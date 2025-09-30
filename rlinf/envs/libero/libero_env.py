@@ -16,7 +16,8 @@ import copy
 import os
 from typing import List, Optional, Union
 
-import gym
+# import gym
+import gymnasium as gym
 import numpy as np
 import torch
 from libero.libero import get_libero_path
@@ -48,6 +49,7 @@ class LiberoEnv(gym.Env):
         self.group_size = self.cfg.group_size
         self.num_group = self.cfg.num_group
         self.use_fixed_reset_state_ids = cfg.use_fixed_reset_state_ids
+        self.fixed_task_ids = cfg.get('fixed_task_ids', None)
 
         self.ignore_terminations = cfg.ignore_terminations
         self.auto_reset = cfg.auto_reset
@@ -118,13 +120,17 @@ class LiberoEnv(gym.Env):
         self.task_descriptions = task_descriptions
         return env_fn_params
 
+    ### CUSTOM: modified to allow for single task training
     def _compute_total_num_group_envs(self):
         self.total_num_group_envs = 0
         self.trial_id_bins = []
-        for task_id in range(self.task_suite.get_num_tasks()):
+
+        task_ids = self.fixed_task_ids or range(self.task_suite.get_num_tasks())
+        for task_id in task_ids:
             task_num_trials = len(self.task_suite.get_task_init_states(task_id))
             self.trial_id_bins.append(task_num_trials)
             self.total_num_group_envs += task_num_trials
+
         self.cumsum_trial_id_bins = np.cumsum(self.trial_id_bins)
 
     def update_reset_state_ids(self):
@@ -171,6 +177,9 @@ class LiberoEnv(gym.Env):
             start_pivot = 0
             for task_id, end_pivot in enumerate(self.cumsum_trial_id_bins):
                 if reset_state_id < end_pivot and reset_state_id >= start_pivot:
+                    if self.fixed_task_ids:
+                        task_id = self.fixed_task_ids[task_id]
+                        
                     task_ids.append(task_id)
                     trial_ids.append(reset_state_id - start_pivot)
                     break

@@ -83,6 +83,8 @@ class ManiskillEnv(BaseManiskillEnv, EnvOffloadMixin):
                     "returns": self.returns.cpu(),
                 }
             )
+        # print("record metrics", self.record_metrics, self.success_once, self.fail_once, self.returns)
+        # quit()
         buffer = io.BytesIO()
         torch.save(simulator_state, buffer)
 

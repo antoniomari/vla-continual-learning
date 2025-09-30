@@ -75,6 +75,14 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         )
 
     def init_worker(self):
+        if not torch.distributed.is_initialized():
+            torch.distributed.init_process_group(backend="nccl")
+        else:
+            if torch.distributed.get_backend() != "nccl":
+                # Destroy existing process group and reinitialize with NCCL
+                torch.distributed.destroy_process_group()
+                torch.distributed.init_process_group(backend="nccl")
+
         self.setup_model_and_optimizer()
         if self.cfg.actor.get("enable_offload", False):
             self.offload_fsdp_param_and_grad()

@@ -4,6 +4,8 @@ defaults:
   - override hydra/job_logging: stdout
 
 hydra:
+  job:
+    chdir: false
   run:
     dir: .
   output_subdir: null
@@ -12,15 +14,16 @@ hydra:
 
 cluster:
   num_nodes: 1
+  num_gpus_per_node: 4
   component_placement:
-    actor: 0-7
-    env: 0-3
-    rollout: 4-7
+    actor: 0-3
+    env: 0-1
+    rollout: 2-3
 
 runner:
   task_type: embodied
   logger:
-    log_path: "../results"
+    log_path: "/scratch/cluster/jshim12/RLinf/results"
     project_name: rlinf
     experiment_name: "test_openvla"
     logger_backends: ["tensorboard"] # wandb, swanlab
@@ -43,9 +46,9 @@ algorithm:
   normalize_advantages: True
   kl_penalty: kl  # how to estimate kl divergence: kl or kl_penalty
   group_size: 1
-  n_chunk_steps: 80
-  n_eval_chunk_steps: 80
-  num_group_envs: 120
+  n_chunk_steps: 40 # was 80
+  n_eval_chunk_steps: 40 # was 80
+  num_group_envs: 30 # was 120
   rollout_epoch: 1
   reward_type: step_level
   logprob_type: action_level
@@ -97,7 +100,7 @@ rollout:
     queue_size: 0
   mode: "colocate"
   backend: "huggingface"
-  model_dir: "/path/to/model/rl4vla/openvla-7b-rlvla-warmup/"
+  model_dir: "/scratch/cluster/jshim12/RLinf/model/openvla-7b-rlvla-warmup/"
   enable_offload: True
   pipeline_stage_num: 2
 
@@ -108,15 +111,16 @@ actor:
     queue_name: "replay_buffer"
     queue_size: 0
   training_backend: "fsdp"
-  checkpoint_load_path: "/path/to/model/rl4vla/openvla-7b-rlvla-warmup/"
-  checkpoint_save_path: "../results"
+  checkpoint_load_path: "/scratch/cluster/jshim12/RLinf/model/openvla-7b-rlvla-warmup/"
+  checkpoint_save_path: "/scratch/cluster/jshim12/RLinf/results"
   micro_batch_size: 20
-  global_batch_size: 160
+  global_batch_size: 80 # was 160
   seed: 1234
   enable_offload: True
 
   model:
     model_name: "openvla"
+    sharding_strategy: "full_shard"
     action_dim: 7
     num_action_chunks: 1
     use_proprio: False
@@ -129,7 +133,7 @@ actor:
     add_qkv_bias: True
     vocab_size: 32000
     hidden_size: 4096
-    policy_setup: "widowx_bridge"
+    policy_setGup: "widowx_bridge"
     vh_mode: "a0"
     image_size: [224, 224]
     is_lora: True
@@ -149,7 +153,7 @@ actor:
 
   tokenizer:
     tokenizer_type: "HuggingFaceTokenizer"
-    tokenizer_model: "/path/to/model/rl4vla/openvla-7b-rlvla-warmup/"
+    tokenizer_model: "/scratch/cluster/jshim12/RLinf/model/openvla-7b-rlvla-warmup/"
     use_fast: False
     trust_remote_code: True
     padding_side: "right"

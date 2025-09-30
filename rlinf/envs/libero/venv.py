@@ -17,7 +17,8 @@ from multiprocessing import Pipe, connection
 from multiprocessing.context import Process
 from typing import Any, Callable, List, Optional, Tuple, Union
 
-import gym
+# import gym
+import gymnasium as gym
 import numpy as np
 from libero.libero.envs import OffScreenRenderEnv
 from libero.libero.envs.venv import (

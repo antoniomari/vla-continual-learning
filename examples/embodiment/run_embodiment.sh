@@ -8,7 +8,7 @@ export MUJOCO_GL="egl"
 export PYOPENGL_PLATFORM="egl"
 export PYTHONPATH=${REPO_PATH}:$PYTHONPATH
 # NOTE: set LIBERO_REPO_PATH to the path of the LIBERO repo
-export LIBERO_REPO_PATH="/path/to/repo/LIBERO"
+export LIBERO_REPO_PATH="/scratch/cluster/jshim12/RLinf/LIBERO"
 # NOTE: set LIBERO_CONFIG_PATH for libero/libero/__init__.py
 export LIBERO_CONFIG_PATH=${LIBERO_REPO_PATH}
 
@@ -16,7 +16,12 @@ export PYTHONPATH=${LIBERO_REPO_PATH}:$PYTHONPATH
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-
+export RAY_DISABLE_IMPORT_WARNING=1
+# export RAY_LOG_TO_STDERR=1
+# export RAY_BACKEND_LOG_LEVEL=DEBUG 
+export RAY_DISABLE_DASHBOARD=1
+export PYTORCH_DISTRIBUTED_BACKEND=nccl
+ 
 if [ -z "$1" ]; then
     CONFIG_NAME="maniskill_ppo_openvlaoft"
 else

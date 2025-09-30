@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import torch
 
 from omegaconf.dictconfig import DictConfig
 from tqdm import tqdm
