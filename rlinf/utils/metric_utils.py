@@ -23,22 +23,85 @@ def compute_split_num(num, split_num):
     return math.lcm(num, split_num) // split_num
 
 
+# def compute_evaluate_metrics(eval_metrics_list):
+#     """
+#     List of evaluate metrics, list length stands for rollout process
+#     """
+#     all_eval_metrics = {}
+#     env_info_keys = eval_metrics_list[0].keys()
+
+#     for env_info_key in env_info_keys:
+#         all_eval_metrics[env_info_key] = [
+#             eval_metrics[env_info_key] for eval_metrics in eval_metrics_list
+#         ]
+
+#     for key in all_eval_metrics:
+#         all_eval_metrics[key] = (
+#             torch.concat(all_eval_metrics[key]).float().mean().numpy()
+#         )
+
+#     return all_eval_metrics
+
 def compute_evaluate_metrics(eval_metrics_list):
-    """
-    List of evaluate metrics, list length stands for rollout process
-    """
     all_eval_metrics = {}
-    env_info_keys = eval_metrics_list[0].keys()
+    
+    # Identify task-specific success keys
+    task_success_keys = [
+        key for key in eval_metrics_list[0].keys()
+        if "task_" in key and key.endswith("_success")
+    ]
+    
+    # Compute task-specific success rates
+    task_stats = {}  # {task_id: {'successes': count, 'total': count}}
+    
+    prefix = "env_info"
+    for eval_metrics in eval_metrics_list:
+        task_ids = eval_metrics[f"{prefix}/task_id"]
+        
+        for task_key in task_success_keys:
+            task_id = int(task_key.split("_")[2]) # env, info/task, {id}, success
+            
+            if task_id not in task_stats:
+                task_stats[task_id] = {'successes': 0, 'total': 0}
+            
+            # Get which completed episodes ran this task
+            task_mask = (task_ids == task_id)
+            n_episodes_this_task = task_mask.sum().item()
+            
+            if n_episodes_this_task > 0:
+                # Get success values for episodes that ran this task
+                successes = eval_metrics[task_key][task_mask]
+                n_successes = successes.float().sum().item()
+                
+                task_stats[task_id]['successes'] += n_successes
+                task_stats[task_id]['total'] += n_episodes_this_task
+    
+    # Compute final success rates per task
+    for task_id, stats in task_stats.items():
+        task_key = f"{prefix}/task_{task_id}_success"
+        if stats['total'] > 0:
+            all_eval_metrics[task_key] = stats['successes'] / stats['total']
+        else:
+            all_eval_metrics[task_key] = -1.0
 
-    for env_info_key in env_info_keys:
-        all_eval_metrics[env_info_key] = [
-            eval_metrics[env_info_key] for eval_metrics in eval_metrics_list
+        all_eval_metrics[f"{task_key}_total"] = stats['total']
+    
+    # Collect and compute non-task-specific metrics
+    non_task_keys = [
+        key for key in eval_metrics_list[0].keys()
+        if key not in task_success_keys and key != f"{prefix}/task_id"
+    ]
+    
+    for key in non_task_keys:
+        collected_values = [
+            eval_metrics[key] for eval_metrics in eval_metrics_list
+            if key in eval_metrics
         ]
-
-    for key in all_eval_metrics:
-        all_eval_metrics[key] = (
-            torch.concat(all_eval_metrics[key]).float().mean().numpy()
-        )
+        
+        if collected_values:
+            all_eval_metrics[key] = (
+                torch.concat(collected_values).float().mean().item()
+            )
 
     return all_eval_metrics
 

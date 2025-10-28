@@ -42,8 +42,8 @@ algorithm:
   normalize_advantages: True
   kl_penalty: kl  # how to estimate kl divergence: kl or kl_penalty
   group_size: 1
-  n_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}  # 512
-  n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}} # 64
+  n_chunk_steps: 512
+  n_eval_chunk_steps: 64
   num_group_envs: 32 # 64
   rollout_epoch: 1
   reward_type: chunk_level
@@ -55,7 +55,7 @@ algorithm:
   loss_agg_func: "token-mean"
   kl_beta: 0.0
   entropy_bonus: 0
-  clip_ratio_high: 0.28
+  clip_ratio_high: 0.2
   clip_ratio_low: 0.2
   clip_ratio_c: 3.0
   value_clip: 0.2
@@ -86,7 +86,7 @@ env:
     queue_name: "obs_buffer"
     queue_size: 0
   enable_offload: False
-  fixed_task_ids: null
+  fixed_task_ids: [3]
 
 rollout:
   group_name: "RolloutGroup"
@@ -96,8 +96,8 @@ rollout:
     queue_size: 0
   mode: "colocate"
   generation_backend: "huggingface"
-  model_dir: "/scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero10-trajall"
-  enable_offload: True
+  model_dir: "/scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero10-traj1"
+  enable_offload: False
   pipeline_stage_num: 1
 
 actor:
@@ -107,16 +107,16 @@ actor:
     queue_name: "replay_buffer"
     queue_size: 0
   training_backend: "fsdp"
-  checkpoint_load_path: "/scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero10-trajall"
+  checkpoint_load_path: "/scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero10-traj1"
   checkpoint_save_path: "../results"
   micro_batch_size: 16
   global_batch_size: 1024
   seed: 1234
-  enable_offload: True
+  enable_offload: False # True
 
   model:
     model_name: "openvla_oft"
-    sharding_strategy: "full_shard"
+    ckpt_path: "/scratch/cluster/jshim12/RLinf/logs/base_to_task2_partial/checkpoints/global_step_40/actor/model.pt"
     value_type: ${algorithm.reward_type}  # 'action' or 'token'
     action_dim: 7
     num_action_chunks: 8
@@ -132,8 +132,10 @@ actor:
     policy_setup: "widowx_bridge"
     vh_mode: "a0"
     image_size: [224, 224]
-    is_lora: True
+    is_lora: False
     lora_rank: 32
+    partial_finetune: True
+    layers_to_train: 50
     num_images_in_input: 1
     attn_implementation: "flash_attention_2"
     low_cpu_mem_usage: True
@@ -141,15 +143,15 @@ actor:
 
   optim:
     lr: 5e-6
-    value_lr: 3e-3
+    value_lr: 3e-3 
     adam_beta1: 0.9
     adam_beta2: 0.999
     adam_eps: 1.0e-05
-    clip_grad: 1.0
+    clip_grad: 5.0
   
   tokenizer:
     tokenizer_type: "HuggingFaceTokenizer"
-    tokenizer_model: "/scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero10-trajall"
+    tokenizer_model: "/scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero10-traj1"
     use_fast: False
     trust_remote_code: True
     padding_side: "right"

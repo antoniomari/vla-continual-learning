@@ -96,11 +96,18 @@ class MultiStepRolloutWorker(Worker):
         }
 
         self._eval_sampling_params = {
-            "temperature": self._sampling_params["temperature_eval"],
-            "top_k": self._sampling_params["top_k"],
-            "top_p": self._sampling_params["top_p"],
             "max_new_tokens": self._length_params["max_new_token"],
         }
+        
+        if not self._sampling_params["use_greedy"]:
+            self._eval_sampling_params.update(
+                {
+                    "temperature": self._sampling_params["temperature_eval"],
+                    "top_k": self._sampling_params["top_k"],
+                    "top_p": self._sampling_params["top_p"],
+                }
+            )
+            
 
     def predict(self, processed_obs, do_sample=True, mode="train"):
         action_token_len = self.hf_model.action_dim * self.hf_model.num_action_chunks
@@ -294,7 +301,7 @@ class MultiStepRolloutWorker(Worker):
                     processor=self.input_processor,
                     precision=self.precision,
                 )
-                chunk_actions, _, _, _ = self.predict(processed_obs, mode="eval")
+                chunk_actions, _, _, _ = self.predict(processed_obs, do_sample=not self._sampling_params["use_greedy"], mode="eval")
                 await self.send_chunk_actions(chunk_actions)
 
                 if "meta" in env_batch:

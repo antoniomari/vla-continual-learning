@@ -101,6 +101,231 @@ def compute_embodied_ppo_actor_critic_loss(**kwargs) -> Tuple[torch.Tensor, Dict
 
     return loss, metrics_data
 
+# @register_policy_loss("embodied_ppo")
+# def compute_embodied_ppo_actor_critic_loss(**kwargs) -> Tuple[torch.Tensor, Dict]:
+#     """
+#     Compute PPO actor loss function with comprehensive debugging.
+#     """
+#     logprobs = kwargs["logprobs"]
+#     entropy = kwargs["entropy"]
+#     values = kwargs["values"]
+#     old_logprobs = kwargs["old_logprobs"]
+#     advantages = kwargs["advantages"]
+#     returns = kwargs["returns"]
+#     prev_values = kwargs["prev_values"]
+#     clip_ratio_low = kwargs["clip_ratio_low"]
+#     clip_ratio_high = kwargs["clip_ratio_high"]
+#     value_clip = kwargs["value_clip"]
+#     huber_delta = kwargs["huber_delta"]
+#     entropy_bonus = kwargs["entropy_bonus"]
+    
+#     # ============ DEBUG: Input Checks ============
+#     debug = False # Set to False to disable debugging
+    
+#     if debug:
+#         print("\n" + "="*60)
+#         print("DEBUG: Input Tensors")
+#         print("="*60)
+        
+#         def check_tensor(name, tensor):
+#             """Helper to check tensor stats"""
+#             if tensor is None:
+#                 print(f"{name}: None")
+#                 return
+#             print(f"\n{name}:")
+#             print(f"  Shape: {tensor.shape}")
+#             print(f"  Dtype: {tensor.dtype}")
+#             print(f"  Device: {tensor.device}")
+#             print(f"  Min: {tensor.min().item():.6f}")
+#             print(f"  Max: {tensor.max().item():.6f}")
+#             print(f"  Mean: {tensor.mean().item():.6f}")
+#             print(f"  Std: {tensor.std().item():.6f}")
+#             print(f"  Has NaN: {torch.isnan(tensor).any().item()}")
+#             print(f"  Has Inf: {torch.isinf(tensor).any().item()}")
+#             if torch.isnan(tensor).any():
+#                 print(f"  NaN count: {torch.isnan(tensor).sum().item()}")
+#                 print(f"  NaN percentage: {100 * torch.isnan(tensor).sum().item() / tensor.numel():.2f}%")
+#             if torch.isinf(tensor).any():
+#                 print(f"  Inf count: {torch.isinf(tensor).sum().item()}")
+        
+#         check_tensor("logprobs", logprobs)
+#         check_tensor("old_logprobs", old_logprobs)
+#         check_tensor("advantages", advantages)
+#         check_tensor("values", values)
+#         check_tensor("prev_values", prev_values)
+#         check_tensor("returns", returns)
+#         check_tensor("entropy", entropy)
+    
+#     # ============ Policy Loss Computation ============
+#     logratio = logprobs - old_logprobs
+    
+#     if debug:
+#         print("\n" + "="*60)
+#         print("DEBUG: Policy Loss Computation")
+#         print("="*60)
+#         check_tensor("logratio", logratio)
+        
+#         # Check for extreme values
+#         if logratio.abs().max() > 10:
+#             print(f"WARNING: Extreme logratio detected! Max abs: {logratio.abs().max().item():.2f}")
+#             print(f"  This suggests logprobs changed drastically from old_logprobs")
+#             print(f"  Max positive logratio: {logratio.max().item():.2f} (ratio will be {torch.exp(logratio.max()).item():.2e})")
+#             print(f"  Min negative logratio: {logratio.min().item():.2f} (ratio will be {torch.exp(logratio.min()).item():.2e})")
+    
+#     ratio = torch.exp(logratio)
+    
+#     if debug:
+#         check_tensor("ratio", ratio)
+        
+#         # Check for problematic ratios
+#         extreme_ratios = (ratio > 100) | (ratio < 0.01)
+#         if extreme_ratios.any():
+#             print(f"WARNING: Extreme ratios detected!")
+#             print(f"  Ratios > 100: {(ratio > 100).sum().item()}")
+#             print(f"  Ratios < 0.01: {(ratio < 0.01).sum().item()}")
+    
+#     surr1 = ratio * advantages
+#     surr2 = torch.clamp(ratio, 1 - clip_ratio_low, 1 + clip_ratio_high) * advantages
+    
+#     if debug:
+#         check_tensor("surr1", surr1)
+#         check_tensor("surr2", surr2)
+    
+#     policy_loss = -torch.min(surr1, surr2).mean()
+    
+#     if debug:
+#         print(f"\npolicy_loss: {policy_loss.item():.6f}")
+#         print(f"  Has NaN: {torch.isnan(policy_loss).item()}")
+    
+#     # ============ NaN Detection ============
+#     if torch.isnan(policy_loss):
+#         print("\n" + "!"*60)
+#         print("NaN DETECTED IN POLICY LOSS!")
+#         print("!"*60)
+        
+#         # Detailed diagnosis
+#         print("\nDiagnosis:")
+#         if torch.isnan(logprobs).any():
+#             print("  ✗ logprobs contains NaN")
+#         if torch.isnan(old_logprobs).any():
+#             print("  ✗ old_logprobs contains NaN")
+#         if torch.isnan(advantages).any():
+#             print("  ✗ advantages contains NaN")
+#         if torch.isnan(logratio).any():
+#             print("  ✗ logratio contains NaN")
+#         if torch.isnan(ratio).any():
+#             print("  ✗ ratio contains NaN")
+#         if torch.isinf(logratio).any():
+#             print("  ✗ logratio contains Inf (will cause NaN in exp)")
+#         if torch.isnan(surr1).any():
+#             print("  ✗ surr1 contains NaN")
+#         if torch.isnan(surr2).any():
+#             print("  ✗ surr2 contains NaN")
+        
+#         # Find first NaN location
+#         if torch.isnan(logprobs).any():
+#             nan_idx = torch.isnan(logprobs).nonzero()[0]
+#             print(f"\nFirst NaN in logprobs at index: {nan_idx.tolist()}")
+#             print(f"  logprobs value: {logprobs.flatten()[nan_idx[0]].item()}")
+        
+#         print(f"\nStatistics:")
+#         print(f"  logratio range: [{logratio.min().item():.2f}, {logratio.max().item():.2f}]")
+#         print(f"  advantages range: [{advantages.min().item():.2f}, {advantages.max().item():.2f}]")
+        
+#         raise ValueError("NaN detected in policy loss - see diagnostics above")
+    
+#     # ============ Value Loss Computation ============
+#     value_pred_clipped = prev_values + (values - prev_values).clamp(
+#         -value_clip, value_clip
+#     )
+#     error_clipped = returns - value_pred_clipped
+#     error_original = returns - values
+    
+#     if debug:
+#         print("\n" + "="*60)
+#         print("DEBUG: Value Loss Computation")
+#         print("="*60)
+#         check_tensor("value_pred_clipped", value_pred_clipped)
+#         check_tensor("error_clipped", error_clipped)
+#         check_tensor("error_original", error_original)
+    
+#     value_loss_clipped = huber_loss(error_clipped, huber_delta)
+#     value_loss_original = huber_loss(error_original, huber_delta)
+    
+#     if debug:
+#         check_tensor("value_loss_clipped", value_loss_clipped)
+#         check_tensor("value_loss_original", value_loss_original)
+    
+#     value_loss = torch.max(value_loss_original, value_loss_clipped)
+#     value_clip_indicator = (value_pred_clipped - prev_values).abs() > value_clip
+#     value_clip_ratio = value_clip_indicator.float().mean()
+#     value_loss = value_loss.mean()
+    
+#     if debug:
+#         print(f"\nvalue_loss: {value_loss.item():.6f}")
+#         print(f"  Has NaN: {torch.isnan(value_loss).item()}")
+#         print(f"value_clip_ratio: {value_clip_ratio.item():.4f}")
+    
+#     # Check for NaN in value loss
+#     if torch.isnan(value_loss):
+#         print("\n" + "!"*60)
+#         print("NaN DETECTED IN VALUE LOSS!")
+#         print("!"*60)
+        
+#         if torch.isnan(values).any():
+#             print("  ✗ values contains NaN")
+#         if torch.isnan(prev_values).any():
+#             print("  ✗ prev_values contains NaN")
+#         if torch.isnan(returns).any():
+#             print("  ✗ returns contains NaN")
+        
+#         raise ValueError("NaN detected in value loss")
+    
+#     # ============ Entropy Loss ============
+#     entropy_loss = entropy.mean()
+    
+#     if debug:
+#         print(f"\nentropy_loss: {entropy_loss.item():.6f}")
+#         print(f"  Has NaN: {torch.isnan(entropy_loss).item()}")
+    
+#     if torch.isnan(entropy_loss):
+#         print("\n" + "!"*60)
+#         print("NaN DETECTED IN ENTROPY LOSS!")
+#         print("!"*60)
+#         raise ValueError("NaN detected in entropy loss")
+    
+#     # ============ Total Loss ============
+#     loss = policy_loss + value_loss - entropy_bonus * entropy_loss
+    
+#     if debug:
+#         print("\n" + "="*60)
+#         print("DEBUG: Final Loss")
+#         print("="*60)
+#         print(f"total_loss: {loss.item():.6f}")
+#         print(f"  policy_loss contribution: {policy_loss.item():.6f}")
+#         print(f"  value_loss contribution: {value_loss.item():.6f}")
+#         print(f"  entropy_loss contribution: {-entropy_bonus * entropy_loss.item():.6f}")
+#         print(f"  Has NaN: {torch.isnan(loss).item()}")
+#         print("="*60 + "\n")
+    
+#     # ============ Metrics ============
+#     metrics_data = {
+#         "actor/raw_loss": loss.detach().item(),
+#         "actor/policy_loss": policy_loss.detach().item(),
+#         "actor/ratio": ratio.mean().detach().item(),
+#         "actor/ratio_max": ratio.max().detach().item(),
+#         "actor/ratio_min": ratio.min().detach().item(),
+#         "actor/logratio_mean": logratio.mean().detach().item(),
+#         "actor/logratio_std": logratio.std().detach().item(),
+#         "actor/logratio_max": logratio.max().detach().item(),
+#         "actor/logratio_min": logratio.min().detach().item(),
+#         "critic/value_loss": value_loss.detach().item(),
+#         "critic/value_clip_ratio": value_clip_ratio.detach().item(),
+#         "actor/entropy_loss": entropy_loss.detach().item(),
+#     }
+    
+#     return loss, metrics_data
+
 
 @register_policy_loss("embodied_grpo")
 def compute_embodied_grpo_actor_loss_fn(**kwargs) -> Tuple[torch.Tensor, Dict]:

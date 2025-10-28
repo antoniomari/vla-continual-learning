@@ -19,18 +19,63 @@ import torch.nn.functional as F
 from transformers.generation import TopKLogitsWarper
 
 
+# def default_logits_processor(logits, action_tokens, vocab_size, n_action_bins):
+#     logits = logits.permute(0, 2, 1)  # [B, vocab-size, action-dim]
+
+#     logits[:, : vocab_size - n_action_bins] = -torch.inf
+#     logits[:, vocab_size:] = -torch.inf
+
+#     logprobs = compute_logprobs_from_logits(logits=logits, target=action_tokens)
+
+#     entropy = compute_entropy_from_logits(logits)
+
+#     ret = {"logprobs": logprobs, "entropy": entropy}
+
+#     return ret
+
 def default_logits_processor(logits, action_tokens, vocab_size, n_action_bins):
     logits = logits.permute(0, 2, 1)  # [B, vocab-size, action-dim]
-
-    logits[:, : vocab_size - n_action_bins] = -torch.inf
-    logits[:, vocab_size:] = -torch.inf
-
+    
+    # Define valid action token range
+    valid_start = vocab_size - n_action_bins
+    valid_end = vocab_size
+    
+    # VALIDATION: Check if action_tokens are in valid range
+    out_of_bounds = (action_tokens < valid_start) | (action_tokens >= valid_end)
+    if out_of_bounds.any():
+        print(f"⚠️ WARNING: {out_of_bounds.sum()}/{action_tokens.numel()} action tokens out of bounds!")
+        print(f"  Valid range: [{valid_start}, {valid_end})")
+        print(f"  action_tokens range: [{action_tokens.min()}, {action_tokens.max()}]")
+        print(f"  Out of bounds indices: {torch.where(out_of_bounds)}")
+        
+        # Show specific problematic values
+        bad_tokens = action_tokens[out_of_bounds]
+        print(f"  Bad token values: {bad_tokens[:10]}")  # Show first 10
+    
+    # Apply masking
+    logits[:, :valid_start] = -torch.inf
+    logits[:, valid_end:] = -torch.inf
+    
+    # VALIDATION: Check if valid region has at least some finite values
+    valid_region = logits[:, valid_start:valid_end, :]
+    all_inf_mask = torch.isinf(valid_region).all(dim=1)  # Check per [B, action-dim]
+    if all_inf_mask.any():
+        print(f"⚠️ WARNING: {all_inf_mask.sum()} positions have all -inf in valid region!")
+        print(f"  This will cause NaN in softmax")
+    
     logprobs = compute_logprobs_from_logits(logits=logits, target=action_tokens)
-
+    
+    # VALIDATION: Check for NaNs in output
+    if torch.isnan(logprobs).any():
+        print(f"⚠️ NaN detected in logprobs!")
+        nan_mask = torch.isnan(logprobs)
+        print(f"  Number of NaNs: {nan_mask.sum()}/{logprobs.numel()}")
+        
+        # Check corresponding action tokens
+        print(f"  Action tokens at NaN positions: {action_tokens[nan_mask][:10]}")
+    
     entropy = compute_entropy_from_logits(logits)
-
     ret = {"logprobs": logprobs, "entropy": entropy}
-
     return ret
 
 

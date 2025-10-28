@@ -98,6 +98,14 @@ def get_model_config_and_processor(cfg: DictConfig):
 
 
 def get_model(model_path, cfg: DictConfig, override_config_kwargs=None):
+    print(f"=== get_model called ===")
+    print(f"model_path: {model_path}")
+    print(f"cfg.model_name: {cfg.model_name}")
+    print(f"cfg has ckpt_path: {hasattr(cfg, 'ckpt_path')}")
+    if hasattr(cfg, 'ckpt_path'):
+        print(f"cfg.ckpt_path value: {cfg.ckpt_path}")
+    print(f"======================")
+
     torch_dtype = torch_dtype_from_precision(cfg.precision)
     if cfg.model_name == "openvla":
         from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
@@ -204,7 +212,24 @@ def get_model(model_path, cfg: DictConfig, override_config_kwargs=None):
             for param in model.value_head.parameters():
                 param.requires_grad = True
 
+    if cfg.partial_finetune:
+        params = []
+        for _, p in model.named_parameters():
+            p.requires_grad = False
+            params.append(p)
+
+        layers_to_train = getattr(cfg, "layers_to_train", 50)
+        for p in params[-layers_to_train:]:
+            p.requires_grad = True
+
+        print(
+            f"Partial finetune enabled. Training last {layers_to_train} layers. Total params: {len(params)}")
+
     if hasattr(cfg, "ckpt_path") and cfg.ckpt_path is not None:
+        print(f"LOADING MODEL CHECKPOINT from: {cfg.ckpt_path}")
+        print(f"Checkpoint exists: {os.path.exists(cfg.ckpt_path)}")
         model_dict = torch.load(cfg.ckpt_path)
+        print(f"Checkpoint keys: {list(model_dict.keys())[:5]}")  # Print first 5 keys
         model.load_state_dict(model_dict)
+        print(f"CHECKPOINT LOADED SUCCESSFULLY")
     return model

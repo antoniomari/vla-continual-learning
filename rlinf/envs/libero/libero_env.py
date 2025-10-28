@@ -152,12 +152,112 @@ class LiberoEnv(gym.Env):
         return reset_state_ids
 
     def get_reset_state_ids_all(self):
-        reset_state_ids = np.arange(self.total_num_group_envs)
-        valid_size = len(reset_state_ids) - (len(reset_state_ids) % self.world_size)
-        self._generator_ordered.shuffle(reset_state_ids)
-        reset_state_ids = reset_state_ids[:valid_size]
-        reset_state_ids = reset_state_ids.reshape(self.world_size, -1)
-        return reset_state_ids
+        # reset_state_ids = np.arange(self.total_num_group_envs)
+        # valid_size = len(reset_state_ids) - (len(reset_state_ids) % self.world_size)
+        # self._generator_ordered.shuffle(reset_state_ids)
+        # reset_state_ids = reset_state_ids[:valid_size]
+        # reset_state_ids = reset_state_ids.reshape(self.world_size, -1)
+        # return reset_state_ids
+
+        if self.cfg.only_eval:
+            task_ids = self.fixed_task_ids or range(self.task_suite.get_num_tasks())
+            num_tasks = len(task_ids)
+            
+            # Calculate total envs across all GPUs
+            total_envs = self.num_envs * self.world_size
+            
+            # Calculate states per task from TOTAL num_envs
+            states_per_task_total = total_envs // num_tasks
+            
+            if total_envs % num_tasks != 0:
+                raise ValueError(
+                    f"Total num_envs ({total_envs}) must be divisible by num_tasks ({num_tasks}). "
+                    f"Current remainder: {total_envs % num_tasks}. "
+                    f"Try using num_envs that's divisible by both num_tasks and world_size. "
+                    f"For {num_tasks} tasks and {self.world_size} GPUs, try: {num_tasks * self.world_size * ((total_envs // (num_tasks * self.world_size)) + 1)}"
+                )
+            
+            # Each GPU should get states_per_task_total / world_size states per task
+            states_per_task_per_gpu = states_per_task_total // self.world_size
+            
+            if states_per_task_total % self.world_size != 0:
+                print(
+                    f"WARNING [Rank {self.rank}]: states_per_task ({states_per_task_total}) not divisible by world_size ({self.world_size}). "
+                    f"Some GPUs may have slightly different numbers of states per task."
+                )
+            
+            # Build reset state IDs for ALL GPUs first
+            all_reset_state_ids = []
+            
+            for task_id_idx, task_id in enumerate(task_ids):
+                # Get the start index for this task in the flat reset_state_id space
+                if task_id_idx == 0:
+                    task_start_idx = 0
+                else:
+                    task_start_idx = self.cumsum_trial_id_bins[task_id_idx - 1]
+                
+                # Get available states for this task
+                task_num_states = self.trial_id_bins[task_id_idx]
+                
+                sampled_state_indices = self._generator.choice(
+                    task_num_states, 
+                    size=states_per_task_total, 
+                    replace=True
+                )
+                
+                for state_idx in sampled_state_indices:
+                    all_reset_state_ids.append(task_start_idx + state_idx)
+            
+            all_reset_state_ids = np.array(all_reset_state_ids)
+            
+            # Reshape to [num_tasks, states_per_task_total]
+            all_reset_state_ids = all_reset_state_ids.reshape(num_tasks, states_per_task_total)
+            
+            # Distribute across GPUs in a round-robin fashion by task
+            gpu_assignments = [[] for _ in range(self.world_size)]
+            
+            remainder = states_per_task_total % self.world_size
+            
+            for task_idx in range(num_tasks):
+                task_states = all_reset_state_ids[task_idx]
+                
+                # Distribute this task's states across GPUs
+                for gpu_idx in range(self.world_size):
+                    start = gpu_idx * states_per_task_per_gpu
+                    # Give extra states to first 'remainder' GPUs
+                    if gpu_idx < remainder:
+                        start += gpu_idx
+                        end = start + states_per_task_per_gpu + 1
+                    else:
+                        start += remainder
+                        end = start + states_per_task_per_gpu
+                    
+                    gpu_assignments[gpu_idx].extend(task_states[start:end])
+            
+            # Convert to numpy array with shape [world_size, states_per_gpu]
+            reset_state_ids = np.array([np.array(gpu_states) for gpu_states in gpu_assignments], dtype=object)
+            
+            # Logging
+            if self.rank == 0:
+                print(f"\n=== Evaluation Distribution ===")
+                print(f"Total envs across all GPUs: {total_envs}")
+                print(f"Number of tasks: {num_tasks}")
+                print(f"States per task (total): {states_per_task_total}")
+                print(f"States per task per GPU: {states_per_task_per_gpu}")
+                for gpu_idx in range(self.world_size):
+                    print(f"[GPU {gpu_idx}] Total states: {len(reset_state_ids[gpu_idx])}")
+                print(f"===============================\n")
+            
+            return reset_state_ids
+        
+        else:
+            # Original training mode behavior
+            reset_state_ids = np.arange(self.total_num_group_envs)
+            valid_size = len(reset_state_ids) - (len(reset_state_ids) % self.world_size)
+            self._generator_ordered.shuffle(reset_state_ids)
+            reset_state_ids = reset_state_ids[:valid_size]
+            reset_state_ids = reset_state_ids.reshape(self.world_size, -1)
+            return reset_state_ids
 
     def _get_ordered_reset_state_ids(self, num_reset_states):
         reset_state_ids = self.reset_state_ids_all[self.rank][
@@ -245,6 +345,24 @@ class LiberoEnv(gym.Env):
         episode_info = {}
         self.returns += step_reward
         self.success_once = self.success_once | terminations
+
+        # task-specific success tracking
+        task_success = {}
+
+        unique_tasks = np.unique(self.task_ids)
+        for task_id in unique_tasks:
+            task_success_tensor = torch.zeros(self.num_envs, dtype=torch.bool)
+        
+            # Mark success for environments running this task
+            task_mask = (self.task_ids == task_id)
+            task_success_tensor[task_mask] = torch.tensor(
+                self.success_once[task_mask], dtype=torch.bool
+            )
+            
+            task_success[f"task_{task_id}_success"] = task_success_tensor
+
+        episode_info.update(task_success)
+        episode_info["task_id"] = self.task_ids.copy()
         episode_info["success_once"] = self.success_once.copy()
         episode_info["return"] = self.returns.copy()
         episode_info["episode_len"] = self.elapsed_steps.copy()
