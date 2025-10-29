@@ -15,6 +15,7 @@
 import gc
 import os
 
+import json
 import numpy as np
 import torch
 from omegaconf import DictConfig
@@ -39,7 +40,9 @@ from rlinf.utils.metric_utils import (
     compute_split_num,
 )
 from rlinf.utils.placement import HybridComponentPlacement
-
+from peft import get_peft_model_state_dict
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp import StateDictType, FullStateDictConfig
 
 class EmbodiedFSDPActor(FSDPModelManager, Worker):
     def __init__(self, cfg: DictConfig):
@@ -422,11 +425,37 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         return mean_metric_dict
 
     def save_checkpoint(self, save_base_path, step):
+        
         torch.distributed.barrier()
-        model_state = self.get_model_state_dict()
+        is_lora = self.cfg.actor.model.get("is_lora", False)
+        model = self.model
+        
         optim_state = self.get_optimizer_state_dict()
-        if self._rank == 0:
-            os.makedirs(save_base_path, exist_ok=True)
-            torch.save(model_state, os.path.join(save_base_path, "model.pt"))
-            torch.save(optim_state, os.path.join(save_base_path, "optim.pt"))
+        
+        if is_lora:
+            # For PEFT models with FSDP, use this pattern:
+            # All ranks must enter the context, but only rank 0 gets the full state
+            save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
+            with FSDP.state_dict_type(
+                model,
+                StateDictType.FULL_STATE_DICT,
+                save_policy
+            ):
+                # Access the PeftModel from FSDP wrapper
+                cpu_state = get_peft_model_state_dict(model, model.state_dict())
+                
+                # Now save_pretrained should work because state is gathered
+                if self._rank == 0:
+                    os.makedirs(save_base_path, exist_ok=True)
+                    torch.save(optim_state, os.path.join(save_base_path, "optim.pt"))
+                    
+                    torch.save(cpu_state, os.path.join(save_base_path, "adapter_model.bin"))
+                    model.peft_config["default"].save_pretrained(save_base_path)
+        else:
+            model_state = self.get_model_state_dict()
+            if self._rank == 0:
+                os.makedirs(save_base_path, exist_ok=True)
+                torch.save(model_state, os.path.join(save_base_path, "model.pt"))
+                torch.save(optim_state, os.path.join(save_base_path, "optim.pt"))
+        
         torch.distributed.barrier()

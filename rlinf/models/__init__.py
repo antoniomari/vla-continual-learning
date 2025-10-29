@@ -206,6 +206,7 @@ def get_model(model_path, cfg: DictConfig, override_config_kwargs=None):
             )
             model = get_peft_model(model, lora_config)
         else:
+            print(f"Loading LoRA adapter from {cfg.lora_path}")
             model = PeftModel.from_pretrained(model, cfg.lora_path, is_trainable=True)
 
         if hasattr(model, "value_head"):

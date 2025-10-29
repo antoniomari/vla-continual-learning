@@ -45,6 +45,7 @@ class FSDPModelManager:
         )
 
     def model_provider_func(self) -> torch.nn.Module:
+        raise Exception("Should not reach here.")
         if self._cfg.model.get("gptq_model", False):
             from auto_gptq import AutoGPTQForCausalLM
 
