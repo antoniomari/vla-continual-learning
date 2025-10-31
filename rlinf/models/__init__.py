@@ -230,7 +230,11 @@ def get_model(model_path, cfg: DictConfig, override_config_kwargs=None):
         print(f"LOADING MODEL CHECKPOINT from: {cfg.ckpt_path}")
         print(f"Checkpoint exists: {os.path.exists(cfg.ckpt_path)}")
         model_dict = torch.load(cfg.ckpt_path)
-        print(f"Checkpoint keys: {list(model_dict.keys())[:5]}")  # Print first 5 keys
-        model.load_state_dict(model_dict)
-        print(f"CHECKPOINT LOADED SUCCESSFULLY")
+        filtered_state_dict = {
+            k: v for k, v in model_dict.items() if "value_head" not in k
+        }
+        missing, unexpected = model.load_state_dict(filtered_state_dict, strict=False)
+        print(f"Missing keys (likely value head): {missing}")
+        print(f"Unexpected keys: {unexpected}")
+        print(f"CHECKPOINT LOADED SUCCESSFULLY (critic reinitialized)")
     return model
