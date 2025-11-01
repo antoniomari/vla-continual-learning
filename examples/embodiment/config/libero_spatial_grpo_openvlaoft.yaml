@@ -89,7 +89,7 @@ env:
     queue_name: "obs_buffer"
     queue_size: 0
   enable_offload: False
-  fixed_task_ids: [1]
+  fixed_task_ids: [2]
 
 rollout:
   group_name: "RolloutGroup"
@@ -119,7 +119,8 @@ actor:
 
   model:
     model_name: "openvla_oft"
-    lora_path: "/scratch/cluster/jshim12/RLinf/logs/base_to_task0_LoRA_grpo/checkpoints/global_step_10/actor/"
+    # lora_path: "/scratch/cluster/jshim12/RLinf/logs/base_to_task0_LoRA_grpo/checkpoints/global_step_10/actor/"
+    lora_path: "/scratch/cluster/jshim12/RLinf/logs/task0_to_task1_LoRA_grpo/checkpoints/global_step_10/actor/"
     value_type: ${algorithm.reward_type}  # 'action' or 'token'
     action_dim: 7
     num_action_chunks: 8

@@ -1,0 +1,631 @@
+----------------------------------------
+Starting run #1...
+python /scratch/cluster/jshim12/RLinf/examples/embodiment/eval_embodied_agent.py --config-path /scratch/cluster/jshim12/RLinf/examples/embodiment/config/ --config-name libero_spatial_grpo_openvlaoft_eval runner.logger.log_path=/scratch/cluster/jshim12/RLinf/logs/evals
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+2025-11-01 14:21:50.136368: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-11-01 14:21:50.178102: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-11-01 14:21:50.178140: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-11-01 14:21:50.179459: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-11-01 14:21:50.186311: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-11-01 14:21:52.197209: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'libero_spatial_grpo_openvlaoft_eval': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+2025-11-01 14:22:01,231	INFO worker.py:1942 -- Started a local Ray instance. View the dashboard at [1m[32mhttp://127.0.0.1:8265 [39m[22m
+[INFO 14:22:03 RLinf] RLinf is running on a cluster with 1 node and 4 accelerators. The nodes' details are: [NodeInfo(node_rank=0, ray_id='f631f2557773cdad56cae3a17446c5791a794889a1f2aa6e89305886', node_ip='128.83.144.14', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, num_accelerators=4, num_cpus=96)]
+[INFO 14:22:03 FlexiblePlacementStrategy] 
+[INFO 14:22:03 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 14:22:03 FlexiblePlacementStrategy] 
+[INFO 14:22:03 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 14:22:03 FlexiblePlacementStrategy] 
+[INFO 14:22:03 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 14:22:03 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[INFO 14:22:03 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[36m(pid=2435171)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435171)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435173)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435173)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435174)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435174)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435172)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435172)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435175)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435175)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435178)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435178)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435176)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435176)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435179)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435179)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435180)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435180)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435181)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435181)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435184)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435184)[0m   import pynvml  # type: ignore[import]
+[36m(EnvWorker pid=2435179)[0m [INFO 14:22:08 NodePlacementStrategy] 
+[36m(EnvWorker pid=2435179)[0m [INFO 14:22:08 NodePlacementStrategy] Using node placement with node IDs: [0].
+[36m(EnvWorker pid=2435179)[0m [INFO 14:22:08 NodePlacementStrategy] Generated 1 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id='0', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=1, visible_accelerators=['0', '1', '2', '3'], isolate_accelerator=True)].
+[36m(pid=2436043)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2436043)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435174)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435174)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435175)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435175)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435176)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435176)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435178)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=2435178)[0m   import pynvml  # type: ignore[import]
+[36m(pid=2435174)[0m 2025-11-01 14:22:12.479197: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=2435175)[0m 2025-11-01 14:22:12.479197: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=2435174)[0m 2025-11-01 14:22:12.527618: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=2435174)[0m 2025-11-01 14:22:12.527686: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=2435174)[0m 2025-11-01 14:22:12.529458: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=2435174)[0m 2025-11-01 14:22:12.537931: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=2435174)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=2435175)[0m 2025-11-01 14:22:12.530133: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=2435175)[0m 2025-11-01 14:22:12.530184: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=2435175)[0m 2025-11-01 14:22:12.531554: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=2435175)[0m 2025-11-01 14:22:12.538652: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=2435175)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=2435176)[0m 2025-11-01 14:22:12.588123: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=2435178)[0m 2025-11-01 14:22:12.614823: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=2435178)[0m 2025-11-01 14:22:12.663736: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=2435178)[0m 2025-11-01 14:22:12.663794: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=2435178)[0m 2025-11-01 14:22:12.665570: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=2435178)[0m 2025-11-01 14:22:12.673952: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=2435178)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=2435176)[0m 2025-11-01 14:22:12.636105: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=2435176)[0m 2025-11-01 14:22:12.636168: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=2435176)[0m 2025-11-01 14:22:12.637943: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=2435176)[0m 2025-11-01 14:22:12.646443: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=2435176)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=2435175)[0m 2025-11-01 14:22:14.200718: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=2435174)[0m 2025-11-01 14:22:14.284763: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=2435178)[0m 2025-11-01 14:22:14.411350: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=2435176)[0m 2025-11-01 14:22:14.367834: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(MultiStepRolloutWorker pid=2435174)[0m 2025-11-01 14:22:20.457710: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=2435174)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=2435175)[0m 2025-11-01 14:22:20.459188: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=2435175)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=2435178)[0m 2025-11-01 14:22:20.457812: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=2435178)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=2435176)[0m 2025-11-01 14:22:20.461690: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=2435176)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=2435174)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=2435175)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=2435176)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=2435178)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=2435174)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:07,  2.48s/it]
+[36m(MultiStepRolloutWorker pid=2435175)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:07,  2.43s/it]
+[36m(MultiStepRolloutWorker pid=2435176)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:07,  2.56s/it]
+[36m(MultiStepRolloutWorker pid=2435174)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.45s/it]
+[36m(MultiStepRolloutWorker pid=2435175)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.44s/it]
+[36m(MultiStepRolloutWorker pid=2435178)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:08,  2.85s/it]
+[36m(MultiStepRolloutWorker pid=2435176)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.48s/it]
+[36m(MultiStepRolloutWorker pid=2435174)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:07<00:02,  2.43s/it]
+[36m(MultiStepRolloutWorker pid=2435175)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:07<00:02,  2.42s/it]
+[36m(MultiStepRolloutWorker pid=2435178)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:05<00:05,  2.60s/it]
+[36m(MultiStepRolloutWorker pid=2435174)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.60s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.91s/it]
+[36m(MultiStepRolloutWorker pid=2435175)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.60s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.90s/it]
+[36m(MultiStepRolloutWorker pid=2435176)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:07<00:02,  2.42s/it]
+[36m(MultiStepRolloutWorker pid=2435176)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.60s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.92s/it]
+[36m(MultiStepRolloutWorker pid=2435178)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:07<00:02,  2.50s/it]
+[36m(MultiStepRolloutWorker pid=2435178)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:08<00:00,  1.65s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:08<00:00,  2.00s/it]
+[36m(EnvWorker pid=2435179)[0m [robosuite WARNING] No private macro file found! (macros.py:53)
+[36m(EnvWorker pid=2435179)[0m [robosuite WARNING] It is recommended to use a private macro file (macros.py:54)
+[36m(EnvWorker pid=2435179)[0m [robosuite WARNING] To setup, run: python /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/robosuite/scripts/setup_macros.py (macros.py:55)
+[36m(EnvWorker pid=2435180)[0m [robosuite WARNING] No private macro file found! (macros.py:53)
+[36m(EnvWorker pid=2435180)[0m [robosuite WARNING] It is recommended to use a private macro file (macros.py:54)
+[36m(EnvWorker pid=2435180)[0m [robosuite WARNING] To setup, run: python /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/robosuite/scripts/setup_macros.py (macros.py:55)
+[36m(EnvWorker pid=2435181)[0m [robosuite WARNING] No private macro file found! (macros.py:53)
+[36m(EnvWorker pid=2435181)[0m [robosuite WARNING] It is recommended to use a private macro file (macros.py:54)
+[36m(EnvWorker pid=2435181)[0m [robosuite WARNING] To setup, run: python /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/robosuite/scripts/setup_macros.py (macros.py:55)
+[36m(EnvWorker pid=2435184)[0m [robosuite WARNING] No private macro file found! (macros.py:53)
+[36m(EnvWorker pid=2435184)[0m [robosuite WARNING] It is recommended to use a private macro file (macros.py:54)
+[36m(EnvWorker pid=2435184)[0m [robosuite WARNING] To setup, run: python /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/robosuite/scripts/setup_macros.py (macros.py:55)
+[36m(MultiStepRolloutWorker pid=2435175)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=2435175)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=2435175)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=2435175)[0m cfg has ckpt_path: False
+[36m(MultiStepRolloutWorker pid=2435175)[0m ======================
+[36m(MultiStepRolloutWorker pid=2435174)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=2435174)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=2435174)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=2435174)[0m cfg has ckpt_path: False
+[36m(MultiStepRolloutWorker pid=2435174)[0m ======================
+[36m(MultiStepRolloutWorker pid=2435176)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=2435176)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=2435176)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=2435176)[0m cfg has ckpt_path: False
+[36m(MultiStepRolloutWorker pid=2435176)[0m ======================
+[36m(MultiStepRolloutWorker pid=2435178)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=2435178)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=2435178)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=2435178)[0m cfg has ckpt_path: False
+[36m(MultiStepRolloutWorker pid=2435178)[0m ======================
+[36m(MultiStepRolloutWorker pid=2435176)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=2435176)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=2435176)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=2435176)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=2435176)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=2435176)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=2435175)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=2435175)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=2435175)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=2435175)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=2435175)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=2435175)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=2435174)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=2435174)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=2435174)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=2435174)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=2435174)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=2435174)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=2435178)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=2435178)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=2435178)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=2435178)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=2435178)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=2435178)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=2435175)[0m Loading LoRA adapter from /scratch/cluster/jshim12/RLinf/logs/task0_to_task1_LoRA_grpo/checkpoints/global_step_10/actor/
+[36m(MultiStepRolloutWorker pid=2435174)[0m Loading LoRA adapter from /scratch/cluster/jshim12/RLinf/logs/task0_to_task1_LoRA_grpo/checkpoints/global_step_10/actor/
+[36m(MultiStepRolloutWorker pid=2435176)[0m Loading LoRA adapter from /scratch/cluster/jshim12/RLinf/logs/task0_to_task1_LoRA_grpo/checkpoints/global_step_10/actor/
+[36m(MultiStepRolloutWorker pid=2435178)[0m Loading LoRA adapter from /scratch/cluster/jshim12/RLinf/logs/task0_to_task1_LoRA_grpo/checkpoints/global_step_10/actor/
+[36m(EnvWorker pid=2435179)[0m [info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m 
+[36m(EnvWorker pid=2435179)[0m === Evaluation Distribution ===
+[36m(EnvWorker pid=2435179)[0m Total envs across all GPUs: 200
+[36m(EnvWorker pid=2435179)[0m Number of tasks: 10
+[36m(EnvWorker pid=2435179)[0m States per task (total): 20
+[36m(EnvWorker pid=2435179)[0m States per task per GPU: 5
+[36m(EnvWorker pid=2435179)[0m [GPU 0] Total states: 50
+[36m(EnvWorker pid=2435179)[0m [GPU 1] Total states: 50
+[36m(EnvWorker pid=2435179)[0m [GPU 2] Total states: 50
+[36m(EnvWorker pid=2435179)[0m [GPU 3] Total states: 50
+[36m(EnvWorker pid=2435179)[0m ===============================
+[36m(EnvWorker pid=2435179)[0m 
+[36m(EnvWorker pid=2435179)[0m 
+[36m(EnvWorker pid=2435179)[0m === Evaluation Distribution ===
+[36m(EnvWorker pid=2435179)[0m Total envs across all GPUs: 200
+[36m(EnvWorker pid=2435179)[0m Number of tasks: 10
+[36m(EnvWorker pid=2435179)[0m States per task (total): 20
+[36m(EnvWorker pid=2435179)[0m States per task per GPU: 5
+[36m(EnvWorker pid=2435179)[0m [GPU 0] Total states: 50
+[36m(EnvWorker pid=2435179)[0m [GPU 1] Total states: 50
+[36m(EnvWorker pid=2435179)[0m [GPU 2] Total states: 50
+[36m(EnvWorker pid=2435179)[0m [GPU 3] Total states: 50
+[36m(EnvWorker pid=2435179)[0m ===============================
+[36m(EnvWorker pid=2435179)[0m 
+[36m(EnvWorker pid=2435179)[0m get task and trial id [ 50 100 150 200 250 300 350 400 450 500] [42 31 25 13 15 63 90 83 50 69 120 101 100 106 100 192 184 185 169 193 233
+[36m(EnvWorker pid=2435179)[0m  228 212 216 235 270 289 265 261 289 328 320 349 309 347 375 381 388 396
+[36m(EnvWorker pid=2435179)[0m  370 441 437 420 424 421 498 496 483 498 493] [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9] [42, 31, 25, 13, 15, 13, 40, 33, 0, 19, 20, 1, 0, 6, 0, 42, 34, 35, 19, 43, 33, 28, 12, 16, 35, 20, 39, 15, 11, 39, 28, 20, 49, 9, 47, 25, 31, 38, 46, 20, 41, 37, 20, 24, 21, 48, 46, 33, 48, 43]
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m get task and trial id [ 50 100 150 200 250 300 350 400 450 500] [7 41 47 12 15 66 72 89 56 65 124 105 149 137 148 181 172 188 168 180 229
+[36m(EnvWorker pid=2435180)[0m  240 213 217 241 259 277 290 267 259 332 312 335 320 341 394 389 371 378
+[36m(EnvWorker pid=2435180)[0m  379 438 444 410 443 441 469 475 450 481 463] [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9] [7, 41, 47, 12, 15, 16, 22, 39, 6, 15, 24, 5, 49, 37, 48, 31, 22, 38, 18, 30, 29, 40, 13, 17, 41, 9, 27, 40, 17, 9, 32, 12, 35, 20, 41, 44, 39, 21, 28, 29, 38, 44, 10, 43, 41, 19, 25, 0, 31, 13]
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m get task and trial id [ 50 100 150 200 250 300 350 400 450 500] [7 34 36 1 5 82 82 84 93 64 138 123 101 112 135 187 164 186 182 160 205
+[36m(EnvWorker pid=2435184)[0m  229 242 232 219 269 256 280 296 259 308 344 348 348 331 359 385 360 381
+[36m(EnvWorker pid=2435184)[0m  392 427 447 435 440 402 459 451 474 480 456] [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9] [7, 34, 36, 1, 5, 32, 32, 34, 43, 14, 38, 23, 1, 12, 35, 37, 14, 36, 32, 10, 5, 29, 42, 32, 19, 19, 6, 30, 46, 9, 8, 44, 48, 48, 31, 9, 35, 10, 31, 42, 27, 47, 35, 40, 2, 9, 1, 24, 30, 6]
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m get task and trial id [ 50 100 150 200 250 300 350 400 450 500] [40 36 49 9 44 60 81 96 98 93 145 146 111 123 128 172 170 179 175 189 231
+[36m(EnvWorker pid=2435181)[0m  216 238 226 202 284 298 289 279 255 342 341 318 304 313 359 375 377 398
+[36m(EnvWorker pid=2435181)[0m  377 401 414 424 400 430 499 468 489 476 481] [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9] [40, 36, 49, 9, 44, 10, 31, 46, 48, 43, 45, 46, 11, 23, 28, 22, 20, 29, 25, 39, 31, 16, 38, 26, 2, 34, 48, 39, 29, 5, 42, 41, 18, 4, 13, 9, 25, 27, 48, 27, 1, 14, 24, 0, 30, 49, 18, 39, 26, 31]
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist![36m(MultiStepRolloutWorker pid=2435174)[0m Rollout in Eval Step:   0%|          | 0/64 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=2435175)[0m Rollout in Eval Step:   0%|          | 0/64 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=2435178)[0m Rollout in Eval Step:   0%|          | 0/64 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=2435176)[0m Rollout in Eval Step:   0%|          | 0/64 [00:00<?, ?it/s]
+
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m get task and trial id [ 50 100 150 200 250 300 350 400 450 500] [42 31 25 13 15 63 90 83 50 69 120 101 100 106 100 192 184 185 169 193 233
+[36m(EnvWorker pid=2435179)[0m  228 212 216 235 270 289 265 261 289 328 320 349 309 347 375 381 388 396
+[36m(EnvWorker pid=2435179)[0m  370 441 437 420 424 421 498 496 483 498 493] [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9] [42, 31, 25, 13, 15, 13, 40, 33, 0, 19, 20, 1, 0, 6, 0, 42, 34, 35, 19, 43, 33, 28, 12, 16, 35, 20, 39, 15, 11, 39, 28, 20, 49, 9, 47, 25, 31, 38, 46, 20, 41, 37, 20, 24, 21, 48, 46, 33, 48, 43]
+[36m(EnvWorker pid=2435180)[0m get task and trial id [ 50 100 150 200 250 300 350 400 450 500] [7 41 47 12 15 66 72 89 56 65 124 105 149 137 148 181 172 188 168 180 229
+[36m(EnvWorker pid=2435180)[0m  240 213 217 241 259 277 290 267 259 332 312 335 320 341 394 389 371 378
+[36m(EnvWorker pid=2435180)[0m  379 438 444 410 443 441 469 475 450 481 463] [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9] [7, 41, 47, 12, 15, 16, 22, 39, 6, 15, 24, 5, 49, 37, 48, 31, 22, 38, 18, 30, 29, 40, 13, 17, 41, 9, 27, 40, 17, 9, 32, 12, 35, 20, 41, 44, 39, 21, 28, 29, 38, 44, 10, 43, 41, 19, 25, 0, 31, 13]
+[36m(EnvWorker pid=2435184)[0m get task and trial id [ 50 100 150 200 250 300 350 400 450 500] [7 34 36 1 5 82 82 84 93 64 138 123 101 112 135 187 164 186 182 160 205
+[36m(EnvWorker pid=2435184)[0m  229 242 232 219 269 256 280 296 259 308 344 348 348 331 359 385 360 381
+[36m(EnvWorker pid=2435184)[0m  392 427 447 435 440 402 459 451 474 480 456] [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9] [7, 34, 36, 1, 5, 32, 32, 34, 43, 14, 38, 23, 1, 12, 35, 37, 14, 36, 32, 10, 5, 29, 42, 32, 19, 19, 6, 30, 46, 9, 8, 44, 48, 48, 31, 9, 35, 10, 31, 42, 27, 47, 35, 40, 2, 9, 1, 24, 30, 6]
+[36m(EnvWorker pid=2435181)[0m get task and trial id [ 50 100 150 200 250 300 350 400 450 500] [40 36 49 9 44 60 81 96 98 93 145 146 111 123 128 172 170 179 175 189 231
+[36m(EnvWorker pid=2435181)[0m  216 238 226 202 284 298 289 279 255 342 341 318 304 313 359 375 377 398
+[36m(EnvWorker pid=2435181)[0m  377 401 414 424 400 430 499 468 489 476 481] [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9] [40, 36, 49, 9, 44, 10, 31, 46, 48, 43, 45, 46, 11, 23, 28, 22, 20, 29, 25, 39, 31, 16, 38, 26, 2, 34, 48, 39, 29, 5, 42, 41, 18, 4, 13, 9, 25, 27, 48, 27, 1, 14, 24, 0, 30, 49, 18, 39, 26, 31]
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435181)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435180)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435179)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
+[36m(EnvWorker pid=2435184)[0m [Warning]: datasets path /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets does not exist!
