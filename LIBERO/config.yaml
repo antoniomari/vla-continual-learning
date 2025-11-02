@@ -1,0 +1,5 @@
+assets: /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/./assets
+bddl_files: /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/./bddl_files
+benchmark_root: /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero
+datasets: /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/../datasets
+init_states: /scratch/cluster/jshim12/RLinf/LIBERO/libero/libero/./init_files

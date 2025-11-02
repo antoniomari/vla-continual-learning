@@ -15,7 +15,5 @@ logs/*
 .venv
 uv.lock
 assets/
-LIBERO/
 model/
-openvla-oft/
 openvla_image.tar

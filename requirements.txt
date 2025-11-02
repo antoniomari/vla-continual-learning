@@ -24,12 +24,10 @@ swanlab
 tensorboard
 # Embodied dependencies
 # prismatic
-transformers==4.40.1
 draccus
 rich
 tensorflow_graphics
 peft==0.11.1
 timm==0.9.10
-git+https://github.com/haosulab/ManiSkill.git
 tensordict
 git+https://github.com/Lifelong-Robot-Learning/LIBERO.git
