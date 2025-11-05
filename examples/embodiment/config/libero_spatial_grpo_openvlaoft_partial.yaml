@@ -89,7 +89,7 @@ env:
     queue_name: "obs_buffer"
     queue_size: 0
   enable_offload: False
-  fixed_task_ids: [2]
+  fixed_task_ids: [4]
 
 rollout:
   group_name: "RolloutGroup"
@@ -120,7 +120,12 @@ actor:
   model:
     model_name: "openvla_oft"
     # ckpt_path: "${oc.env:REPO_PATH}/logs/base_to_task0_partial_grpo/checkpoints/global_step_10/actor/model.pt"
-    ckpt_path: "${oc.env:REPO_PATH}/logs/task0_to_task1_partial_grpo/checkpoints/global_step_10/actor/model.pt"
+    # ckpt_path: "${oc.env:REPO_PATH}/logs/task0_to_task1_partial_grpo/checkpoints/global_step_10/actor/model.pt"
+    # ckpt_path: "/scratch/cluster/jshim12/RLinf/logs/base_to_task0_partial_grpo/checkpoints/global_step_10/actor/model.pt"
+    # ckpt_path: "/scratch/cluster/jshim12/RLinf/logs/task0_to_task1_partial_grpo/checkpoints/global_step_10/actor/model.pt"
+    # ckpt_path: "/scratch/cluster/jshim12/RLinf/logs/task1_to_task2_partial_grpo/checkpoints/global_step_10/actor/model.pt"
+    ckpt_path: "/scratch/cluster/jshim12/RLinf/logs/task2_to_task3_partial_grpo/checkpoints/global_step_10/actor/model.pt"
+    # ckpt_path: "/scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt"
     value_type: ${algorithm.reward_type}  # 'action' or 'token'
     action_dim: 7
     num_action_chunks: 8

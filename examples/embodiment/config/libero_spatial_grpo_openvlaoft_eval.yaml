@@ -120,7 +120,12 @@ actor:
   model:
     model_name: "openvla_oft"
     # lora_path: "${oc.env:REPO_PATH}/logs/base_to_task0_LoRA_grpo/checkpoints/global_step_10/actor/"
-    lora_path: "${oc.env:REPO_PATH}/logs/task0_to_task1_LoRA_grpo/checkpoints/global_step_10/actor/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/task0_to_task1_LoRA_grpo/checkpoints/global_step_10/actor/"
+    # lora_path: "/scratch/cluster/jshim12/RLinf/logs/base_to_task0_LoRA_grpo/checkpoints/global_step_10/actor/"
+    # lora_path: "/scratch/cluster/jshim12/RLinf/logs/task0_to_task1_LoRA_grpo/checkpoints/global_step_10/actor/"
+    # lora_path: "/scratch/cluster/jshim12/RLinf/logs/task1_to_task2_LoRA_grpo/checkpoints/global_step_10/actor/"
+    # lora_path: "/scratch/cluster/jshim12/RLinf/logs/task2_to_task3_LoRA_grpo/checkpoints/global_step_10/actor/"
+    lora_path: "/scratch/cluster/jshim12/RLinf/logs/task3_to_task4_LoRA_grpo/checkpoints/global_step_10/actor/"
     value_type: ${algorithm.reward_type}  # 'action' or 'token'
     action_dim: 7
     num_action_chunks: 8

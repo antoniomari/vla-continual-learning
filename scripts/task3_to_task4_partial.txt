@@ -1,0 +1,916 @@
+----------------------------------------
+Starting run #1...
+python /scratch/cluster/jshim12/RLinf/examples/embodiment/eval_embodied_agent.py --config-path /scratch/cluster/jshim12/RLinf/examples/embodiment/config/ --config-name libero_spatial_grpo_openvlaoft_partial_eval runner.logger.log_path=/scratch/cluster/jshim12/RLinf/logs/evals
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+2025-11-04 12:04:46.417718: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-11-04 12:04:59.270961: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-11-04 12:04:59.271031: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-11-04 12:05:01.532812: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-11-04 12:05:07.804295: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-11-04 12:05:16.751020: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'libero_spatial_grpo_openvlaoft_partial_eval': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+2025-11-04 12:05:42,520	INFO worker.py:1942 -- Started a local Ray instance. View the dashboard at [1m[32mhttp://127.0.0.1:8265 [39m[22m
+[INFO 12:05:46 RLinf] RLinf is running on a cluster with 1 node and 4 accelerators. The nodes' details are: [NodeInfo(node_rank=0, ray_id='04fd2f502def9846044419e806dd53006a92dc4ecf9c57f188c16ef7', node_ip='128.83.144.36', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, num_accelerators=4, num_cpus=96)]
+[INFO 12:05:46 FlexiblePlacementStrategy] 
+[INFO 12:05:46 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:05:46 FlexiblePlacementStrategy] 
+[INFO 12:05:46 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:05:46 FlexiblePlacementStrategy] 
+[INFO 12:05:46 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:05:46 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[INFO 12:05:46 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[36m(pid=13706)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13706)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13705)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13705)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13708)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13708)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13707)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13707)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13709)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13709)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13710)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13710)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13713)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13713)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13716)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13716)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13717)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13717)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13720)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13720)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13715)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13715)[0m   import pynvml  # type: ignore[import]
+[36m(EnvWorker pid=13715)[0m [INFO 12:05:50 NodePlacementStrategy] 
+[36m(EnvWorker pid=13715)[0m [INFO 12:05:50 NodePlacementStrategy] Using node placement with node IDs: [0].
+[36m(EnvWorker pid=13715)[0m [INFO 12:05:50 NodePlacementStrategy] Generated 1 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id='0', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=1, visible_accelerators=['0', '1', '2', '3'], isolate_accelerator=True)].
+[36m(pid=14556)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=14556)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13708)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13708)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13709)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13709)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13710)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13710)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13713)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=13713)[0m   import pynvml  # type: ignore[import]
+[36m(pid=13708)[0m 2025-11-04 12:05:53.798033: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=13708)[0m 2025-11-04 12:05:53.830867: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=13708)[0m 2025-11-04 12:05:53.830890: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=13708)[0m 2025-11-04 12:05:53.831615: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=13708)[0m 2025-11-04 12:05:53.836294: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=13708)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=13709)[0m 2025-11-04 12:05:53.794793: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=13709)[0m 2025-11-04 12:05:53.829120: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=13709)[0m 2025-11-04 12:05:53.829158: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=13709)[0m 2025-11-04 12:05:53.830231: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=13709)[0m 2025-11-04 12:05:53.835744: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=13709)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=13710)[0m 2025-11-04 12:05:53.794793: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=13710)[0m 2025-11-04 12:05:53.829117: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=13710)[0m 2025-11-04 12:05:53.829158: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=13710)[0m 2025-11-04 12:05:53.830230: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=13710)[0m 2025-11-04 12:05:53.835742: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=13710)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=13713)[0m 2025-11-04 12:05:53.794793: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=13713)[0m 2025-11-04 12:05:53.829120: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=13713)[0m 2025-11-04 12:05:53.829158: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=13713)[0m 2025-11-04 12:05:53.830230: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=13713)[0m 2025-11-04 12:05:53.835741: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=13713)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=13708)[0m 2025-11-04 12:05:55.495450: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=13710)[0m 2025-11-04 12:05:55.496989: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=13713)[0m 2025-11-04 12:05:55.495363: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=13709)[0m 2025-11-04 12:05:55.517480: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(MultiStepRolloutWorker pid=13708)[0m 2025-11-04 12:06:08.352454: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=13708)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=13709)[0m 2025-11-04 12:06:08.352447: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=13709)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=13710)[0m 2025-11-04 12:06:08.352444: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=13710)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=13713)[0m 2025-11-04 12:06:08.352447: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=13713)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=13708)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=13709)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=13710)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=13713)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=13708)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [01:18<03:56, 78.99s/it]
+[36m(MultiStepRolloutWorker pid=13709)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [01:19<03:58, 79.49s/it]
+[36m(MultiStepRolloutWorker pid=13710)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [01:19<03:58, 79.66s/it]
+[36m(MultiStepRolloutWorker pid=13713)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [01:19<03:59, 79.72s/it]
+[36m(MultiStepRolloutWorker pid=13710)[0m Loading checkpoint shards:  50%|█████     | 2/4 [02:34<02:33, 76.70s/it]
+[36m(MultiStepRolloutWorker pid=13708)[0m Loading checkpoint shards:  50%|█████     | 2/4 [02:34<02:34, 77.07s/it]
+[36m(MultiStepRolloutWorker pid=13709)[0m Loading checkpoint shards:  50%|█████     | 2/4 [02:34<02:34, 77.00s/it]
+[36m(MultiStepRolloutWorker pid=13713)[0m Loading checkpoint shards:  50%|█████     | 2/4 [02:34<02:34, 77.02s/it]
+[36m(MultiStepRolloutWorker pid=13708)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [03:51<01:16, 76.78s/it]
+[36m(MultiStepRolloutWorker pid=13709)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [03:51<01:16, 76.87s/it]
+[36m(MultiStepRolloutWorker pid=13710)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [03:51<01:16, 76.92s/it]
+[36m(MultiStepRolloutWorker pid=13713)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [03:51<01:16, 76.85s/it]
+[36m(MultiStepRolloutWorker pid=13708)[0m Loading checkpoint shards: 100%|██████████| 4/4 [03:53<00:00, 47.56s/it]Loading checkpoint shards: 100%|██████████| 4/4 [03:53<00:00, 58.48s/it]
+[36m(MultiStepRolloutWorker pid=13709)[0m Loading checkpoint shards: 100%|██████████| 4/4 [03:53<00:00, 47.47s/it]Loading checkpoint shards: 100%|██████████| 4/4 [03:53<00:00, 58.47s/it]
+[36m(MultiStepRolloutWorker pid=13710)[0m Loading checkpoint shards: 100%|██████████| 4/4 [03:53<00:00, 47.51s/it]Loading checkpoint shards: 100%|██████████| 4/4 [03:53<00:00, 58.47s/it]
+[36m(MultiStepRolloutWorker pid=13713)[0m Loading checkpoint shards: 100%|██████████| 4/4 [03:53<00:00, 47.46s/it]Loading checkpoint shards: 100%|██████████| 4/4 [03:53<00:00, 58.47s/it]
+[36m(MultiStepRolloutWorker pid=13708)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=13708)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=13708)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=13708)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=13708)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=13708)[0m ======================
+[36m(MultiStepRolloutWorker pid=13709)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=13709)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=13709)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=13709)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=13709)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=13709)[0m ======================
+[36m(MultiStepRolloutWorker pid=13710)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=13710)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=13710)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=13710)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=13710)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=13710)[0m ======================
+[36m(MultiStepRolloutWorker pid=13713)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=13713)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=13713)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=13713)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=13713)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=13713)[0m ======================
+[36m(MultiStepRolloutWorker pid=13708)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=13708)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=13708)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=13708)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=13708)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=13708)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=13709)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=13709)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=13709)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=13709)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=13709)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=13709)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=13710)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=13710)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=13710)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=13710)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=13710)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=13710)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=13713)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=13713)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=13713)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=13713)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=13713)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=13713)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+Exception occurred while running MultiStepRolloutWorker's function init_worker: exception is [36mray::MultiStepRolloutWorker.init_worker()[39m (pid=13713, ip=128.83.144.36, actor_id=de2f0183427802ceb9a145fa01000000, repr=<rlinf.workers.rollout.hf.huggingface_worker.MultiStepRolloutWorker object at 0x7f1412f3e450>)
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+           ^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/scheduler/worker/worker.py", line 74, in sync_func
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/workers/rollout/hf/huggingface_worker.py", line 73, in init_worker
+    self.hf_model = get_model(self.cfg.rollout.model_dir, self.cfg.actor.model)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/models/__init__.py", line 232, in get_model
+    model_dict = torch.load(cfg.ckpt_path)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 1425, in load
+    with _open_file_like(f, "rb") as opened_file:
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 751, in _open_file_like
+    return _open_file(name_or_buffer, mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 732, in __init__
+    super().__init__(open(name, mode))
+                     ^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt'
+[36m(MultiStepRolloutWorker pid=13713)[0m Partial finetune enabled. Training last 50 layers. Total params: 987
+[36m(MultiStepRolloutWorker pid=13713)[0m LOADING MODEL CHECKPOINT from: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=13713)[0m Checkpoint exists: False
+Exiting main process due to a failure upon worker execution.
+Finished run #1
+----------------------------------------
+Starting run #2...
+python /scratch/cluster/jshim12/RLinf/examples/embodiment/eval_embodied_agent.py --config-path /scratch/cluster/jshim12/RLinf/examples/embodiment/config/ --config-name libero_spatial_grpo_openvlaoft_partial_eval runner.logger.log_path=/scratch/cluster/jshim12/RLinf/logs/evals
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+2025-11-04 12:11:19.448929: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-11-04 12:11:19.484248: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-11-04 12:11:19.484275: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-11-04 12:11:19.485199: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-11-04 12:11:19.490721: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-11-04 12:11:20.952627: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'libero_spatial_grpo_openvlaoft_partial_eval': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+2025-11-04 12:11:27,725	INFO worker.py:1942 -- Started a local Ray instance. View the dashboard at [1m[32mhttp://127.0.0.1:8265 [39m[22m
+[INFO 12:11:29 RLinf] RLinf is running on a cluster with 1 node and 4 accelerators. The nodes' details are: [NodeInfo(node_rank=0, ray_id='224d2c8a345be92e33fa5300d9cd44609173c8680f5d010bd1999dc1', node_ip='128.83.144.36', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, num_accelerators=4, num_cpus=96)]
+[INFO 12:11:29 FlexiblePlacementStrategy] 
+[INFO 12:11:29 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:11:29 FlexiblePlacementStrategy] 
+[INFO 12:11:29 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:11:29 FlexiblePlacementStrategy] 
+[INFO 12:11:29 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:11:29 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[INFO 12:11:29 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[36m(pid=24548)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24548)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24549)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24549)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24550)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24550)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24551)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24551)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24552)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24552)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24555)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24555)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24553)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24553)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24556)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24556)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24557)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24557)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24558)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24558)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24561)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24561)[0m   import pynvml  # type: ignore[import]
+[36m(EnvWorker pid=24556)[0m [INFO 12:11:33 NodePlacementStrategy] 
+[36m(EnvWorker pid=24556)[0m [INFO 12:11:33 NodePlacementStrategy] Using node placement with node IDs: [0].
+[36m(EnvWorker pid=24556)[0m [INFO 12:11:33 NodePlacementStrategy] Generated 1 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id='0', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=1, visible_accelerators=['0', '1', '2', '3'], isolate_accelerator=True)].
+[36m(pid=25323)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=25323)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24552)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24552)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24555)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24555)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24551)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24551)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24553)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=24553)[0m   import pynvml  # type: ignore[import]
+[36m(pid=24551)[0m 2025-11-04 12:11:36.067057: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=24551)[0m 2025-11-04 12:11:36.101361: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=24551)[0m 2025-11-04 12:11:36.101400: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=24551)[0m 2025-11-04 12:11:36.102221: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=24551)[0m 2025-11-04 12:11:36.107332: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=24551)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=24552)[0m 2025-11-04 12:11:36.067075: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=24552)[0m 2025-11-04 12:11:36.102014: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=24552)[0m 2025-11-04 12:11:36.102046: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=24552)[0m 2025-11-04 12:11:36.102979: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=24552)[0m 2025-11-04 12:11:36.108259: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=24552)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=24555)[0m 2025-11-04 12:11:36.067075: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=24555)[0m 2025-11-04 12:11:36.102013: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=24555)[0m 2025-11-04 12:11:36.102045: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=24555)[0m 2025-11-04 12:11:36.102980: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=24555)[0m 2025-11-04 12:11:36.108259: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=24555)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=24553)[0m 2025-11-04 12:11:36.067076: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=24553)[0m 2025-11-04 12:11:36.101847: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=24553)[0m 2025-11-04 12:11:36.101873: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=24553)[0m 2025-11-04 12:11:36.102616: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=24553)[0m 2025-11-04 12:11:36.107523: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=24553)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=24551)[0m 2025-11-04 12:11:37.554843: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=24552)[0m 2025-11-04 12:11:37.554459: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=24555)[0m 2025-11-04 12:11:37.554775: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=24553)[0m 2025-11-04 12:11:37.555071: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(MultiStepRolloutWorker pid=24551)[0m 2025-11-04 12:11:43.236722: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=24551)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=24552)[0m 2025-11-04 12:11:43.236278: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=24552)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=24555)[0m 2025-11-04 12:11:43.235109: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=24555)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=24553)[0m 2025-11-04 12:11:43.236509: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=24553)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=24555)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=24553)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=24552)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=24551)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=24552)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:06,  2.24s/it]
+[36m(MultiStepRolloutWorker pid=24555)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:07,  2.52s/it]
+[36m(MultiStepRolloutWorker pid=24553)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:07,  2.53s/it]
+[36m(MultiStepRolloutWorker pid=24551)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:06,  2.29s/it]
+[36m(MultiStepRolloutWorker pid=24552)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.29s/it]
+[36m(MultiStepRolloutWorker pid=24555)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.36s/it]
+[36m(MultiStepRolloutWorker pid=24553)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.36s/it]
+[36m(MultiStepRolloutWorker pid=24551)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.27s/it]
+[36m(MultiStepRolloutWorker pid=24551)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.28s/it]
+[36m(MultiStepRolloutWorker pid=24552)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.30s/it]
+[36m(MultiStepRolloutWorker pid=24555)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:07<00:02,  2.35s/it]
+[36m(MultiStepRolloutWorker pid=24553)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:07<00:02,  2.35s/it]
+[36m(MultiStepRolloutWorker pid=24551)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.51s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.79s/it]
+[36m(MultiStepRolloutWorker pid=24552)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.52s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.80s/it]
+[36m(MultiStepRolloutWorker pid=24555)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.55s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.86s/it]
+[36m(MultiStepRolloutWorker pid=24553)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.56s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.86s/it]
+[36m(MultiStepRolloutWorker pid=24551)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=24551)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=24551)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=24551)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=24551)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=24551)[0m ======================
+[36m(MultiStepRolloutWorker pid=24552)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=24552)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=24552)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=24552)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=24552)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=24552)[0m ======================
+[36m(MultiStepRolloutWorker pid=24555)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=24555)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=24555)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=24555)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=24555)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=24555)[0m ======================
+[36m(MultiStepRolloutWorker pid=24553)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=24553)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=24553)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=24553)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=24553)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=24553)[0m ======================
+[36m(MultiStepRolloutWorker pid=24552)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=24552)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=24552)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=24552)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=24552)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=24552)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=24551)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=24551)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=24551)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=24551)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=24551)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=24551)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=24555)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=24555)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=24555)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=24555)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=24555)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=24555)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=24553)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=24553)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=24553)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=24553)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=24553)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=24553)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+Exception occurred while running MultiStepRolloutWorker's function init_worker: exception is [36mray::MultiStepRolloutWorker.init_worker()[39m (pid=24552, ip=128.83.144.36, actor_id=54cebfbb2a7bd9292495dfc301000000, repr=<rlinf.workers.rollout.hf.huggingface_worker.MultiStepRolloutWorker object at 0x7f1e9bf8a9d0>)
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+           ^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/scheduler/worker/worker.py", line 74, in sync_func
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/workers/rollout/hf/huggingface_worker.py", line 73, in init_worker
+    self.hf_model = get_model(self.cfg.rollout.model_dir, self.cfg.actor.model)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/models/__init__.py", line 232, in get_model
+    model_dict = torch.load(cfg.ckpt_path)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 1425, in load
+    with _open_file_like(f, "rb") as opened_file:
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 751, in _open_file_like
+    return _open_file(name_or_buffer, mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 732, in __init__
+    super().__init__(open(name, mode))
+                     ^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt'
+[36m(MultiStepRolloutWorker pid=24552)[0m Partial finetune enabled. Training last 50 layers. Total params: 987
+[36m(MultiStepRolloutWorker pid=24552)[0m LOADING MODEL CHECKPOINT from: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=24552)[0m Checkpoint exists: False
+[36m(MultiStepRolloutWorker pid=24555)[0m Partial finetune enabled. Training last 50 layers. Total params: 987
+[36m(MultiStepRolloutWorker pid=24555)[0m LOADING MODEL CHECKPOINT from: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=24555)[0m Checkpoint exists: False
+[36m(MultiStepRolloutWorker pid=24553)[0m Partial finetune enabled. Training last 50 layers. Total params: 987
+[36m(MultiStepRolloutWorker pid=24553)[0m LOADING MODEL CHECKPOINT from: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=24553)[0m Checkpoint exists: False
+Exiting main process due to a failure upon worker execution.
+Finished run #2
+----------------------------------------
+Starting run #3...
+python /scratch/cluster/jshim12/RLinf/examples/embodiment/eval_embodied_agent.py --config-path /scratch/cluster/jshim12/RLinf/examples/embodiment/config/ --config-name libero_spatial_grpo_openvlaoft_partial_eval runner.logger.log_path=/scratch/cluster/jshim12/RLinf/logs/evals
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+2025-11-04 12:12:54.552674: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-11-04 12:12:54.587756: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-11-04 12:12:54.587782: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-11-04 12:12:54.588691: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-11-04 12:12:54.594118: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-11-04 12:12:56.023129: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'libero_spatial_grpo_openvlaoft_partial_eval': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+2025-11-04 12:13:02,781	INFO worker.py:1942 -- Started a local Ray instance. View the dashboard at [1m[32mhttp://127.0.0.1:8265 [39m[22m
+[INFO 12:13:04 RLinf] RLinf is running on a cluster with 1 node and 4 accelerators. The nodes' details are: [NodeInfo(node_rank=0, ray_id='5a33c4eadb0edbe708b399e1a92411780b3940d9ea4023588704b327', node_ip='128.83.144.36', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, num_accelerators=4, num_cpus=96)]
+[INFO 12:13:04 FlexiblePlacementStrategy] 
+[INFO 12:13:04 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:13:04 FlexiblePlacementStrategy] 
+[INFO 12:13:04 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:13:04 FlexiblePlacementStrategy] 
+[INFO 12:13:04 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:13:04 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[INFO 12:13:05 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[36m(pid=35128)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35128)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35127)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35127)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35129)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35129)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35130)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35130)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35131)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35131)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35132)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35132)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35135)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35135)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35134)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35134)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35136)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35136)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35137)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35137)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35140)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35140)[0m   import pynvml  # type: ignore[import]
+[36m(EnvWorker pid=35135)[0m [INFO 12:13:08 NodePlacementStrategy] 
+[36m(EnvWorker pid=35135)[0m [INFO 12:13:08 NodePlacementStrategy] Using node placement with node IDs: [0].
+[36m(EnvWorker pid=35135)[0m [INFO 12:13:08 NodePlacementStrategy] Generated 1 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id='0', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=1, visible_accelerators=['0', '1', '2', '3'], isolate_accelerator=True)].
+[36m(pid=35901)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35901)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35131)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35131)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35130)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35130)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35134)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35134)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35132)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=35132)[0m   import pynvml  # type: ignore[import]
+[36m(pid=35130)[0m 2025-11-04 12:13:11.040197: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=35130)[0m 2025-11-04 12:13:11.073875: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=35130)[0m 2025-11-04 12:13:11.073909: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=35130)[0m 2025-11-04 12:13:11.074720: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=35130)[0m 2025-11-04 12:13:11.079733: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=35130)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=35132)[0m 2025-11-04 12:13:11.278403: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=35132)[0m 2025-11-04 12:13:11.313508: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=35132)[0m 2025-11-04 12:13:11.313546: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=35132)[0m 2025-11-04 12:13:11.314352: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=35132)[0m 2025-11-04 12:13:11.319415: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=35132)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=35134)[0m 2025-11-04 12:13:11.254892: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=35134)[0m 2025-11-04 12:13:11.289856: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=35134)[0m 2025-11-04 12:13:11.289894: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=35134)[0m 2025-11-04 12:13:11.290757: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=35134)[0m 2025-11-04 12:13:11.296167: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=35134)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=35131)[0m 2025-11-04 12:13:11.335180: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=35131)[0m 2025-11-04 12:13:11.388129: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=35131)[0m 2025-11-04 12:13:11.388168: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=35131)[0m 2025-11-04 12:13:11.389031: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=35131)[0m 2025-11-04 12:13:11.394396: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=35131)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=35130)[0m 2025-11-04 12:13:12.396252: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=35132)[0m 2025-11-04 12:13:12.608982: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=35134)[0m 2025-11-04 12:13:12.599793: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=35131)[0m 2025-11-04 12:13:12.714052: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(MultiStepRolloutWorker pid=35132)[0m 2025-11-04 12:13:17.196429: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=35132)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=35130)[0m 2025-11-04 12:13:17.383940: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=35130)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=35134)[0m 2025-11-04 12:13:17.375366: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=35134)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=35131)[0m 2025-11-04 12:13:17.403829: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=35131)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=35130)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=35132)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=35134)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=35131)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=35134)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:06,  2.29s/it]
+[36m(MultiStepRolloutWorker pid=35130)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:07,  2.35s/it]
+[36m(MultiStepRolloutWorker pid=35132)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:07,  2.36s/it]
+[36m(MultiStepRolloutWorker pid=35131)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:06,  2.25s/it]
+[36m(MultiStepRolloutWorker pid=35134)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.28s/it]
+[36m(MultiStepRolloutWorker pid=35130)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.30s/it]
+[36m(MultiStepRolloutWorker pid=35132)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.30s/it]
+[36m(MultiStepRolloutWorker pid=35131)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.26s/it]
+[36m(MultiStepRolloutWorker pid=35134)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.28s/it]
+[36m(MultiStepRolloutWorker pid=35130)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.32s/it]
+[36m(MultiStepRolloutWorker pid=35132)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:07<00:02,  2.34s/it]
+[36m(MultiStepRolloutWorker pid=35131)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.28s/it]
+[36m(MultiStepRolloutWorker pid=35134)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.51s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.79s/it]
+[36m(MultiStepRolloutWorker pid=35130)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.54s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.82s/it]
+[36m(MultiStepRolloutWorker pid=35132)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.55s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.83s/it]
+[36m(MultiStepRolloutWorker pid=35131)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.51s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.79s/it]
+[36m(MultiStepRolloutWorker pid=35131)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=35131)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=35131)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=35131)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=35131)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=35131)[0m ======================
+[36m(MultiStepRolloutWorker pid=35130)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=35130)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=35130)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=35130)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=35130)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=35130)[0m ======================
+[36m(MultiStepRolloutWorker pid=35134)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=35134)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=35134)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=35134)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=35134)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=35134)[0m ======================
+[36m(MultiStepRolloutWorker pid=35132)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=35132)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=35132)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=35132)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=35132)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=35132)[0m ======================
+[36m(MultiStepRolloutWorker pid=35132)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=35132)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=35132)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=35132)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=35132)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=35132)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=35130)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=35130)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=35130)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=35130)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=35130)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=35130)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=35134)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=35134)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=35134)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=35134)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=35134)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=35134)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=35131)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=35131)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=35131)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=35131)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=35131)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=35131)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+Exception occurred while running MultiStepRolloutWorker's function init_worker: exception is [36mray::MultiStepRolloutWorker.init_worker()[39m (pid=35134, ip=128.83.144.36, actor_id=a18a27582f1b94cb5e826c6e01000000, repr=<rlinf.workers.rollout.hf.huggingface_worker.MultiStepRolloutWorker object at 0x7f9a3e65c490>)
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+           ^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/scheduler/worker/worker.py", line 74, in sync_func
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/workers/rollout/hf/huggingface_worker.py", line 73, in init_worker
+    self.hf_model = get_model(self.cfg.rollout.model_dir, self.cfg.actor.model)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/models/__init__.py", line 232, in get_model
+    model_dict = torch.load(cfg.ckpt_path)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 1425, in load
+    with _open_file_like(f, "rb") as opened_file:
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 751, in _open_file_like
+    return _open_file(name_or_buffer, mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 732, in __init__
+    super().__init__(open(name, mode))
+                     ^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt'
+[36m(MultiStepRolloutWorker pid=35134)[0m Partial finetune enabled. Training last 50 layers. Total params: 987
+[36m(MultiStepRolloutWorker pid=35134)[0m LOADING MODEL CHECKPOINT from: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=35134)[0m Checkpoint exists: False
+[36m(MultiStepRolloutWorker pid=35130)[0m Partial finetune enabled. Training last 50 layers. Total params: 987
+[36m(MultiStepRolloutWorker pid=35130)[0m LOADING MODEL CHECKPOINT from: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=35130)[0m Checkpoint exists: False
+[36m(MultiStepRolloutWorker pid=35131)[0m Partial finetune enabled. Training last 50 layers. Total params: 987
+[36m(MultiStepRolloutWorker pid=35131)[0m LOADING MODEL CHECKPOINT from: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=35131)[0m Checkpoint exists: False
+Exiting main process due to a failure upon worker execution.
+Finished run #3
+----------------------------------------
+Starting run #4...
+python /scratch/cluster/jshim12/RLinf/examples/embodiment/eval_embodied_agent.py --config-path /scratch/cluster/jshim12/RLinf/examples/embodiment/config/ --config-name libero_spatial_grpo_openvlaoft_partial_eval runner.logger.log_path=/scratch/cluster/jshim12/RLinf/logs/evals
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+2025-11-04 12:14:29.019964: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-11-04 12:14:29.054887: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-11-04 12:14:29.054912: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-11-04 12:14:29.055843: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-11-04 12:14:29.061274: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-11-04 12:14:30.345512: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'libero_spatial_grpo_openvlaoft_partial_eval': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+2025-11-04 12:14:37,164	INFO worker.py:1942 -- Started a local Ray instance. View the dashboard at [1m[32mhttp://127.0.0.1:8265 [39m[22m
+[INFO 12:14:39 RLinf] RLinf is running on a cluster with 1 node and 4 accelerators. The nodes' details are: [NodeInfo(node_rank=0, ray_id='6f846ccf89c45ad1e84b8c72802ed360a2041b75177f4798602fd646', node_ip='128.83.144.36', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, num_accelerators=4, num_cpus=96)]
+[INFO 12:14:39 FlexiblePlacementStrategy] 
+[INFO 12:14:39 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:14:39 FlexiblePlacementStrategy] 
+[INFO 12:14:39 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:14:39 FlexiblePlacementStrategy] 
+[INFO 12:14:39 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:14:39 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[INFO 12:14:39 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[36m(pid=45699)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45699)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45697)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45697)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45698)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45698)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45702)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45702)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45701)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45701)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45700)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45700)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45704)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45704)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45705)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45705)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45706)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45706)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45710)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45710)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45707)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45707)[0m   import pynvml  # type: ignore[import]
+[36m(EnvWorker pid=45705)[0m [INFO 12:14:42 NodePlacementStrategy] 
+[36m(EnvWorker pid=45705)[0m [INFO 12:14:42 NodePlacementStrategy] Using node placement with node IDs: [0].
+[36m(EnvWorker pid=45705)[0m [INFO 12:14:42 NodePlacementStrategy] Generated 1 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id='0', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=1, visible_accelerators=['0', '1', '2', '3'], isolate_accelerator=True)].
+[36m(pid=46473)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=46473)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45700)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45700)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45702)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45702)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45701)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45701)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45704)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=45704)[0m   import pynvml  # type: ignore[import]
+[36m(pid=45700)[0m 2025-11-04 12:14:45.350073: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=45700)[0m 2025-11-04 12:14:45.385060: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=45700)[0m 2025-11-04 12:14:45.385095: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=45700)[0m 2025-11-04 12:14:45.385889: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=45700)[0m 2025-11-04 12:14:45.390926: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=45700)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=45702)[0m 2025-11-04 12:14:45.525719: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=45702)[0m 2025-11-04 12:14:45.561115: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=45702)[0m 2025-11-04 12:14:45.561160: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=45702)[0m 2025-11-04 12:14:45.561948: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=45702)[0m 2025-11-04 12:14:45.567093: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=45702)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=45701)[0m 2025-11-04 12:14:45.588181: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=45704)[0m 2025-11-04 12:14:45.590391: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=45701)[0m 2025-11-04 12:14:45.622937: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=45701)[0m 2025-11-04 12:14:45.622974: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=45701)[0m 2025-11-04 12:14:45.623799: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=45701)[0m 2025-11-04 12:14:45.628875: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=45701)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=45704)[0m 2025-11-04 12:14:45.624153: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=45704)[0m 2025-11-04 12:14:45.624186: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=45704)[0m 2025-11-04 12:14:45.624983: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=45704)[0m 2025-11-04 12:14:45.630063: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=45704)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=45700)[0m 2025-11-04 12:14:46.691638: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=45702)[0m 2025-11-04 12:14:46.941657: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=45701)[0m 2025-11-04 12:14:46.946136: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=45704)[0m 2025-11-04 12:14:46.943863: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(MultiStepRolloutWorker pid=45702)[0m 2025-11-04 12:14:51.516064: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=45702)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=45701)[0m 2025-11-04 12:14:51.515183: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=45701)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=45700)[0m 2025-11-04 12:14:51.515172: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=45700)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=45704)[0m 2025-11-04 12:14:51.515530: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=45704)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=45704)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=45700)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=45701)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=45702)[0m Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]
+[36m(MultiStepRolloutWorker pid=45704)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:06,  2.25s/it]
+[36m(MultiStepRolloutWorker pid=45700)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:06,  2.31s/it]
+[36m(MultiStepRolloutWorker pid=45701)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:06,  2.31s/it]
+[36m(MultiStepRolloutWorker pid=45702)[0m Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:06,  2.32s/it]
+[36m(MultiStepRolloutWorker pid=45704)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.28s/it]
+[36m(MultiStepRolloutWorker pid=45700)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.27s/it]
+[36m(MultiStepRolloutWorker pid=45701)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.29s/it]
+[36m(MultiStepRolloutWorker pid=45702)[0m Loading checkpoint shards:  50%|█████     | 2/4 [00:04<00:04,  2.29s/it]
+[36m(MultiStepRolloutWorker pid=45704)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.29s/it]
+[36m(MultiStepRolloutWorker pid=45704)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.52s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.80s/it]
+[36m(MultiStepRolloutWorker pid=45700)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.30s/it]
+[36m(MultiStepRolloutWorker pid=45701)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.29s/it]
+[36m(MultiStepRolloutWorker pid=45700)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.53s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.81s/it]
+[36m(MultiStepRolloutWorker pid=45702)[0m Loading checkpoint shards:  75%|███████▌  | 3/4 [00:06<00:02,  2.30s/it]
+[36m(MultiStepRolloutWorker pid=45701)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.52s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.81s/it]
+[36m(MultiStepRolloutWorker pid=45702)[0m Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.53s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:07<00:00,  1.81s/it]
+[36m(MultiStepRolloutWorker pid=45701)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=45701)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=45701)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=45701)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=45701)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=45701)[0m ======================
+[36m(MultiStepRolloutWorker pid=45702)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=45702)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=45702)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=45702)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=45702)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=45702)[0m ======================
+[36m(MultiStepRolloutWorker pid=45700)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=45700)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=45700)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=45700)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=45700)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=45700)[0m ======================
+[36m(MultiStepRolloutWorker pid=45704)[0m === get_model called ===
+[36m(MultiStepRolloutWorker pid=45704)[0m model_path: /scratch/cluster/jshim12/RLinf/model/Openvla-oft-SFT-libero-spatial-traj1/
+[36m(MultiStepRolloutWorker pid=45704)[0m cfg.model_name: openvla_oft
+[36m(MultiStepRolloutWorker pid=45704)[0m cfg has ckpt_path: True
+[36m(MultiStepRolloutWorker pid=45704)[0m cfg.ckpt_path value: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=45704)[0m ======================
+[36m(MultiStepRolloutWorker pid=45701)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=45701)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=45701)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=45701)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=45701)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=45701)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=45702)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=45702)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=45702)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=45702)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=45702)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=45702)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=45700)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=45700)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=45700)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=45700)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=45700)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=45700)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+[36m(MultiStepRolloutWorker pid=45704)[0m Using LIBERO constants:
+[36m(MultiStepRolloutWorker pid=45704)[0m   NUM_ACTIONS_CHUNK = 8
+[36m(MultiStepRolloutWorker pid=45704)[0m   ACTION_DIM = 7
+[36m(MultiStepRolloutWorker pid=45704)[0m   PROPRIO_DIM = 8
+[36m(MultiStepRolloutWorker pid=45704)[0m   ACTION_PROPRIO_NORMALIZATION_TYPE = NormalizationType.BOUNDS_Q99
+[36m(MultiStepRolloutWorker pid=45704)[0m If needed, manually set the correct constants in `prismatic/vla/constants.py`!
+Exception occurred while running MultiStepRolloutWorker's function init_worker: exception is [36mray::MultiStepRolloutWorker.init_worker()[39m (pid=45704, ip=128.83.144.36, actor_id=2e6aaf8c4813e2c1f36813ab01000000, repr=<rlinf.workers.rollout.hf.huggingface_worker.MultiStepRolloutWorker object at 0x7fd343e0df10>)
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+           ^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/scheduler/worker/worker.py", line 74, in sync_func
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/workers/rollout/hf/huggingface_worker.py", line 73, in init_worker
+    self.hf_model = get_model(self.cfg.rollout.model_dir, self.cfg.actor.model)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/RLinf/rlinf/models/__init__.py", line 232, in get_model
+    model_dict = torch.load(cfg.ckpt_path)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 1425, in load
+    with _open_file_like(f, "rb") as opened_file:
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 751, in _open_file_like
+    return _open_file(name_or_buffer, mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/serialization.py", line 732, in __init__
+    super().__init__(open(name, mode))
+                     ^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt'
+[36m(MultiStepRolloutWorker pid=45704)[0m Partial finetune enabled. Training last 50 layers. Total params: 987
+[36m(MultiStepRolloutWorker pid=45704)[0m LOADING MODEL CHECKPOINT from: /scratch/cluster/jshim12/RLinf/logs/task3_to_task4_partial_grpo/checkpoints/global_step_10/actor/model.pt
+[36m(MultiStepRolloutWorker pid=45704)[0m Checkpoint exists: False
+Exiting main process due to a failure upon worker execution.
+Finished run #4
+----------------------------------------
+Starting run #5...
+python /scratch/cluster/jshim12/RLinf/examples/embodiment/eval_embodied_agent.py --config-path /scratch/cluster/jshim12/RLinf/examples/embodiment/config/ --config-name libero_spatial_grpo_openvlaoft_partial_eval runner.logger.log_path=/scratch/cluster/jshim12/RLinf/logs/evals
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+2025-11-04 12:16:02.632017: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-11-04 12:16:02.668082: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-11-04 12:16:02.668107: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-11-04 12:16:02.669026: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-11-04 12:16:02.674612: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-11-04 12:16:04.094227: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/defaults_list.py:251: UserWarning: In 'libero_spatial_grpo_openvlaoft_partial_eval': Defaults list is missing `_self_`. See https://hydra.cc/docs/1.2/upgrades/1.0_to_1.1/default_composition_order for more information
+  warnings.warn(msg, UserWarning)
+/scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+2025-11-04 12:16:09,724	INFO worker.py:1942 -- Started a local Ray instance. View the dashboard at [1m[32mhttp://127.0.0.1:8265 [39m[22m
+[INFO 12:16:11 RLinf] RLinf is running on a cluster with 1 node and 4 accelerators. The nodes' details are: [NodeInfo(node_rank=0, ray_id='22bf6663480ad6c1232c76737f6dbc0deae428132da3efdb43eed0b3', node_ip='128.83.144.36', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, num_accelerators=4, num_cpus=96)]
+[INFO 12:16:11 FlexiblePlacementStrategy] 
+[INFO 12:16:11 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:16:11 FlexiblePlacementStrategy] 
+[INFO 12:16:11 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:16:11 FlexiblePlacementStrategy] 
+[INFO 12:16:11 FlexiblePlacementStrategy] Using flexible placement with accelerator IDs: [[0], [1], [2], [3]].
+[INFO 12:16:11 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[INFO 12:16:12 FlexiblePlacementStrategy] Generated 4 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id=0, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=4, visible_accelerators=['0'], isolate_accelerator=True), Placement(rank=1, node_id=0, node_rank=0, local_accelerator_id=1, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=1, local_world_size=4, visible_accelerators=['1'], isolate_accelerator=True), Placement(rank=2, node_id=0, node_rank=0, local_accelerator_id=2, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=2, local_world_size=4, visible_accelerators=['2'], isolate_accelerator=True), Placement(rank=3, node_id=0, node_rank=0, local_accelerator_id=3, accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=3, local_world_size=4, visible_accelerators=['3'], isolate_accelerator=True)].
+[36m(pid=56329)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56329)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56327)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56327)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56328)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56328)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56330)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56330)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56331)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56331)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56332)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56332)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56334)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56334)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56335)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56335)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56337)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56337)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56336)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56336)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56340)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56340)[0m   import pynvml  # type: ignore[import]
+[36m(EnvWorker pid=56335)[0m [INFO 12:16:15 NodePlacementStrategy] 
+[36m(EnvWorker pid=56335)[0m [INFO 12:16:15 NodePlacementStrategy] Using node placement with node IDs: [0].
+[36m(EnvWorker pid=56335)[0m [INFO 12:16:15 NodePlacementStrategy] Generated 1 placements: [Placement(rank=0, node_id=0, node_rank=0, local_accelerator_id='0', accelerator_type=<AcceleratorType.NV_GPU: 'NV_GPU'>, local_rank=0, local_world_size=1, visible_accelerators=['0', '1', '2', '3'], isolate_accelerator=True)].
+[36m(pid=57103)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=57103)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56330)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56330)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56331)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56331)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56332)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56332)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56334)[0m /scratch/cluster/jshim12/miniconda3/envs/rlinf/lib/python3.11/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[36m(pid=56334)[0m   import pynvml  # type: ignore[import]
+[36m(pid=56330)[0m 2025-11-04 12:16:18.083832: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=56330)[0m 2025-11-04 12:16:18.118018: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=56330)[0m 2025-11-04 12:16:18.118054: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=56330)[0m 2025-11-04 12:16:18.118908: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=56330)[0m 2025-11-04 12:16:18.124283: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=56330)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=56331)[0m 2025-11-04 12:16:18.153378: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=56331)[0m 2025-11-04 12:16:18.186917: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=56331)[0m 2025-11-04 12:16:18.186954: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=56331)[0m 2025-11-04 12:16:18.187770: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=56331)[0m 2025-11-04 12:16:18.192847: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=56331)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=56332)[0m 2025-11-04 12:16:18.363920: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=56332)[0m 2025-11-04 12:16:18.398308: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=56332)[0m 2025-11-04 12:16:18.398344: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=56332)[0m 2025-11-04 12:16:18.399350: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=56332)[0m 2025-11-04 12:16:18.405132: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=56332)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=56334)[0m 2025-11-04 12:16:18.363920: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+[36m(pid=56334)[0m 2025-11-04 12:16:18.398308: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+[36m(pid=56334)[0m 2025-11-04 12:16:18.398344: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+[36m(pid=56334)[0m 2025-11-04 12:16:18.399350: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+[36m(pid=56334)[0m 2025-11-04 12:16:18.405130: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+[36m(pid=56334)[0m To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[36m(pid=56330)[0m 2025-11-04 12:16:19.438910: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=56331)[0m 2025-11-04 12:16:19.505051: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=56332)[0m 2025-11-04 12:16:19.735614: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(pid=56334)[0m 2025-11-04 12:16:19.811095: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+[36m(MultiStepRolloutWorker pid=56330)[0m 2025-11-04 12:16:24.300580: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=56330)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=56331)[0m 2025-11-04 12:16:24.301557: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=56331)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=56332)[0m 2025-11-04 12:16:24.300437: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=56332)[0m Skipping registering GPU devices...
+[36m(MultiStepRolloutWorker pid=56334)[0m 2025-11-04 12:16:24.300591: W tensorflow/core/common_runtime/gpu/gpu_device.cc:2256] Cannot dlopen some GPU libraries. Please make sure the missing libraries mentioned above are installed properly if you would like to use GPU. Follow the guide at https://www.tensorflow.org/install/gpu for how to download and setup the required libraries for your platform.
+[36m(MultiStepRolloutWorker pid=56334)[0m Skipping registering GPU devices...
