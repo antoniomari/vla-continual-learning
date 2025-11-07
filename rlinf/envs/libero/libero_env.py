@@ -257,16 +257,18 @@ class LiberoEnv(gym.Env):
             self._generator_ordered.shuffle(reset_state_ids)
             reset_state_ids = reset_state_ids[:valid_size]
             reset_state_ids = reset_state_ids.reshape(self.world_size, -1)
+            print(f"get_reset_state_ids_all: generated reset_state_ids_all with shape {reset_state_ids.shape}, reset_state_ids: {reset_state_ids}")
             return reset_state_ids
 
     def _get_ordered_reset_state_ids(self, num_reset_states):
+        if self.start_idx + num_reset_states > len(self.reset_state_ids_all[0]):
+            self.reset_state_ids_all = self.get_reset_state_ids_all()
+            self.start_idx = 0
+
         reset_state_ids = self.reset_state_ids_all[self.rank][
             self.start_idx : self.start_idx + num_reset_states
         ]
         self.start_idx = self.start_idx + num_reset_states
-        if self.start_idx >= len(self.reset_state_ids_all[0]):
-            self.reset_state_ids_all = self.get_reset_state_ids_all()
-            self.start_idx = 0
         return reset_state_ids
 
     def _get_task_and_trial_ids_from_reset_state_ids(self, reset_state_ids):
@@ -414,6 +416,7 @@ class LiberoEnv(gym.Env):
         task_ids, trial_ids = self._get_task_and_trial_ids_from_reset_state_ids(
             reset_state_ids
         )
+
         for j, env_id in enumerate(env_idx):
             if self.task_ids[env_id] != task_ids[j]:
                 reconfig_env_idx.append(env_id)
