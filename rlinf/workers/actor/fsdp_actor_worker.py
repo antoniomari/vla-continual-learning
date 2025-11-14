@@ -346,7 +346,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             self.rollout_batch,
             rollout_size // batch_size_per_rank,
         )
-        bc_coeff = self.cfg.actor.get("bc_coeff", 0.0)
+        bc_coeff = self.cfg.algorithm.get("bc_coeff", 0.0)
 
         metrics = {}
         for _, train_global_batch in tqdm(
