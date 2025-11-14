@@ -118,104 +118,50 @@ def actor_forward(
     actions = None
     if bc_batch:
         # RL + BC forward
-        output_dict, actions = custom_forward_with_bc(
+        actions = bc_custom_forward(
             model,
-            rl_batch=rl_batch,
-            bc_batch=bc_batch,
-            output_hidden_states=output_hidden_states,
-            action_token_len=action_token_len,
-            value_model=value_model,
-            value_head_mode=value_head_mode,
-            logits_processor=logits_processor,
-            logits_processor_args=logits_processor_args,
+            input_ids=bc_batch["input_ids"],
+            attention_mask=bc_batch["attention_mask"],
+            pixel_values=bc_batch["pixel_values"],
             temperature=temperature,
             top_k=top_k,
-            do_sample=do_sample,
+            do_sample=do_sample
         )
-        return output_dict, actions
 
-    else:
-        # RL-only forward
-        output_dict = custom_forward(
-            model,
-            input_ids=rl_batch["input_ids"],
-            attention_mask=rl_batch["attention_mask"],
-            pixel_values=rl_batch["pixel_values"],
-            output_hidden_states=output_hidden_states,
-            action_token_len=action_token_len,
-            value_model=value_model,
-            value_head_mode=value_head_mode,
-            temperature=temperature,
-            top_k=top_k,
-            logits_processor=logits_processor,
-            logits_processor_args=logits_processor_args
-        )
+    # RL-only forward
+    output_dict = custom_forward(
+        model,
+        input_ids=rl_batch["input_ids"],
+        attention_mask=rl_batch["attention_mask"],
+        pixel_values=rl_batch["pixel_values"],
+        output_hidden_states=output_hidden_states,
+        action_token_len=action_token_len,
+        value_model=value_model,
+        value_head_mode=value_head_mode,
+        temperature=temperature,
+        top_k=top_k,
+        logits_processor=logits_processor,
+        logits_processor_args=logits_processor_args
+    )
     return output_dict, actions
 
-def custom_forward_with_bc(
+def bc_custom_forward(
     model,
-    rl_batch,
-    bc_batch,
-    output_hidden_states=True,
-    action_token_len=None,
-    value_model=False,
-    value_head_mode: str = "a",
-    logits_processor=default_logits_processor,
-    temperature: int = 1.0,
-    top_k: int = -1,
-    logits_processor_args: Optional[dict] = None,
+    input_ids,
+    attention_mask,
+    pixel_values,
+    temperature=0.1,
+    top_k=50,
     do_sample=False,
 ):
-    ### POTENTIAL BUG: how does concat handle different length input_ids? 
-    input_ids = torch.cat([rl_batch["input_ids"], bc_batch["input_ids"]], dim=0)
-    attention_mask = torch.cat([rl_batch["attention_mask"], bc_batch["attention_mask"]], dim=0)
-    pixel_values = torch.cat([rl_batch["pixel_values"], bc_batch["pixel_values"]], dim=0)
-
-    bs_rl = rl_batch["input_ids"].shape[0]
-    bs_bc = bc_batch["input_ids"].shape[0]
-
     outputs = model(
         input_ids=input_ids,
         attention_mask=attention_mask,
         pixel_values=pixel_values,
-        output_hidden_states=output_hidden_states,
+        output_hidden_states=True,
     )
-    logits = outputs.logits[:, -action_token_len - 1 : -1]  # [B, action_dim, vocab_size]
 
-    rl_logits = logits[:bs_rl]
-    bc_logits = logits[bs_rl:]
-    last_hidden_state = outputs.hidden_states[-1]
-    rl_hstates = last_hidden_state[:bs_rl]
-
-    # rl processing
-    processed_logits_tensor = rl_logits / temperature
-    top_k = min(top_k, processed_logits_tensor.size(-1))  # Safety check
-    if top_k > 0:
-        logits_warper = TopKLogitsWarper(
-            top_k
-        )  # since here is logprob instead of logits, we use 0 instead of -inf
-        processed_logits_tensor = logits_warper(None, processed_logits_tensor)
-
-    output_dict = logits_processor(processed_logits_tensor, **logits_processor_args)
-
-    if value_model:
-        # NOTE: Here we subtract 1 because the input tokens do not include the EOS token.
-        last_hidden_state = rl_hstates  # [B, L, hidden_dim]
-        if value_head_mode == "a0":
-            hidden_features = last_hidden_state[
-                :, -action_token_len - 1
-            ]  # [batch_size, hidden_dim]
-            values = model.value_head(hidden_features)  # [batch_size, 1]
-        else:
-            raise ValueError(f"Unknown value head mode: {value_head_mode}")
-    else:
-        values = None
-
-    if values is not None:
-        output_dict.update({"values": values})
-
-    # bc processing
-    n_prompt_tokens = bc_batch["input_ids"].shape[-1] - 1
+    n_prompt_tokens = input_ids.shape[-1] - 1
     # Calculate number of patches (including proprio token and/or diffusion timestep embedding if present)
     n_patches = (
         model.vision_backbone.get_num_patches()
@@ -223,7 +169,10 @@ def custom_forward_with_bc(
     )
 
     # Extract hidden states for action tokens
-    logits_tensor = bc_logits[
+    last_hidden_states = outputs.hidden_states[-1]  # (B, seq_len, D)
+    # assert last_hidden_states.shape[1] == mm_embeddings.shape[1]
+
+    logits_tensor = outputs.logits[
         :,
         n_patches + n_prompt_tokens : n_patches
         + n_prompt_tokens
@@ -231,10 +180,15 @@ def custom_forward_with_bc(
         :,
     ]  # [B, act, vocab_size + 64]
 
+    print(f"model actio dim: {model.action_dim}, num chunks: {model.num_action_chunks}")
+    last_hidden_states = last_hidden_states[
+        :, -model.action_dim * model.num_action_chunks - 1 : -1
+    ]
+
     logits_tensor[..., : model.vocab_size - model.config.n_action_bins] = -torch.inf
     logits_tensor[..., model.vocab_size :] = -torch.inf
 
-    processed_logits_tensor = logits_tensor / temperature
+    processed_logits_tensor = logits_tensor / temperature 
     top_k = min(
         top_k, processed_logits_tensor.size(-1)
     )  # Safety check
@@ -283,9 +237,9 @@ def custom_forward_with_bc(
 
     # Unnormalize predicted actions
     actions = model._unnormalize_actions(normalized_actions, model.unnorm_key)
-    actions = actions.reshape(idxs.shape) 
+    actions = actions.reshape(idxs.shape)
 
-    return output_dict, actions
+    return actions
 
 def custom_forward(
     model,

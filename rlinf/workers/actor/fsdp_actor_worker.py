@@ -436,7 +436,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 bc_loss, bc_metrics_data = 0.0, {}
                 if self.use_experience_replay:
                     kwargs = {
-                        "action_tokens": actions,
+                        "action_tokens": torch.from_numpy(actions).to(f"cuda:{int(os.environ['LOCAL_RANK'])}"),
                         "expert_action_tokens": bc_batch["action_tokens"],
                         "bc_coeff": bc_coeff
                     }
