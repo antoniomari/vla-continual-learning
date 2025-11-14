@@ -29,7 +29,7 @@ from rlinf.hybrid_engines.fsdp.fsdp_model_manager import (
     FSDPModelManager,
 )
 from rlinf.models import get_model
-from rlinf.models.embodiment.model_utils import custom_forward
+from rlinf.models.embodiment.model_utils import actor_forward 
 from rlinf.scheduler import Cluster, Worker
 from rlinf.utils.data_iter_utils import get_iterator_k_split
 from rlinf.utils.distributed import all_reduce_dict
@@ -46,6 +46,9 @@ from torch.distributed.fsdp import StateDictType, FullStateDictConfig
 from rlinf.models import get_model_config_and_processor
 from rlinf.custom.loss import behavior_cloning_loss
 from rlinf.custom.libero_trajectory_dataset import LiberoSFTDataset
+from torch.utils.data import DataLoader
+from itertools import cycle
+from omegaconf import OmegaConf
 
 class EmbodiedFSDPActor(FSDPModelManager, Worker):
     def __init__(self, cfg: DictConfig):
@@ -98,13 +101,13 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             world_size=self._world_size
         )
 
-        self.sft_dataloader = DataLoader(
+        self.sft_dataloader = cycle(DataLoader(
             self.sft_dataset,
             batch_size=self.cfg.actor.micro_batch_size,
             shuffle=True,
             num_workers=0,
             pin_memory=False,
-        )
+        ))
 
         self.sft_iterator = iter(self.sft_dataloader)
         if self._rank == 0:
@@ -369,29 +372,31 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 for k, v in data.items():
                     data[k] = v.to(f"cuda:{int(os.environ['LOCAL_RANK'])}")
 
-                bc_batch = next(self.sft_iterator)
-                for k, v in bc_batch.items():
-                    bc_batch[k] = v.to(f"cuda:{int(os.environ['LOCAL_RANK'])}")
-
                 data = self.model.preprocess_for_train(data)
-                input_ids = data["input_ids"]
-                action_tokens = data["action_tokens"]
-                attention_mask = data["attention_mask"]
-                pixel_values = data["pixel_values"]
-
                 action_token_len = self.model.action_dim * self.model.num_action_chunks
 
                 logits_processor_args = {
-                    "action_tokens": action_tokens,
+                    "action_tokens": data["action_tokens"],
                     "vocab_size": self.model.vocab_size,
                     "n_action_bins": self.model.config.n_action_bins,
                 }
 
-                output_dict = custom_forward(
+                bc_batch = None
+                if self.use_experience_replay:
+                    bc_batch = next(self.sft_iterator)
+                    for k, v in bc_batch.items():
+                        bc_batch[k] = v.to(f"cuda:{int(os.environ['LOCAL_RANK'])}")
+
+                    bc_batch = self.model.preprocess_for_train(bc_batch)
+
+                    sampling_params = OmegaConf.to_container(
+                        self.cfg.algorithm.sampling_params, resolve=True
+                    )
+
+                output_dict, actions = actor_forward(
                     self.model,
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    pixel_values=pixel_values,
+                    rl_batch=data,
+                    bc_batch=bc_batch,
                     action_token_len=action_token_len,
                     value_model=True
                     if self.cfg.algorithm.adv_type == "embodied_gae"
@@ -400,6 +405,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                     temperature=self.cfg.algorithm.sampling_params.temperature_train,
                     top_k=self.cfg.algorithm.sampling_params.top_k,
                     logits_processor_args=logits_processor_args,
+                    do_sample=not sampling_params["use_greedy"],
                 )
 
                 kwargs = {
@@ -425,44 +431,27 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 }
 
                 kwargs = preprocess_loss_inputs(**kwargs)
-                loss, metrics_data = actor_loss(**kwargs)
+                rl_loss, metrics_data = actor_loss(**kwargs)
 
-                if use_experience_replay:
-                    # BC Update
-                    sampling_params = OmegaConf.to_container(
-                        self.cfg.algorithm.sampling_params, resolve=True
-                    )
-                    train_sampling_params = {
-                        "temperature": self._sampling_params["temperature_train"],
-                        "top_k": self._sampling_params["top_k"],
-                        "top_p": self._sampling_params["top_p"],
-                        "max_new_tokens": self._length_params["max_new_token"],
-                        "use_cache": True,
-                    }
-
-                    action, _, _, _ = self.model.predict_action_batch(
-                        input_ids=bc_batch["input_ids"],
-                        attention_mask=bc_batch["attention_mask"],
-                        pixel_values=bc_batch["pixel_values"],
-                        do_sample=not sampling_params["use_greedy"],
-                        **train_sampling_params
-                    )
-
+                bc_loss, bc_metrics_data = 0.0, {}
+                if self.use_experience_replay:
                     kwargs = {
-                        "action_chunk": action_chunk,
-                        "expert_action_chunk": bc_batch["action_chunks"],
+                        "action_tokens": actions,
+                        "expert_action_tokens": bc_batch["action_tokens"],
                         "bc_coeff": bc_coeff
                     }
 
                     bc_loss, bc_metrics_data = behavior_cloning_loss(**kwargs)
-                    loss = loss + bc_loss
+
+                loss = rl_loss + bc_loss
 
                 loss /= self.gradient_accumulation
                 loss.backward()
 
-                metrics_data["loss"] = loss.detach().item()
+                metrics_data["rl/loss"] = rl_loss.detach().item()
+                metrics_data.update(bc_metrics_data)
+                metrics_data["total/loss"] = loss.detach().item()
                 append_to_dict(metrics, metrics_data)
-                append_to_dict(metrics, bc_metrics_data)
 
             torch.cuda.empty_cache()
 

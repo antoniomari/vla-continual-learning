@@ -380,4 +380,4 @@ class OpenVLAOFTForRLActionPrediction(OpenVLAOFTForActionPrediction):
             output_hidden_states=output_hidden_states,
             return_dict=True,
         )
-        return outputs
+        return outputs   

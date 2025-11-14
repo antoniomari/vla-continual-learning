@@ -32,8 +32,11 @@ class LiberoSFTDataset(Dataset):
 
         self.sample_indices = []
         for path, demo_name, traj_len in self.trajectories:
-            for t in range(traj_len):
-                self.sample_indices.append((path, demo_name, t, task_desc))
+            valid_len = traj_len - self.num_action_chunks + 1
+
+            if valid_len > 0:
+                for t in range(valid_len):
+                    self.sample_indices.append((path, demo_name, t, task_desc))
 
         self.sample_indices = self.sample_indices[rank::world_size]
 
@@ -73,9 +76,9 @@ class LiberoSFTDataset(Dataset):
             processor=self.input_processor,
             precision=self.precision,
         ) 
-
+        processed_obs = {k: v.squeeze(0) for k, v in processed_obs.items()}
         action_chunks = torch.from_numpy(actions).float()
-        return {*processed_obs, "action_chunks": action_chunks}
+        return {**processed_obs, "action_tokens": action_chunks}
 
 
 @hydra.main(
@@ -105,9 +108,10 @@ def main(cfg):
     )
 
     sft_iterator = iter(sft_dataloader)
-    batch = next(sft_iterator)
-    obs, action = batch["obs"], batch["action"]
-    print(f"obs shape: {obs.shape}, action shape: {action.shape}")
+    batch = next(iter(sft_iterator))
+
+    # obs, action = batch["obs"], batch["action"]
+    # print(f"obs shape: {obs.shape}, action shape: {action.shape}")
 
 if __name__ == "__main__":
     import os

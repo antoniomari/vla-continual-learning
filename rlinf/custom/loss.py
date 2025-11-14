@@ -1,6 +1,9 @@
+import torch
+import torch.nn.functional as F
+
 def behavior_cloning_loss(**kwargs):
-    predicted_actions = kwargs["action_chunk"]
-    expert_actions = kwargs["expert_action_chunk"]
+    predicted_actions = kwargs["action_tokens"]
+    expert_actions = kwargs["expert_action_tokens"]
     bc_coeff = kwargs["bc_coeff"]
     
     bc_loss = F.mse_loss(predicted_actions, expert_actions, reduction='mean')
