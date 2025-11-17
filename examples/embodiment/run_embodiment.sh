@@ -33,13 +33,24 @@ export PYTORCH_DISTRIBUTED_BACKEND=nccl
  
 if [ -z "$1" ]; then
     CONFIG_NAME="maniskill_ppo_openvlaoft"
+    CONFIG_PATH="${EMBODIED_PATH}/config/"
 else
-    CONFIG_NAME=$1
+    # Check if config name contains a path (subdirectory)
+    if [[ "$1" == *"/"* ]]; then
+        # Extract directory and config name
+        CONFIG_DIR=$(dirname "$1")
+        CONFIG_NAME=$(basename "$1")
+        CONFIG_PATH="${EMBODIED_PATH}/config/${CONFIG_DIR}/"
+    else
+        # No subdirectory, use root config directory
+        CONFIG_NAME=$1
+        CONFIG_PATH="${EMBODIED_PATH}/config/"
+    fi
 fi
 
 LOG_DIR="${REPO_PATH}/logs/$(date +'%Y%m%d-%H:%M:%S')" #/$(date +'%Y%m%d-%H:%M:%S')"
 MEGA_LOG_FILE="${LOG_DIR}/run_embodiment.log"
 mkdir -p "${LOG_DIR}"
-CMD="python ${SRC_FILE} --config-path ${EMBODIED_PATH}/config/ --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR}"
+CMD="python ${SRC_FILE} --config-path ${CONFIG_PATH} --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR}"
 echo ${CMD} > ${MEGA_LOG_FILE}
 ${CMD} 2>&1 | tee -a ${MEGA_LOG_FILE}
