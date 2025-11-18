@@ -21,7 +21,7 @@ runner:
     log_path: "../results"
     project_name: rlinf
     experiment_name: "test_openvla"
-    logger_backends: ["tensorboard"] # wandb, swanlab
+    logger_backends: ["wandb"] # wandb, swanlab
 
   max_epochs: 1000
   max_steps: -1
@@ -91,6 +91,9 @@ env:
     queue_name: "obs_buffer"
     queue_size: 0
   enable_offload: False
+  eval:
+    num_envs: 120
+    eval_per_task: ${oc.eval:"${env.eval.num_envs} // 10"}
   fixed_task_ids: [0]
 
 rollout:
