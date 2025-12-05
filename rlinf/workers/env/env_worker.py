@@ -290,6 +290,9 @@ class EnvWorker(Worker):
             if self.cfg.env.eval.video_cfg.save_video:
                 for i in range(self.stage_num):
                     self.eval_simulator_list[i].flush_video(video_sub_dir=f"stage_{i}")
+            print(f"Eval: Updating reset state ids")
+            for i in range(self.stage_num):
+                self.eval_simulator_list[i].update_reset_state_ids()
 
     def split_env_batch(self, env_batch, gather_id, mode):
         env_batch_i = {}

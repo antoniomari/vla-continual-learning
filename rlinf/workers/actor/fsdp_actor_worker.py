@@ -504,6 +504,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 # Now save_pretrained should work because state is gathered
                 if self._rank == 0:
                     os.makedirs(save_base_path, exist_ok=True)
+                    print(f"Saving model checkpoint to {save_base_path}")
                     torch.save(optim_state, os.path.join(save_base_path, "optim.pt"))
                     
                     torch.save(cpu_state, os.path.join(save_base_path, "adapter_model.bin"))

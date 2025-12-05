@@ -17,9 +17,10 @@ num_images_in_input: 1
 
 num_envs: ${env.eval.num_envs}  # Override in main config via env.eval.num_envs
 eval_per_task: ${env.eval.eval_per_task}  # Override in main config (documentation: expected evaluations per task)
+fixed_task_ids: ${env.fixed_task_ids}  # Override in main config eval.fixed_task_ids
 
 video_cfg:
-  save_video: False
+  save_video: True
   info_on_video: True
   video_base_dir: ${runner.logger.log_path}/video/train
 
