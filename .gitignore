@@ -18,3 +18,4 @@ model/
 openvla_image.tar
 *.err
 .ray_tmp*
+wandb/*

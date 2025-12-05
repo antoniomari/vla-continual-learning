@@ -24,7 +24,7 @@ echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
 echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
 
 # rlinf  # Starts the conda environment
-bash examples/embodiment/run_embodiment.sh libero_spatial_grpo_openvlaoft_bcrl algorithm.bc_coeff=0.1 actor.model.lora_path="logs/run_0.1/checkpoints/global_step_10/actor/"
+bash examples/embodiment/run_embodiment.sh libero_spatial_grpo_openvlaoft_bcrl algorithm.bc_coeff=1.0 actor.model.lora_path="logs/run_1.0/checkpoints/global_step_10/actor/"
 
 # Print completion time
 echo "End Time: $(date)"
