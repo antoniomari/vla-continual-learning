@@ -82,6 +82,75 @@ def cpu_weight_swap(resident_model, cpu_weights):
         swap_dict(resident_model, cpu_dict, offload_onto_cpu=False)
 
 
+@contextmanager
+def fsdp_cpu_weight_swap(fsdp_model, cpu_weights):
+    """FSDP-aware weight swap: swap weights into FSDP model, then swap back.
+    
+    Uses LOCAL_STATE_DICT to avoid gathering all parameters, which would cause
+    OOM errors. Each rank only handles its local parameters.
+
+    TODO: This function is not working correctly. Slow and also not working as expected for LoRA Models.
+    
+    Args:
+        fsdp_model: FSDP-wrapped model
+        cpu_weights: State dict with weights to temporarily load (on CPU, full state dict)
+    
+    Yields:
+        None: Context manager that temporarily swaps weights
+    """
+    from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+    from torch.distributed.fsdp import StateDictType, FullStateDictConfig
+    
+    # Save current weights using LOCAL_STATE_DICT to avoid gathering all params
+    # Each rank only saves its local parameters
+    with FSDP.state_dict_type(fsdp_model, StateDictType.LOCAL_STATE_DICT):
+        current_weights = fsdp_model.state_dict()
+        # Convert to CPU - each rank only has its local parameters
+        # Handle ShardedTensor by extracting local shard, and ensure requires_grad=False
+        current_weights_cpu = {}
+        for k, v in current_weights.items():
+            if torch.is_tensor(v):
+                # Regular tensor - detach (no gradients needed) and convert to CPU
+                current_weights_cpu[k] = v.detach().cpu().clone()
+            else:
+                # Check if it's a ShardedTensor
+                try:
+                    from torch.distributed._shard.sharded_tensor import ShardedTensor
+                    if isinstance(v, ShardedTensor):
+                        # Extract local shard and convert to regular tensor
+                        local_shards = v.local_shards()
+                        if local_shards:
+                            # Get the local shard tensor and detach (no gradients needed)
+                            local_tensor = local_shards[0].tensor
+                            current_weights_cpu[k] = local_tensor.detach().cpu().clone()
+                        else:
+                            # No local shard for this rank, skip
+                            continue
+                    else:
+                        current_weights_cpu[k] = v
+                except (ImportError, AttributeError):
+                    # Fallback if ShardedTensor not available or no local_shards method
+                    current_weights_cpu[k] = v
+    
+    # Load reference weights using FULL_STATE_DICT (cpu weights are a full dict)
+    # We offload to CPU and let every rank participate (rank0_only=False) so shards are rebuilt correctly.
+    full_state_cfg = FullStateDictConfig(offload_to_cpu=True, rank0_only=False)
+    with FSDP.state_dict_type(
+        fsdp_model,
+        StateDictType.FULL_STATE_DICT,
+        state_dict_config=full_state_cfg,
+    ):
+        fsdp_model.load_state_dict(cpu_weights, strict=False)
+    
+    try:
+        yield
+    finally:
+        # Restore original weights using LOCAL_STATE_DICT
+        # Each rank only restores its local parameters
+        with FSDP.state_dict_type(fsdp_model, StateDictType.LOCAL_STATE_DICT):
+            fsdp_model.load_state_dict(current_weights_cpu, strict=False)
+
+
 def configure_batch_sizes(rank, mbs, gbs, dp=1):
     from megatron.core.num_microbatches_calculator import (
         reconfigure_num_microbatches_calculator,

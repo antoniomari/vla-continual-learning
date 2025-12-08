@@ -114,19 +114,40 @@ def actor_forward(
     top_k: int = -1,
     logits_processor_args: Optional[dict] = None,
     do_sample=False,
+    return_bc_logits=False,
 ):
+    """Forward pass for actor model with optional BC batch.
+    
+    Args:
+        model: The model to use
+        rl_batch: RL training batch
+        bc_batch: Optional BC batch for experience replay
+        return_bc_logits: If True, return logits from BC forward pass
+        ... (other args same as before)
+    
+    Returns:
+        output_dict: Dictionary with logprobs, entropy, values, etc.
+        actions: Actions from BC forward (numpy array) or None
+        bc_logits: Optional logits from BC forward (if return_bc_logits=True)
+    """
     actions = None
+    bc_logits = None
     if bc_batch:
         # RL + BC forward
-        actions = bc_custom_forward(
+        result = bc_custom_forward(
             model,
             input_ids=bc_batch["input_ids"],
             attention_mask=bc_batch["attention_mask"],
             pixel_values=bc_batch["pixel_values"],
             temperature=temperature,
             top_k=top_k,
-            do_sample=do_sample
+            do_sample=do_sample,
+            return_logits=return_bc_logits,
         )
+        if return_bc_logits:
+            actions, bc_logits = result
+        else:
+            actions = result
 
     # RL-only forward
     output_dict = custom_forward(
@@ -143,7 +164,11 @@ def actor_forward(
         logits_processor=logits_processor,
         logits_processor_args=logits_processor_args
     )
-    return output_dict, actions
+    
+    if return_bc_logits:
+        return output_dict, actions, bc_logits
+    else:
+        return output_dict, actions
 
 def bc_custom_forward(
     model,
@@ -153,7 +178,24 @@ def bc_custom_forward(
     temperature=0.1,
     top_k=50,
     do_sample=False,
+    return_logits=False,
 ):
+    """Forward pass for behavior cloning batch.
+    
+    Args:
+        model: The model to use for forward pass
+        input_ids: Input token IDs
+        attention_mask: Attention mask
+        pixel_values: Pixel values for vision input
+        temperature: Temperature for sampling
+        top_k: Top-k filtering
+        do_sample: Whether to sample or use argmax
+        return_logits: If True, return raw logits in addition to actions
+    
+    Returns:
+        If return_logits=False: actions (numpy array)
+        If return_logits=True: (actions, logits) tuple where logits are raw logits before temperature/top-k
+    """
     outputs = model(
         input_ids=input_ids,
         attention_mask=attention_mask,
@@ -183,6 +225,9 @@ def bc_custom_forward(
     last_hidden_states = last_hidden_states[
         :, -model.action_dim * model.num_action_chunks - 1 : -1
     ]
+
+    # Store raw logits before masking (for reference model comparison)
+    raw_logits = logits_tensor.clone()
 
     logits_tensor[..., : model.vocab_size - model.config.n_action_bins] = -torch.inf
     logits_tensor[..., model.vocab_size :] = -torch.inf
@@ -238,7 +283,15 @@ def bc_custom_forward(
     actions = model._unnormalize_actions(normalized_actions, model.unnorm_key)
     actions = actions.reshape(idxs.shape)
 
-    return actions
+    if return_logits:
+        # Return raw logits (before temperature/top-k) for reference model comparison
+        # Only return the valid action token range for efficiency
+        valid_start = model.vocab_size - model.config.n_action_bins
+        valid_end = model.vocab_size
+        raw_logits_valid = raw_logits[..., valid_start:valid_end]  # [B, act, n_action_bins]
+        return actions, raw_logits_valid
+    else:
+        return actions
 
 def custom_forward(
     model,

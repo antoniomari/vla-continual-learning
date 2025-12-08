@@ -14,6 +14,7 @@
 
 import gc
 import os
+from contextlib import nullcontext
 
 import json
 import numpy as np
@@ -44,7 +45,8 @@ from peft import get_peft_model_state_dict
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import StateDictType, FullStateDictConfig
 from rlinf.models import get_model_config_and_processor
-from rlinf.custom.loss import behavior_cloning_loss
+from rlinf.custom.loss import behavior_cloning_loss, behavior_cloning_loss_with_reference_logits
+from rlinf.models.embodiment.model_utils import bc_custom_forward
 from rlinf.custom.libero_trajectory_dataset import LiberoSFTDataset
 from torch.utils.data import DataLoader
 from itertools import cycle
@@ -87,6 +89,15 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         self.use_experience_replay = cfg.algorithm.use_experience_replay
         if self.use_experience_replay:
             self._init_sft_replay_buffer()
+        
+        # Track training step for logit comparison checks
+        self.training_step_count = 0
+        # Enable logit comparison check (for testing).
+        exp_name = cfg.runner.logger.get("experiment_name", "")
+        self.enable_logit_check = exp_name.endswith("_oom")
+        print(f"Enable logit comparison check: {self.enable_logit_check}. experiment name: {exp_name}")
+        # if not self.enable_logit_check:
+        #     exit()
 
     def _init_sft_replay_buffer(self):
         dataset_path = os.environ.get("LIBERO_REPO_PATH")
@@ -123,6 +134,24 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 torch.distributed.init_process_group(backend="nccl")
 
         self.setup_model_and_optimizer()
+        
+        # This default to using the base model without LoRA weights
+        # Store reference model state dict if using reference logits BC loss
+        self.ref_policy_state_dict = None
+        use_ref_logits_bc = self.cfg.algorithm.get("use_reference_logits_bc", False)
+        if use_ref_logits_bc and self.use_experience_replay:
+            # Check if we should load from a checkpoint path
+            reference_model_path = self.cfg.actor.get("reference_model_path", None)
+            
+            # Keep existing logic (we may reuse reference weights for non-LoRA cases)
+            if reference_model_path is not None:
+                if self._rank == 0:
+                    print(f"Loading reference model from checkpoint: {reference_model_path}")
+                ref_state_dict = torch.load(reference_model_path, map_location="cpu")
+                if isinstance(ref_state_dict, dict) and "model" in ref_state_dict:
+                    ref_state_dict = ref_state_dict["model"]
+                self.ref_policy_state_dict = ref_state_dict
+        
         if self.cfg.actor.get("enable_offload", False):
             self.offload_fsdp_param_and_grad()
             self.offload_fsdp_optimizer()
@@ -298,6 +327,43 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         rollout_metrics = compute_rollout_metrics(self.rollout_batch)
         return rollout_metrics
 
+    def _get_peft_base_model(self):
+        """
+        Return the underlying PEFT model if present (handle FSDP wrapper), else None.
+        """
+        try:
+            from peft import PeftModel
+        except ImportError:
+            return None
+
+        model_to_check = self.model.module if hasattr(self.model, "module") else self.model
+        if isinstance(model_to_check, PeftModel):
+            return model_to_check
+        return None
+
+    def _compute_reference_bc_logits(self, bc_batch):
+        """
+        Compute reference logits by disabling LoRA adapters (no weight swapping).
+        Falls back to regular forward if no PEFT model is present.
+        """
+        peft_model = self._get_peft_base_model()
+        assert (peft_model is not None and hasattr(peft_model, "disable_adapter")), "PEFT model is not present or does not have disable_adapter method"
+        adapter_ctx = peft_model.disable_adapter()
+
+        with torch.no_grad():
+            with adapter_ctx:
+                _, reference_bc_logits = bc_custom_forward(
+                    self.model,
+                    input_ids=bc_batch["input_ids"],
+                    attention_mask=bc_batch["attention_mask"],
+                    pixel_values=bc_batch["pixel_values"],
+                    temperature=self.cfg.algorithm.sampling_params.temperature_train,
+                    top_k=self.cfg.algorithm.sampling_params.top_k,
+                    do_sample=False,
+                    return_logits=True,
+                )
+        return reference_bc_logits
+
     def run_training(self):
         if self.cfg.actor.get("enable_offload", False):
             self.load_fsdp_param_and_grad(self.device)
@@ -368,6 +434,8 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             )
 
             self.optimizer.zero_grad()
+            use_ref_logits_bc = self.cfg.algorithm.get("use_reference_logits_bc", False)
+            
             for data_idx, data in enumerate(train_micro_batch):
                 for k, v in data.items():
                     data[k] = v.to(f"cuda:{int(os.environ['LOCAL_RANK'])}")
@@ -393,7 +461,8 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
                     bc_batch = self.model.preprocess_for_train(bc_batch)
 
-                output_dict, actions = actor_forward(
+                return_bc_logits = use_ref_logits_bc and bc_batch is not None
+                forward_result = actor_forward(
                     self.model,
                     rl_batch=data,
                     bc_batch=bc_batch,
@@ -406,7 +475,13 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                     top_k=self.cfg.algorithm.sampling_params.top_k,
                     logits_processor_args=logits_processor_args,
                     do_sample=not sampling_params["use_greedy"],
+                    return_bc_logits=return_bc_logits,
                 )
+                
+                if return_bc_logits:
+                    output_dict, actions, current_bc_logits = forward_result
+                else:
+                    output_dict, actions = forward_result
 
                 kwargs = {
                     "loss_type": self.cfg.algorithm.loss_type,
@@ -435,13 +510,39 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
                 bc_loss, bc_metrics_data = 0.0, {}
                 if self.use_experience_replay:
-                    kwargs = {
-                        "action_tokens": torch.from_numpy(actions).to(f"cuda:{int(os.environ['LOCAL_RANK'])}"),
-                        "expert_action_tokens": bc_batch["action_tokens"],
-                        "bc_coeff": bc_coeff
-                    }
+                    if use_ref_logits_bc:
+                        reference_bc_logits = self._compute_reference_bc_logits(bc_batch)
 
-                    bc_loss, bc_metrics_data = behavior_cloning_loss(**kwargs)
+                        if self.enable_logit_check:
+                            logit_diff = (current_bc_logits - reference_bc_logits).abs()
+                            max_diff = logit_diff.max().item()
+                            mean_diff = logit_diff.mean().item()
+                            
+                            if self._rank == 0:
+                                if self.training_step_count == 0:
+                                    if max_diff < 1e-5:
+                                        print(f"✓ Step {self.training_step_count}: Reference and current logits match (max_diff={max_diff:.2e}, mean_diff={mean_diff:.2e})")
+                                    else:
+                                        print(f"✗ Step {self.training_step_count}: WARNING - Reference and current logits differ (max_diff={max_diff:.2e}, mean_diff={mean_diff:.2e})")
+                                else:
+                                    if max_diff > 1e-5:
+                                        print(f"✓ Step {self.training_step_count}: Reference and current logits differ as expected (max_diff={max_diff:.2e}, mean_diff={mean_diff:.2e})")
+                                    else:
+                                        print(f"✗ Step {self.training_step_count}: WARNING - Reference and current logits still match (max_diff={max_diff:.2e}, mean_diff={mean_diff:.2e})")
+                        
+                        kwargs = {
+                            "current_logits": current_bc_logits,
+                            "reference_logits": reference_bc_logits,
+                            "bc_coeff": bc_coeff
+                        }
+                        bc_loss, bc_metrics_data = behavior_cloning_loss_with_reference_logits(**kwargs)
+                    else:
+                        kwargs = {
+                            "action_tokens": torch.from_numpy(actions).to(f"cuda:{int(os.environ['LOCAL_RANK'])}"),
+                            "expert_action_tokens": bc_batch["action_tokens"],
+                            "bc_coeff": bc_coeff
+                        }
+                        bc_loss, bc_metrics_data = behavior_cloning_loss(**kwargs)
 
                 loss = rl_loss + bc_loss
 
@@ -459,6 +560,9 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 max_norm=self.cfg.actor.optim.clip_grad
             )
             self.optimizer.step()
+
+            # Increment training step counter
+            self.training_step_count += 1
 
             self.optimizer.zero_grad()
             data = {
