@@ -22,14 +22,14 @@ runner:
     log_path: "../results"
     project_name: rlinf
     experiment_name: "test_openvla"
-    logger_backends: ["tensorboard"] # wandb, swanlab
+    logger_backends: ["wandb"] # wandb, swanlab
 
-  max_epochs: 5
+  max_epochs: 50
   max_steps: -1
 
   only_eval: False
   val_check_interval: -1
-  save_interval: 5
+  save_interval: 10
   seq_length: 4096
   max_prompt_length: 128
 
@@ -46,6 +46,7 @@ algorithm:
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   num_group_envs: 8
   rollout_epoch: 16
+  eval_rollout_epoch: 8
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
   entropy_type: token_level
@@ -91,6 +92,9 @@ env:
     name: "env_buffer_list"
     queue_name: "obs_buffer"
     queue_size: 0
+  eval:
+    num_envs: 80
+    eval_per_task: ${int_div:${env.eval.num_envs}, 10}
   enable_offload: False
   fixed_task_ids: [0, 1, 2, 3, 4]
 
@@ -122,8 +126,16 @@ actor:
 
   model:
     model_name: "openvla_oft"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_5/actor/"
-    lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_10/actor/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_5/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_10/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_15/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_20/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_25/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_30/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_35/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_40/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_45/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_50/"
     value_type: ${algorithm.reward_type}  # 'action' or 'token'
     action_dim: 7
     num_action_chunks: 8
