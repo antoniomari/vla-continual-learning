@@ -284,12 +284,10 @@ def bc_custom_forward(
     actions = actions.reshape(idxs.shape)
 
     if return_logits:
-        # Return raw logits (before temperature/top-k) for reference model comparison
-        # Only return the valid action token range for efficiency
-        valid_start = model.vocab_size - model.config.n_action_bins
-        valid_end = model.vocab_size
-        raw_logits_valid = raw_logits[..., valid_start:valid_end]  # [B, act, n_action_bins]
-        return actions, raw_logits_valid
+        # valid_start = model.vocab_size - model.config.n_action_bins
+        # valid_end = model.vocab_size
+        # raw_logits_valid = raw_logits[..., valid_start:valid_end]  # [B, act, n_action_bins]
+        return actions, raw_logits # raw_logits_valid
     else:
         return actions
 
