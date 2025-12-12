@@ -42,9 +42,6 @@ def behavior_cloning_loss_with_reference_logits(**kwargs):
     # Ensure reference logits are detached to prevent gradient flow
     reference_logits = reference_logits.detach()
 
-    print("current logits", current_logits.shape)
-    print("reference logits", reference_logits.shape)
-
     # Compute MSE loss between logits
     bc_loss = F.mse_loss(current_logits, reference_logits, reduction="mean")
     weighted_loss = bc_coeff * bc_loss
