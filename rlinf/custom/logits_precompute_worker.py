@@ -102,6 +102,12 @@ class LogitsPrecomputeWorker(Worker):
                 logits_type="all",
             )
 
+        valid_start = self.hf_model.vocab_size - self.hf_model.config.n_action_bins
+        valid_end = self.hf_model.vocab_size
+        processed_logits_tensor = processed_logits_tensor[
+            ..., valid_start:valid_end
+        ]  # [B, act, n_action_bins]
+
         return {
             "raw_action_logits": raw_logits.cpu().numpy(),
             "processed_action_logits": processed_logits_tensor.cpu().numpy(),

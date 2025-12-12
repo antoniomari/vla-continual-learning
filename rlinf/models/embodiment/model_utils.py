@@ -296,13 +296,17 @@ def bc_custom_forward(
     actions = actions.reshape(idxs.shape)
 
     if return_logits:
-        # valid_start = model.vocab_size - model.config.n_action_bins
-        # valid_end = model.vocab_size
-        # raw_logits_valid = raw_logits[..., valid_start:valid_end]  # [B, act, n_action_bins]
         if logits_type == "processed":
+            valid_start = model.vocab_size - model.config.n_action_bins
+            valid_end = model.vocab_size
+            processed_logits_tensor = processed_logits_tensor[
+                ..., valid_start:valid_end
+            ]  # [B, act, n_action_bins]
             return actions, processed_logits_tensor
         elif logits_type == "raw":
             return actions, raw_logits  # raw_logits_valid
+        elif logits_type == "all":
+            return actions, raw_logits, processed_logits_tensor
     else:
         return actions
 
