@@ -20,8 +20,10 @@ class LiberoSFTDataset(Dataset):
         rank=0,
         world_size=1,
         use_cached_logits=False,
+        logits_type="",
     ):
         self.cfg = cfg
+        self.logits_type = logits_type
         task_suite_name = cfg.env.train.task_suite_name
         dataset_dir = "datasets" if not use_cached_logits else "datasets_with_logits"
         self.root_dir = os.path.join(root_dir, "libero", dataset_dir, task_suite_name)
@@ -56,6 +58,8 @@ class LiberoSFTDataset(Dataset):
 
         self.sample_indices = self.sample_indices[rank::world_size]
 
+        self.file_handles = {}
+
     def _extract_task_description(self, filename):
         name = filename.replace(".hdf5", "")
         parts = name.split("_")
@@ -67,21 +71,26 @@ class LiberoSFTDataset(Dataset):
     def __getitem__(self, idx):
         path, demo_name, timestep, task_desc = self.sample_indices[idx]
 
-        with h5py.File(path, "r") as f:
-            demo = f["data"][demo_name]
-            obs = np.array(demo["obs"]["agentview_rgb"][timestep])
-            actions = np.array(
-                demo["actions"][timestep : timestep + self.num_action_chunks]
-            )
+        if path not in self.file_handles:
+            self.file_handles[path] = h5py.File(path, "r")
+        f = self.file_handles[path]
 
-            raw_action_logits = None
-            processed_action_logits = None
-            if "raw_action_logits" in demo.keys():
-                raw_action_logits = np.array(demo["raw_action_logits"][timestep])
-            if "processed_action_logits" in demo.keys():
-                processed_action_logits = np.array(
-                    demo["processed_action_logits"][timestep]
-                )
+        demo = f["data"][demo_name]
+        obs = np.array(demo["obs"]["agentview_rgb"][timestep])
+        actions = np.array(
+            demo["actions"][timestep : timestep + self.num_action_chunks]
+        )
+
+        raw_action_logits = None
+        processed_action_logits = None
+        if self.logits_type == "raw" and "raw_action_logits" in demo.keys():
+            raw_action_logits = np.array(demo["raw_action_logits"][timestep])
+        elif (
+            self.logits_type == "processed" and "processed_action_logits" in demo.keys()
+        ):
+            processed_action_logits = np.array(
+                demo["processed_action_logits"][timestep]
+            )
 
         assert actions.shape[0] == self.num_action_chunks, (
             f"Expected {self.num_action_chunks} actions, got {actions.shape[0]}"
@@ -110,10 +119,14 @@ class LiberoSFTDataset(Dataset):
 
         if raw_action_logits is not None:
             output["raw_action_logits"] = raw_action_logits
-        if processed_action_logits is not None:
+        elif processed_action_logits is not None:
             output["processed_action_logits"] = processed_action_logits
 
         return output
+
+    def __del__(self):
+        for fh in self.file_handles.values():
+            fh.close()
 
 
 @hydra.main(
@@ -136,6 +149,7 @@ def main(cfg):
         rank=0,
         world_size=4,
         use_cached_logits=True,
+        logits_type="processed",
     )
 
     sft_dataloader = DataLoader(
@@ -145,14 +159,20 @@ def main(cfg):
         num_workers=0,
         pin_memory=False,
     )
-
     sft_iterator = iter(sft_dataloader)
-    batch = next(iter(sft_iterator))
 
-    for key in batch:
-        print(f"{key} : {batch[key].shape}")
-    # obs, action = batch["obs"], batch["action"]
-    # print(f"obs shape: {obs.shape}, action shape: {action.shape}")
+    import time
+
+    times = []
+    for _ in range(10):
+        torch.cuda.synchronize()
+        t0 = time.perf_counter()
+        _ = next(sft_iterator)
+        torch.cuda.synchronize()
+        t1 = time.perf_counter()
+        times.append(t1 - t0)
+
+    print("avg batch time:", sum(times) / len(times))
 
 
 if __name__ == "__main__":

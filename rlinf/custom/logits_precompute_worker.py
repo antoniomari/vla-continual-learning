@@ -92,19 +92,19 @@ class LogitsPrecomputeWorker(Worker):
         """Run forward pass and return logits."""
 
         with torch.no_grad():
-            actions, raw_logits, processed_logits_tensor = bc_custom_forward(
+            actions, raw_logits = bc_custom_forward(
                 model=self.hf_model,
                 input_ids=processed_obs["input_ids"],
                 attention_mask=processed_obs["attention_mask"],
                 pixel_values=processed_obs["pixel_values"],
                 do_sample=False,
                 return_logits=True,
-                logits_type="all",
+                logits_type="raw",
             )
 
         valid_start = self.hf_model.vocab_size - self.hf_model.config.n_action_bins
         valid_end = self.hf_model.vocab_size
-        processed_logits_tensor = processed_logits_tensor[
+        processed_logits_tensor = raw_logits[
             ..., valid_start:valid_end
         ]  # [B, act, n_action_bins]
 

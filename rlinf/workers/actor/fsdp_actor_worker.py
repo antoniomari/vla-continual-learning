@@ -121,6 +121,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             rank=self._rank,
             world_size=self._world_size,
             use_cached_logits=use_cached_logits,
+            logits_type=self.logits_type,
         )
 
         self.sft_dataloader = cycle(
@@ -536,16 +537,12 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 if self.use_experience_replay:
                     if use_ref_logits_bc:
                         if self.use_cached_bc_logits:
-                            reference_bc_logits = bc_batch["raw_action_logits"]
-                            if self.logits_type == "processed":
-                                valid_start = (
-                                    self.model.vocab_size
-                                    - self.model.config.n_action_bins
-                                )
-                                valid_end = self.model.vocab_size
-                                reference_bc_logits = reference_bc_logits[
-                                    ..., valid_start:valid_end
-                                ]  # [B, act, n_action_bins]
+                            if self.logits_type == "raw":
+                                reference_bc_logits = bc_batch["raw_action_logits"]
+                            elif self.logits_type == "processed":
+                                reference_bc_logits = bc_batch[
+                                    "processed_action_logits"
+                                ]
                         else:
                             reference_bc_logits = self._compute_reference_bc_logits(
                                 bc_batch
