@@ -15,17 +15,33 @@
 
 
 ### Usage: sbatch run_embodiment.slurm TASK_ID BC_COEFF [CHECKPOINT_PATH] [CONFIG_NAME]
-### Example: sbatch run_embodiment.slurm 0 0.1 ./logs/... libero_spatial_grpo_openvlaoft_bcrl_logit
+### Example: sbatch run_embodiment.slurm 0 0.1 libero_spatial_grpo_openvlaoft_bcrl
+### Note: CHECKPOINT_PATH is now optional and will be auto-generated from previous task if not provided
 
 TASK_ID=$1
 BC_COEFF=$2
-CHECKPOINT_PATH=$3
-CONFIG_NAME=${4:-libero_spatial_grpo_openvlaoft_bcrl_logit}  # Default config if not provided
+MANUAL_CHECKPOINT_PATH=$3
+CONFIG_NAME=${4:-libero_spatial_grpo_openvlaoft_bcrl}  # Default config if not provided
 
 if [ -z "$TASK_ID" ] || [ -z "$BC_COEFF" ]; then
     echo "ERROR: Missing required arguments"
     echo "Usage: sbatch run_embodiment.slurm TASK_ID BC_COEFF [CHECKPOINT_PATH] [CONFIG_NAME]"
     exit 1
+fi
+
+# Automatically determine checkpoint path if not manually provided
+if [ -z "$MANUAL_CHECKPOINT_PATH" ]; then
+    if [ "$TASK_ID" -eq 0 ]; then
+        # Task 0 uses base model, no checkpoint
+        CHECKPOINT_PATH=""
+    else
+        # Use checkpoint from previous task
+        PREV_TASK_ID=$((TASK_ID - 1))
+        CHECKPOINT_PATH="./logs/bcrl_action/${BC_COEFF}/task_${PREV_TASK_ID}/checkpoints/global_step_10/actor"
+    fi
+else
+    # Use manually provided checkpoint path
+    CHECKPOINT_PATH="$MANUAL_CHECKPOINT_PATH"
 fi
 
 # Print job information
@@ -38,12 +54,12 @@ echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
 echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
 echo ""
 
-mkdir -p logs/bcrl_logit
-mkdir -p logs/bcrl_logit/${BC_COEFF}
-LOG_DIR="./logs/bcrl_logit/${BC_COEFF}/task_${TASK_ID}"
+mkdir -p logs/bcrl_action
+mkdir -p logs/bcrl_action/${BC_COEFF}
+LOG_DIR="./logs/bcrl_action/${BC_COEFF}/task_${TASK_ID}"
 export LOG_DIR
 
-EXPERIMENT_NAME="bcrl_task_${TASK_ID}_${BC_COEFF}"
+EXPERIMENT_NAME="bcrl_action_task_${TASK_ID}_${BC_COEFF}"
 
 echo "========================================="
 echo "Lifelong Learning - Single Task Training"
@@ -56,16 +72,20 @@ echo "  Checkpoint Save Path: $LOG_DIR"
 echo "  Config Name: $CONFIG_NAME"
 
 if [ -n "$CHECKPOINT_PATH" ]; then
-    echo "  Loading from checkpoint: $CHECKPOINT_PATH"
+    if [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
+        echo "  Loading from checkpoint (manually specified): $CHECKPOINT_PATH"
+    else
+        echo "  Loading from checkpoint (auto-generated from task $((TASK_ID - 1))): $CHECKPOINT_PATH"
+    fi
 
     # Verify checkpoint exists
     if [ ! -d "$CHECKPOINT_PATH" ]; then
         echo "  ERROR: Checkpoint not found at $CHECKPOINT_PATH"
         exit 1
     fi
-    CHECKPOINT_ARG="actor.lora_path=${CHECKPOINT_PATH}"
+    CHECKPOINT_ARG="+actor.model.lora_path=${CHECKPOINT_PATH}"
 else
-    echo "  Training from base model (SFT checkpoint)"
+    echo "  Training from base model (SFT checkpoint) - Task 0"
 fi
 
 echo "========================================="
