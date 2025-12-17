@@ -15,6 +15,7 @@
 import gc
 import json
 import os
+import time
 from contextlib import nullcontext
 from itertools import cycle
 
@@ -39,8 +40,8 @@ from rlinf.custom.loss import (
 from rlinf.hybrid_engines.fsdp.fsdp_model_manager import (
     FSDPModelManager,
 )
-from rlinf.models import get_model, get_model_config_and_processor
-from rlinf.models.embodiment.model_utils import actor_forward, bc_custom_forward
+from rlinf.models import get_model
+from rlinf.models.embodiment.model_utils import actor_forward, custom_forward
 from rlinf.scheduler import Cluster, Worker
 from rlinf.utils.data_iter_utils import get_iterator_k_split
 from rlinf.utils.distributed import all_reduce_dict
@@ -88,6 +89,9 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
         # initialize sft buffer
         self.use_experience_replay = cfg.algorithm.use_experience_replay
+        self.use_reference_logits_bc = cfg.algorithm.get(
+            "use_reference_logits_bc", False
+        )
         self.use_cached_bc_logits = cfg.algorithm.get("use_cached_bc_logits", False)
         self.logits_type = cfg.algorithm.get("logits_type", "processed")
         if self.logits_type not in ["processed", "raw"]:
@@ -123,7 +127,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             rank=self._rank,
             world_size=self._world_size,
             use_cached_logits=use_cached_logits,
-            logits_type=self.logits_type,
+            logits_type=self.logits_type if self.use_reference_logits_bc else "",
         )
 
         self.sft_dataloader = cycle(
@@ -421,7 +425,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
         with torch.no_grad():
             with adapter_ctx:
-                _, reference_bc_logits = bc_custom_forward(
+                _, reference_bc_logits = custom_forward(
                     self.model,
                     input_ids=bc_batch["input_ids"],
                     attention_mask=bc_batch["attention_mask"],
@@ -532,6 +536,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
                     bc_batch = self.model.preprocess_for_train(bc_batch)
 
+                s = time.time()
                 return_bc_logits = use_ref_logits_bc and bc_batch is not None
                 forward_result = actor_forward(
                     self.model,
@@ -549,11 +554,13 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                     return_bc_logits=return_bc_logits,
                     logits_type=self.logits_type,
                 )
+                e = time.time()
+                print(f"Forward pass took {e - s:.2f} seconds")
 
                 if return_bc_logits:
-                    output_dict, actions, current_bc_logits = forward_result
+                    output_dict, current_bc_logits = forward_result
                 else:
-                    output_dict, actions = forward_result
+                    output_dict = forward_result
 
                 kwargs = {
                     "loss_type": self.cfg.algorithm.loss_type,
@@ -629,19 +636,24 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                             behavior_cloning_loss_with_reference_logits(**kwargs)
                         )
                     else:
-                        kwargs = {
-                            "action_tokens": torch.from_numpy(actions).to(
-                                f"cuda:{int(os.environ['LOCAL_RANK'])}"
-                            ),
-                            "expert_action_tokens": bc_batch["action_tokens"],
-                            "bc_coeff": bc_coeff,
-                        }
-                        bc_loss, bc_metrics_data = behavior_cloning_loss(**kwargs)
+                        raise NotImplementedError()
+                        # kwargs = {
+                        #     "action_tokens": torch.from_numpy(actions).to(
+                        #         f"cuda:{int(os.environ['LOCAL_RANK'])}"
+                        #     ),
+                        #     "expert_action_tokens": bc_batch["action_tokens"],
+                        #     "bc_coeff": bc_coeff,
+                        # }
+                        # bc_loss, bc_metrics_data = behavior_cloning_loss(**kwargs)
 
                 loss = rl_loss + bc_loss
 
                 loss /= self.gradient_accumulation
+
+                s = time.time()
                 loss.backward()
+                e = time.time()
+                print(f"Backward pass took {e - s:.2f} seconds")
 
                 metrics_data["rl/loss"] = rl_loss.detach().item()
                 metrics_data.update(bc_metrics_data)

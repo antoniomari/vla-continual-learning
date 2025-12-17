@@ -152,26 +152,34 @@ def main(cfg):
         logits_type="processed",
     )
 
-    sft_dataloader = DataLoader(
-        sft_dataset,
-        batch_size=32,
-        shuffle=True,
-        num_workers=0,
-        pin_memory=False,
+    from itertools import cycle
+
+    sft_dataloader = cycle(
+        DataLoader(
+            sft_dataset,
+            batch_size=16,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=False,
+        )
     )
     sft_iterator = iter(sft_dataloader)
 
     import time
 
     times = []
-    for _ in range(10):
+    for _ in range(30):
         torch.cuda.synchronize()
         t0 = time.perf_counter()
-        _ = next(sft_iterator)
+        batch = next(sft_iterator)
         torch.cuda.synchronize()
         t1 = time.perf_counter()
         times.append(t1 - t0)
 
+    print(times)
+    print("action shape:", batch["action_tokens"].shape)
+    if "processed_action_logits" in batch:
+        print("logits shape:", batch["processed_action_logits"].shape)
     print("avg batch time:", sum(times) / len(times))
 
 

@@ -19,68 +19,19 @@ import torch
 import torch.nn.functional as F
 from transformers.generation import TopKLogitsWarper
 
-# def default_logits_processor(logits, action_tokens, vocab_size, n_action_bins):
-#     logits = logits.permute(0, 2, 1)  # [B, vocab-size, action-dim]
-
-#     logits[:, : vocab_size - n_action_bins] = -torch.inf
-#     logits[:, vocab_size:] = -torch.inf
-
-#     logprobs = compute_logprobs_from_logits(logits=logits, target=action_tokens)
-
-#     entropy = compute_entropy_from_logits(logits)
-
-#     ret = {"logprobs": logprobs, "entropy": entropy}
-
-#     return ret
-
 
 def default_logits_processor(logits, action_tokens, vocab_size, n_action_bins):
     logits = logits.permute(0, 2, 1)  # [B, vocab-size, action-dim]
 
-    # Define valid action token range
-    valid_start = vocab_size - n_action_bins
-    valid_end = vocab_size
-
-    # VALIDATION: Check if action_tokens are in valid range
-    out_of_bounds = (action_tokens < valid_start) | (action_tokens >= valid_end)
-    if out_of_bounds.any():
-        print(
-            f"⚠️ WARNING: {out_of_bounds.sum()}/{action_tokens.numel()} action tokens out of bounds!"
-        )
-        print(f"  Valid range: [{valid_start}, {valid_end})")
-        print(f"  action_tokens range: [{action_tokens.min()}, {action_tokens.max()}]")
-        print(f"  Out of bounds indices: {torch.where(out_of_bounds)}")
-
-        # Show specific problematic values
-        bad_tokens = action_tokens[out_of_bounds]
-        print(f"  Bad token values: {bad_tokens[:10]}")  # Show first 10
-
-    # Apply masking
-    logits[:, :valid_start] = -torch.inf
-    logits[:, valid_end:] = -torch.inf
-
-    # VALIDATION: Check if valid region has at least some finite values
-    valid_region = logits[:, valid_start:valid_end, :]
-    all_inf_mask = torch.isinf(valid_region).all(dim=1)  # Check per [B, action-dim]
-    if all_inf_mask.any():
-        print(
-            f"⚠️ WARNING: {all_inf_mask.sum()} positions have all -inf in valid region!"
-        )
-        print(f"  This will cause NaN in softmax")
+    logits[:, : vocab_size - n_action_bins] = -torch.inf
+    logits[:, vocab_size:] = -torch.inf
 
     logprobs = compute_logprobs_from_logits(logits=logits, target=action_tokens)
 
-    # VALIDATION: Check for NaNs in output
-    if torch.isnan(logprobs).any():
-        print(f"⚠️ NaN detected in logprobs!")
-        nan_mask = torch.isnan(logprobs)
-        print(f"  Number of NaNs: {nan_mask.sum()}/{logprobs.numel()}")
-
-        # Check corresponding action tokens
-        print(f"  Action tokens at NaN positions: {action_tokens[nan_mask][:10]}")
-
     entropy = compute_entropy_from_logits(logits)
+
     ret = {"logprobs": logprobs, "entropy": entropy}
+
     return ret
 
 
@@ -126,46 +77,27 @@ def actor_forward(
 
     Args:
         model: The model to use
-        rl_batch: RL training batch
-        bc_batch: Optional BC batch for experience replay
+        ...
         return_bc_logits: If True, return logits from BC forward pass
-        ... (other args same as before)
 
     Returns:
         output_dict: Dictionary with logprobs, entropy, values, etc.
         actions: Actions from BC forward (numpy array) or None
         bc_logits: Optional logits from BC forward (if return_bc_logits=True)
     """
-    actions = None
-    raw_bc_logits = None
-    processed_bc_logits = None
-    if bc_batch:
-        # RL + BC forward
-        result = bc_custom_forward(
-            model,
-            input_ids=bc_batch["input_ids"],
-            attention_mask=bc_batch["attention_mask"],
-            pixel_values=bc_batch["pixel_values"],
-            temperature=temperature,
-            top_k=top_k,
-            do_sample=do_sample,
-            return_logits=return_bc_logits,
-            logits_type=logits_type,
-        )
-        if return_bc_logits:
-            if logits_type == "processed":
-                actions, processed_bc_logits = result
-            elif logits_type == "raw":
-                actions, raw_bc_logits = result
-        else:
-            actions = result
+    has_bc_batch = bc_batch is not None
+    if has_bc_batch:
+        batch = {}
+        for k in ["input_ids", "attention_mask", "pixel_values"]:
+            batch[k] = torch.cat([rl_batch[k], bc_batch[k]], dim=0)
+    else:
+        batch = rl_batch
 
-    # RL-only forward
     output_dict = custom_forward(
         model,
-        input_ids=rl_batch["input_ids"],
-        attention_mask=rl_batch["attention_mask"],
-        pixel_values=rl_batch["pixel_values"],
+        input_ids=batch["input_ids"],
+        attention_mask=batch["attention_mask"],
+        pixel_values=batch["pixel_values"],
         output_hidden_states=output_hidden_states,
         action_token_len=action_token_len,
         value_model=value_model,
@@ -174,141 +106,27 @@ def actor_forward(
         top_k=top_k,
         logits_processor=logits_processor,
         logits_processor_args=logits_processor_args,
+        has_bc_batch=has_bc_batch,
     )
+
+    if has_bc_batch:
+        bs = rl_batch["input_ids"].shape[0]
+        rl_output_dict = {}
+        for key, value in output_dict.items():
+            rl_output_dict[key] = value[:bs]
+        processed_bc_logits = output_dict["processed_logits"][bs:]
+        processed_bc_logits
+
+        raw_bc_logits = output_dict["raw_logits"][bs:]
+        output_dict = rl_output_dict
 
     if return_bc_logits:
         if logits_type == "processed":
-            return output_dict, actions, processed_bc_logits
+            return output_dict, processed_bc_logits
         elif logits_type == "raw":
-            return output_dict, actions, raw_bc_logits
+            return output_dict, raw_bc_logits
     else:
-        return output_dict, actions
-
-
-def bc_custom_forward(
-    model,
-    input_ids,
-    attention_mask,
-    pixel_values,
-    temperature=0.1,
-    top_k=50,
-    do_sample=False,
-    return_logits=False,
-    logits_type="processed",
-):
-    """Forward pass for behavior cloning batch.
-
-    Args:
-        model: The model to use for forward pass
-        input_ids: Input token IDs
-        attention_mask: Attention mask
-        pixel_values: Pixel values for vision input
-        temperature: Temperature for sampling
-        top_k: Top-k filtering
-        do_sample: Whether to sample or use argmax
-        return_logits: If True, return raw logits in addition to actions
-
-    Returns:
-        If return_logits=False: actions (numpy array)
-        If return_logits=True: (actions, logits) tuple where logits are raw logits before temperature/top-k
-    """
-    outputs = model(
-        input_ids=input_ids,
-        attention_mask=attention_mask,
-        pixel_values=pixel_values,
-        output_hidden_states=True,
-    )
-
-    n_prompt_tokens = input_ids.shape[-1] - 1
-    # Calculate number of patches (including proprio token and/or diffusion timestep embedding if present)
-    n_patches = (
-        model.vision_backbone.get_num_patches()
-        * model.vision_backbone.get_num_images_in_input()
-    )
-
-    # Extract hidden states for action tokens
-    last_hidden_states = outputs.hidden_states[-1]  # (B, seq_len, D)
-    # assert last_hidden_states.shape[1] == mm_embeddings.shape[1]
-
-    logits_tensor = outputs.logits[
-        :,
-        n_patches + n_prompt_tokens : n_patches
-        + n_prompt_tokens
-        + model.action_dim * model.num_action_chunks,
-        :,
-    ]  # [B, act, vocab_size + 64]
-
-    last_hidden_states = last_hidden_states[
-        :, -model.action_dim * model.num_action_chunks - 1 : -1
-    ]
-
-    # Store raw logits before masking (for reference model comparison)
-    raw_logits = logits_tensor.clone()
-
-    logits_tensor[..., : model.vocab_size - model.config.n_action_bins] = -torch.inf
-    logits_tensor[..., model.vocab_size :] = -torch.inf
-
-    processed_logits_tensor = logits_tensor / temperature
-    top_k = min(top_k, processed_logits_tensor.size(-1))  # Safety check
-    if top_k > 0:
-        logits_warper = TopKLogitsWarper(
-            top_k
-        )  # since here is logprob instead of logits, we use 0 instead of -inf
-        processed_logits_tensor = logits_warper(None, processed_logits_tensor)
-
-    processed_logprob_tensor = F.log_softmax(
-        processed_logits_tensor, dim=-1
-    )  # [B, act, vocab_size + 64]
-
-    if do_sample:
-        probs_tensor = torch.exp(processed_logprob_tensor)  # [B, act, vocab_size + 64]
-        probs_flat = probs_tensor.view(
-            -1, processed_logprob_tensor.shape[-1]
-        )  # [B * act, vocab_size + 64]
-
-        sample_flat = torch.multinomial(
-            probs_flat, num_samples=1, replacement=True
-        )  # [B * act, 1]
-        idxs = sample_flat.view(
-            processed_logprob_tensor.shape[0], processed_logprob_tensor.shape[1]
-        )  # [B, act]
-    else:
-        idxs = processed_logprob_tensor.argmax(dim=-1)  # [B, act]
-
-    assert torch.all(
-        idxs >= model.vocab_size - model.config.n_action_bins
-    ) and torch.all(idxs < model.vocab_size)
-
-    chunk_action_tokens = idxs.reshape(-1, model.action_dim)
-    predicted_action_token_ids = chunk_action_tokens.cpu().numpy()
-    discretized_actions = model.vocab_size - predicted_action_token_ids
-    discretized_actions = np.clip(
-        discretized_actions - 1, a_min=0, a_max=model.bin_centers.shape[0] - 1
-    )
-    # normalized_actions = model.bin_centers[discretized_actions]
-    normalized_actions = np.asarray(
-        [model.bin_centers[da] for da in discretized_actions]
-    )  # [B, dim]
-    normalized_actions = normalized_actions.reshape(-1, model.action_dim)
-
-    # Unnormalize predicted actions
-    actions = model._unnormalize_actions(normalized_actions, model.unnorm_key)
-    actions = actions.reshape(idxs.shape)
-
-    if return_logits:
-        if logits_type == "processed":
-            valid_start = model.vocab_size - model.config.n_action_bins
-            valid_end = model.vocab_size
-            processed_logits_tensor = processed_logits_tensor[
-                ..., valid_start:valid_end
-            ]  # [B, act, n_action_bins]
-            return actions, processed_logits_tensor
-        elif logits_type == "raw":
-            return actions, raw_logits  # raw_logits_valid
-        elif logits_type == "all":
-            return actions, raw_logits, processed_logits_tensor
-    else:
-        return actions
+        return output_dict
 
 
 def custom_forward(
@@ -324,16 +142,21 @@ def custom_forward(
     temperature: int = 1.0,
     top_k: int = -1,
     logits_processor_args: Optional[dict] = None,
+    has_bc_batch: bool = False,
 ):
-    output = model(
+    outputs = model(
         input_ids=input_ids,
         attention_mask=attention_mask,
         pixel_values=pixel_values,
         output_hidden_states=output_hidden_states,
     )
-    logits = output.logits[:, -action_token_len - 1 : -1]  # [B, action_dim, vocab_size]
 
-    processed_logits_tensor = logits / temperature
+    logits_tensor = outputs.logits[
+        :, -action_token_len - 1 : -1
+    ]  # [B, action_dim, vocab_size]
+    raw_logits = logits_tensor.clone()
+
+    processed_logits_tensor = logits_tensor / temperature
     top_k = min(top_k, processed_logits_tensor.size(-1))  # Safety check
     if top_k > 0:
         logits_warper = TopKLogitsWarper(
@@ -341,11 +164,25 @@ def custom_forward(
         )  # since here is logprob instead of logits, we use 0 instead of -inf
         processed_logits_tensor = logits_warper(None, processed_logits_tensor)
 
-    output_dict = logits_processor(processed_logits_tensor, **logits_processor_args)
+    # to handle bc batching case
+    bs = input_ids.shape[0]
+    if has_bc_batch:
+        bs //= 2
+
+    output_dict = logits_processor(
+        processed_logits_tensor[:bs], **logits_processor_args
+    )
+    output_dict["raw_logits"] = raw_logits
+    valid_start = model.vocab_size - model.config.n_action_bins
+    valid_end = model.vocab_size
+    processed_bc_logits = raw_logits[
+        ..., valid_start:valid_end
+    ]  # [B, act, n_action_bins]
+    output_dict["processed_logits"] = processed_bc_logits
 
     if value_model:
         # NOTE: Here we subtract 1 because the input tokens do not include the EOS token.
-        last_hidden_state = output.hidden_states[-1]  # [B, L, hidden_dim]
+        last_hidden_state = outputs.hidden_states[-1]  # [B, L, hidden_dim]
         if value_head_mode == "a0":
             hidden_features = last_hidden_state[
                 :, -action_token_len - 1
