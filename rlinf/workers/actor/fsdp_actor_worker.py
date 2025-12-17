@@ -536,7 +536,6 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
                     bc_batch = self.model.preprocess_for_train(bc_batch)
 
-                s = time.time()
                 return_bc_logits = use_ref_logits_bc and bc_batch is not None
                 forward_result = actor_forward(
                     self.model,
@@ -554,8 +553,6 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                     return_bc_logits=return_bc_logits,
                     logits_type=self.logits_type,
                 )
-                e = time.time()
-                print(f"Forward pass took {e - s:.2f} seconds")
 
                 if return_bc_logits:
                     output_dict, current_bc_logits = forward_result
@@ -647,13 +644,8 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                         # bc_loss, bc_metrics_data = behavior_cloning_loss(**kwargs)
 
                 loss = rl_loss + bc_loss
-
                 loss /= self.gradient_accumulation
-
-                s = time.time()
                 loss.backward()
-                e = time.time()
-                print(f"Backward pass took {e - s:.2f} seconds")
 
                 metrics_data["rl/loss"] = rl_loss.detach().item()
                 metrics_data.update(bc_metrics_data)
