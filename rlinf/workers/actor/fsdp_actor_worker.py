@@ -631,8 +631,6 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                             "current_logits": current_bc_logits,
                             "reference_logits": reference_bc_logits,
                             "bc_coeff": bc_coeff,
-                            "vocab_size": self.model.vocab_size,
-                            "n_action_bins": self.model.config.n_action_bins,
                         }
                         bc_loss, bc_metrics_data = (
                             behavior_cloning_loss_with_reference_logits(**kwargs)
@@ -640,10 +638,15 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                     else:
                         kwargs = {
                             "intermediate_logits": output_dict["intermediate_logits"],
-                            "expert_actions_tokens": compute_action_tokens_from_actions(
-                                self.model, bc_batch["actions"]
+                            "expert_actions_tokens": torch.tensor(
+                                compute_action_tokens_from_actions(
+                                    self.model, bc_batch["actions"]
+                                ),
+                                device=f"cuda:{int(os.environ['LOCAL_RANK'])}",
                             ),
                             "bc_coeff": bc_coeff,
+                            "vocab_size": self.model.vocab_size,
+                            "n_action_bins": self.model.config.n_action_bins,
                         }
                         bc_loss, bc_metrics_data = behavior_cloning_ce_loss(**kwargs)
 

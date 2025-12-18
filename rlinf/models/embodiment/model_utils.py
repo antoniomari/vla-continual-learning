@@ -57,6 +57,51 @@ def compute_entropy_from_logits(logits, epsilon=1e-10):
     return entropy
 
 
+def _normalize_actions(model, actions, norm_key=None):
+    actions = actions.cpu().numpy()
+    from prismatic.vla.constants import (
+        ACTION_PROPRIO_NORMALIZATION_TYPE,
+        NormalizationType,
+    )
+
+    """Normalize actions to [-1, 1] using dataset statistics"""
+    action_norm_stats = model.get_action_stats(norm_key)
+
+    if ACTION_PROPRIO_NORMALIZATION_TYPE == NormalizationType.BOUNDS:
+        mask = action_norm_stats.get(
+            "mask", np.ones_like(action_norm_stats["min"], dtype=bool)
+        )
+        action_high, action_low = (
+            np.array(action_norm_stats["max"]),
+            np.array(action_norm_stats["min"]),
+        )
+    elif ACTION_PROPRIO_NORMALIZATION_TYPE == NormalizationType.BOUNDS_Q99:
+        mask = action_norm_stats.get(
+            "mask", np.ones_like(action_norm_stats["q01"], dtype=bool)
+        )
+        action_high, action_low = (
+            np.array(action_norm_stats["q99"]),
+            np.array(action_norm_stats["q01"]),
+        )
+    else:
+        raise ValueError("Unsupported action/proprio normalization type detected!")
+
+    action_dim = actions.shape[-1]
+    repeat_factor = action_dim // action_high.shape[0]
+
+    action_high = action_high.repeat(repeat_factor)
+    action_low = action_low.repeat(repeat_factor)
+    mask = mask * repeat_factor
+
+    normalized_actions = np.where(
+        mask,
+        2.0 * (actions - action_low) / (action_high - action_low + 1e-8) - 1.0,
+        actions,
+    )
+
+    return normalized_actions
+
+
 def compute_action_tokens_from_actions(model, actions):
     """
     Inverse of the action tokens to continuous actions
@@ -82,7 +127,7 @@ def compute_action_tokens_from_actions(model, actions):
     B, T, D = actions.shape
     assert D == model.action_dim
 
-    normalized_actions = model._normalize_actions(actions, model.unnorm_key)
+    normalized_actions = _normalize_actions(model, actions, norm_key=model.unnorm_key)
     normalized_actions = normalized_actions.reshape(-1, D)
     bin_centers = model.bin_centers
 
@@ -134,7 +179,7 @@ def actor_forward(
         actions: Actions from BC forward (numpy array) or None
         bc_logits: Optional logits from BC forward (if return_bc_logits=True)
     """
-    assert rl_batch.shape[0] == bc_batch.shape[0]
+    assert rl_batch["input_ids"].shape[0] == bc_batch["input_ids"].shape[0]
     has_bc_batch = bc_batch is not None
     if has_bc_batch:
         batch = {}
