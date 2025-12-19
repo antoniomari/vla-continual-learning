@@ -13,7 +13,7 @@ hydra:
 cluster:
   num_nodes: 1
   component_placement:
-    actor,env,rollout: all
+    actor,env,rollout: 0,5,6,7 # all
   ray_object_store_memory: 461708984320  # Ray object store memory in bytes (~200GB, lower than training)
 
 runner:
@@ -21,8 +21,8 @@ runner:
   logger:
     log_path: "../results"
     project_name: rlinf
-    experiment_name: "test_openvla"
-    logger_backends: ["tensorboard"] # wandb, swanlab
+    experiment_name: "mll_eval"
+    logger_backends: ["wandb"] # wandb, swanlab
 
   max_epochs: 1000
   max_steps: -1

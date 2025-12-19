@@ -21,7 +21,7 @@ runner:
   logger:
     log_path: "../results"
     project_name: rlinf
-    experiment_name: "test_openvla"
+    experiment_name: "eval_openvla"
     logger_backends: ["wandb"] # wandb, swanlab
 
   max_epochs: 1000
@@ -46,7 +46,7 @@ algorithm:
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   num_group_envs: 8
   rollout_epoch: 16
-  eval_rollout_epoch: 2
+  eval_rollout_epoch: 20 # 8
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
   entropy_type: token_level
@@ -93,8 +93,8 @@ env:
   enable_offload: False
   fixed_task_ids: null
   eval:
-    num_envs: 200  # Number of parallel evaluation environments (default: 200)
-    eval_per_task: 20  # Expected evaluations per task (for 10 tasks: num_envs // 10)
+    num_envs: 80 # 200  # Number of parallel evaluation environments (default: 200) # try 180 for 3 PGU
+    eval_per_task: null  # Expected evaluations per task (for 10 tasks: num_envs // 10)
 
 rollout:
   group_name: "RolloutGroup"

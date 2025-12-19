@@ -51,8 +51,41 @@ else
     HYDRA_OVERRIDES=""
 fi
 
-LOG_DIR="${REPO_PATH}/logs/evals" #/$(date +'%Y%m%d-%H:%M:%S')"
-# LOG_DIR="${REPO_PATH}/logs/bcrl/eval_$(date +'%Y%m%d-%H:%M:%S')"
+# If we pass actor.model.lora_path=..., store eval logs under:
+#   ${REPO_PATH}/logs/evals/<three path components before "checkpoints">/
+# Example:
+#   .../RLinf/logs/base_to_task0_LoRA_grpo/checkpoints/... -> logs/evals/RLinf/logs/base_to_task0_LoRA_grpo
+#
+# Otherwise, store under:
+#   ${REPO_PATH}/logs/evals/base
+LORA_PATH=""
+if [[ " ${HYDRA_OVERRIDES} " =~ actor\.model\.lora_path=([^[:space:]]+) ]]; then
+    LORA_PATH="${BASH_REMATCH[1]}"
+    # Strip optional single/double quotes around the value
+    LORA_PATH="${LORA_PATH%\"}"; LORA_PATH="${LORA_PATH#\"}"
+    LORA_PATH="${LORA_PATH%\'}"; LORA_PATH="${LORA_PATH#\'}"
+fi
+
+LOG_SUBDIR="base"
+if [ -n "${LORA_PATH}" ]; then
+    LORA_PATH="${LORA_PATH%/}" # normalize trailing slash
+    # Take everything before the first "/checkpoints" occurrence
+    BEFORE_CHECKPOINTS="${LORA_PATH%%/checkpoints*}"
+    if [ -n "${BEFORE_CHECKPOINTS}" ] && [ "${BEFORE_CHECKPOINTS}" != "${LORA_PATH}" ]; then
+        # Use the last 3 path components from BEFORE_CHECKPOINTS (e.g., RLinf/logs/exp_name)
+        TMP="${BEFORE_CHECKPOINTS#/}"
+        IFS='/' read -r -a PARTS <<< "${TMP}"
+        N=${#PARTS[@]}
+        if [ "${N}" -ge 3 ]; then
+            LOG_SUBDIR="${PARTS[N-3]}/${PARTS[N-2]}/${PARTS[N-1]}"
+        elif [ "${N}" -ge 1 ]; then
+            LOG_SUBDIR="${PARTS[N-1]}"
+        fi
+    fi
+fi
+
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+LOG_DIR="${REPO_PATH}/logs/evals/${LOG_SUBDIR}_${TIMESTAMP}"
 MEGA_LOG_FILE="${LOG_DIR}/eval_embodiment.log"
 mkdir -p "${LOG_DIR}"
 CMD="python ${SRC_FILE} --config-path ${CONFIG_PATH} --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR} ${HYDRA_OVERRIDES}"
