@@ -179,7 +179,9 @@ def actor_forward(
         actions: Actions from BC forward (numpy array) or None
         bc_logits: Optional logits from BC forward (if return_bc_logits=True)
     """
-    assert rl_batch["input_ids"].shape[0] == bc_batch["input_ids"].shape[0]
+    if bc_batch is not None:
+        assert rl_batch["input_ids"].shape[0] == bc_batch["input_ids"].shape[0]
+
     has_bc_batch = bc_batch is not None
     if has_bc_batch:
         batch = {}
