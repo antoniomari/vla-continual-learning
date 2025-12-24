@@ -16,10 +16,10 @@ import hydra
 import torch.multiprocessing as mp
 
 from rlinf.config import validate_cfg
+from rlinf.custom.random_action_rollout_worker import RandomActionRolloutWorker
 from rlinf.runners.embodied_eval_runner import EmbodiedEvalRunner
 from rlinf.scheduler import Cluster
 from rlinf.utils.placement import HybridComponentPlacement
-from rlinf.workers.actor.fsdp_actor_worker import EmbodiedFSDPActor
 from rlinf.workers.env.env_worker import EnvWorker
 from rlinf.workers.rollout.hf.huggingface_worker import MultiStepRolloutWorker
 
@@ -36,6 +36,7 @@ def main(cfg) -> None:
     # Export Ray object store memory from config to environment variable
     # This allows start_ray.sh to use the configured value
     import os
+
     ray_memory = cfg.cluster.get("ray_object_store_memory", 461708984320)
     os.environ["RAY_OBJECT_STORE_MEMORY"] = str(ray_memory)
 
@@ -44,9 +45,15 @@ def main(cfg) -> None:
 
     # Create rollout worker group
     rollout_placement = component_placement.get_strategy("rollout")
-    rollout_group = MultiStepRolloutWorker.create_group(cfg).launch(
-        cluster, name=cfg.rollout.group_name, placement_strategy=rollout_placement
-    )
+
+    if cfg.rollout.get("random_action", False):
+        rollout_group = RandomActionRolloutWorker.create_group(cfg).launch(
+            cluster, name=cfg.rollout.group_name, placement_strategy=rollout_placement
+        )
+    else:
+        rollout_group = MultiStepRolloutWorker.create_group(cfg).launch(
+            cluster, name=cfg.rollout.group_name, placement_strategy=rollout_placement
+        )
     # Create env worker group
     env_placement = component_placement.get_strategy("env")
     env_group = EnvWorker.create_group(cfg).launch(
@@ -63,6 +70,7 @@ def main(cfg) -> None:
     )
 
     import time
+
     s = time.time()
     runner.run()
     print("Eval time:", time.time() - s)

@@ -107,6 +107,7 @@ rollout:
   model_dir: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
   enable_offload: False
   pipeline_stage_num: 1
+  random_action: True
 
 actor:
   group_name: "ActorGroup"
@@ -125,7 +126,7 @@ actor:
   model:
     model_name: "openvla_oft"
     # lora_path: "${oc.env:REPO_PATH}/logs/best_LoRA/base_to_task2_LoRA_grpo/checkpoints/global_step_10/actor/"
-    lora_path: "${oc.env:REPO_PATH}/logs/best_LoRA/task1_to_task3_LoRA_grpo/checkpoints/global_step_10/actor/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/best_LoRA/task1_to_task3_LoRA_grpo/checkpoints/global_step_10/actor/"
     value_type: ${algorithm.reward_type}  # 'action' or 'token'
     action_dim: 7
     num_action_chunks: 8
