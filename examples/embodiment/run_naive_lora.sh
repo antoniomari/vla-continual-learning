@@ -23,8 +23,8 @@ if [ ! -f "$RUN_EMBODIMENT_SCRIPT" ]; then
 fi
 
 # Default values
-DEFAULT_CONFIG="libero_spatial_grpo_openvlaoft_bcrl"
-DEFAULT_BC_COEFF=0.03
+DEFAULT_CONFIG="libero_spatial_grpo_openvlaoft"
+DEFAULT_BC_COEFF=0.00
 DEFAULT_NUM_TASKS=5
 
 # Get arguments
@@ -52,7 +52,7 @@ else
 fi
 
 # Base log directory
-BASE_LOG_DIR="${REPO_PATH}/logs/bcrl/${BC_COEFF_FORMATTED}"
+BASE_LOG_DIR="${REPO_PATH}/logs/naive_LoRA/"
 mkdir -p "${BASE_LOG_DIR}"
 
 # ============================================================================
