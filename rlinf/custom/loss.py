@@ -9,7 +9,7 @@ def behavior_cloning_ce_loss(**kwargs):
     vocab_size = kwargs["vocab_size"]
     n_action_bins = kwargs["n_action_bins"]
 
-    logits = logits.permute(0, 2, 1)  # [B, vocab-size, action-dim]
+    logits = logits.permute(0, 2, 1)  # [B, vocab-size, action_token_len]
 
     logits[:, : vocab_size - n_action_bins] = -torch.inf
     logits[:, vocab_size:] = -torch.inf

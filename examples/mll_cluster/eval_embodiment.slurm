@@ -50,6 +50,15 @@ if [ ! -d "$CHECKPOINT_PATH" ]; then
     exit 1
 fi
 
+# Update SLURM job name to be more descriptive (based on CHECKPOINT_LOCATION)
+# Extract meaningful path components from CHECKPOINT_LOCATION
+# e.g., "logs/bcrl_logit/0.3/task_0" -> "bcrl_logit_0.3_task_0"
+if command -v scontrol &> /dev/null && [ -n "$SLURM_JOB_ID" ]; then
+    # Convert path to job name by replacing slashes with underscores and removing "logs/" prefix
+    JOB_NAME=$(echo "$CHECKPOINT_LOCATION" | sed 's|^logs/||' | tr '/' '_')
+    scontrol update job=$SLURM_JOB_ID name="${JOB_NAME}" 2>/dev/null || true
+fi
+
 # Print job information
 echo "Job ID: $SLURM_JOB_ID"
 echo "Job Name: $SLURM_JOB_NAME"

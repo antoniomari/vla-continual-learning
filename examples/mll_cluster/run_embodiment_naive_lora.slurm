@@ -58,6 +58,14 @@ export LOG_DIR
 
 EXPERIMENT_NAME="naive_lora_task_${TASK_ID}"
 
+# Update SLURM job name to be more descriptive (based on LOG_DIR)
+# Extract the last component of LOG_DIR (e.g., "task_0")
+LOG_DIR_BASENAME=$(basename "$LOG_DIR")
+if command -v scontrol &> /dev/null && [ -n "$SLURM_JOB_ID" ]; then
+    # Use the directory name from LOG_DIR (e.g., "task_0")
+    scontrol update job=$SLURM_JOB_ID name="${LOG_DIR_BASENAME}" 2>/dev/null || true
+fi
+
 echo "========================================="
 echo "Lifelong Learning - Single Task Training (Naive LoRA)"
 echo "========================================="

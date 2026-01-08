@@ -83,6 +83,16 @@ else
 fi
 export LOG_DIR
 
+# Update SLURM job name to be more descriptive (based on LOG_DIR)
+# Extract the last component of LOG_DIR (e.g., "task_0" or "task_1_coeff_0_8")
+# This makes the job name match the log directory structure exactly
+LOG_DIR_BASENAME=$(basename "$LOG_DIR")
+if command -v scontrol &> /dev/null && [ -n "$SLURM_JOB_ID" ]; then
+    # Use the full directory name from LOG_DIR as the job name
+    # This will show as "task_0" or "task_1_coeff_0_8" in SLURM, matching LOG_DIR exactly
+    scontrol update job=$SLURM_JOB_ID name="${LOG_DIR_BASENAME}" 2>/dev/null || true
+fi
+
 echo "========================================="
 echo "Lifelong Learning - Multi-LoRA Training"
 echo "========================================="

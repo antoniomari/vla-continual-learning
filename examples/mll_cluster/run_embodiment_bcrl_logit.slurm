@@ -59,6 +59,16 @@ export LOG_DIR
 
 EXPERIMENT_NAME="bcrl_logit_task_${TASK_ID}_${BC_COEFF}"
 
+# Update SLURM job name to be more descriptive (based on LOG_DIR)
+# Extract meaningful path components: bcrl_logit/${BC_COEFF}/task_${TASK_ID}
+# Use parent directory and basename for a descriptive name
+LOG_DIR_PARENT=$(basename "$(dirname "$LOG_DIR")")  # e.g., "0.3"
+LOG_DIR_BASENAME=$(basename "$LOG_DIR")  # e.g., "task_0"
+if command -v scontrol &> /dev/null && [ -n "$SLURM_JOB_ID" ]; then
+    # Combine to show both BC_COEFF and task: "bcrl_logit_0.3_task_0"
+    scontrol update job=$SLURM_JOB_ID name="bcrl_logit_${LOG_DIR_PARENT}_${LOG_DIR_BASENAME}" 2>/dev/null || true
+fi
+
 echo "========================================="
 echo "Lifelong Learning - Single Task Training"
 echo "========================================="

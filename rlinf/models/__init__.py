@@ -292,22 +292,29 @@ def get_model(model_path, cfg: DictConfig, override_config_kwargs=None):
             print(f"  ✓ Successfully merged {merged_count} adapter(s) into base model with coefficient {merge_coefficient}")
             print(f"  → Base model now contains knowledge from {merged_count} previous task(s)")
             
-            # After merging all previous adapters, create a NEW trainable LoRA adapter on top
-            # This new adapter will be the only trainable one
-            print(f"  Creating new trainable LoRA adapter on top of merged model...")
-            lora_config = LoraConfig(
-                r=cfg.lora_rank,
-                lora_alpha=cfg.lora_rank,
-                lora_dropout=0.0,
-                target_modules=[
-                    "proj", "qkv", "fc1", "fc2", "q", "kv", "fc3",
-                    "q_proj", "k_proj", "v_proj", "o_proj",
-                    "gate_proj", "up_proj", "down_proj", "lm_head",
-                ],
-                init_lora_weights="gaussian",
-            )
-            model = get_peft_model(model, lora_config)
-            print(f"  ✓ New trainable LoRA adapter created (only this adapter will be updated during training)")
+            # After merging all previous adapters, either load an existing adapter or create a new one
+            if lora_path is not None:
+                # Load existing adapter (for evaluation or resuming training)
+                print(f"  Loading current LoRA adapter from {cfg.lora_path}")
+                model = PeftModel.from_pretrained(model, cfg.lora_path, is_trainable=True)
+                print(f"  ✓ Current LoRA adapter loaded on top of merged model")
+            else:
+                # Create a NEW trainable LoRA adapter on top (for new task training)
+                # This new adapter will be the only trainable one
+                print(f"  Creating new trainable LoRA adapter on top of merged model...")
+                lora_config = LoraConfig(
+                    r=cfg.lora_rank,
+                    lora_alpha=cfg.lora_rank,
+                    lora_dropout=0.0,
+                    target_modules=[
+                        "proj", "qkv", "fc1", "fc2", "q", "kv", "fc3",
+                        "q_proj", "k_proj", "v_proj", "o_proj",
+                        "gate_proj", "up_proj", "down_proj", "lm_head",
+                    ],
+                    init_lora_weights="gaussian",
+                )
+                model = get_peft_model(model, lora_config)
+                print(f"  ✓ New trainable LoRA adapter created (only this adapter will be updated during training)")
         elif lora_path is not None:
             # Single LoRA adapter (backward compatibility)
             print(f"Loading LoRA adapter from {cfg.lora_path}")

@@ -78,6 +78,21 @@ if [[ " ${HYDRA_OVERRIDES} " =~ actor\.model\.lora_scale=([^[:space:]]+) ]]; the
     LORA_SCALE="${LORA_SCALE%\'}"; LORA_SCALE="${LORA_SCALE#\'}"
 fi
 
+# Extract previous_lora_merge_coefficient from Hydra overrides (for multi-LoRA)
+PREVIOUS_LORA_COEFF=""
+if [[ " ${HYDRA_OVERRIDES} " =~ actor\.model\.previous_lora_merge_coefficient=([^[:space:]]+) ]]; then
+    PREVIOUS_LORA_COEFF="${BASH_REMATCH[1]}"
+    # Strip optional single/double quotes around the value
+    PREVIOUS_LORA_COEFF="${PREVIOUS_LORA_COEFF%\"}"; PREVIOUS_LORA_COEFF="${PREVIOUS_LORA_COEFF#\"}"
+    PREVIOUS_LORA_COEFF="${PREVIOUS_LORA_COEFF%\'}"; PREVIOUS_LORA_COEFF="${PREVIOUS_LORA_COEFF#\'}"
+fi
+
+# Check if this is multi-LoRA (has lora_paths)
+IS_MULTILORA=false
+if [[ " ${HYDRA_OVERRIDES} " =~ actor\.model\.lora_paths= ]]; then
+    IS_MULTILORA=true
+fi
+
 LOG_SUBDIR="base"
 if [ -n "${LORA_PATH}" ]; then
     LORA_PATH="${LORA_PATH%/}" # normalize trailing slash
@@ -96,8 +111,18 @@ if [ -n "${LORA_PATH}" ]; then
     fi
 fi
 
-# Append lora_scale to LOG_SUBDIR if provided
-if [ -n "${LORA_SCALE}" ]; then
+# Append coefficients to LOG_SUBDIR for multi-LoRA
+if [ "$IS_MULTILORA" = true ]; then
+    if [ -n "${PREVIOUS_LORA_COEFF}" ]; then
+        PREV_COEFF_PATH=$(echo "$PREVIOUS_LORA_COEFF" | tr '.' '_')
+        LOG_SUBDIR="${LOG_SUBDIR}_prev_coeff_${PREV_COEFF_PATH}"
+    fi
+    if [ -n "${LORA_SCALE}" ] && [ "${LORA_SCALE}" != "1.0" ]; then
+        LORA_SCALE_PATH=$(echo "$LORA_SCALE" | tr '.' '_')
+        LOG_SUBDIR="${LOG_SUBDIR}_curr_scale_${LORA_SCALE_PATH}"
+    fi
+elif [ -n "${LORA_SCALE}" ]; then
+    # Single LoRA: append lora_scale to LOG_SUBDIR if provided
     # Format lora_scale for use in path (replace dot with underscore, e.g., 0.5 -> 0_5)
     LORA_SCALE_PATH=$(echo "$LORA_SCALE" | tr '.' '_')
     LOG_SUBDIR="${LOG_SUBDIR}_lora_scale/lora_scale_${LORA_SCALE_PATH}"
