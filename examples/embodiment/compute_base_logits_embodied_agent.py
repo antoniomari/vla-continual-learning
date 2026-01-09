@@ -18,6 +18,7 @@ from omegaconf import OmegaConf
 
 from rlinf.config import validate_cfg
 from rlinf.custom.logits_precompute_worker import LogitsPrecomputeWorker
+from rlinf.custom.rlds_logits_precompute_worker import RLDSLogitsPrecomputeWorker
 from rlinf.scheduler import Cluster
 from rlinf.utils.placement import HybridComponentPlacement
 
@@ -39,7 +40,7 @@ def main(cfg) -> None:
         cfg.logits_precompute = {
             "root_dir": os.getenv("LIBERO_REPO_PATH"),
             "output_dir": None,
-            "demos_per_task": 1,
+            "demos_per_task": None,
         }
 
     cfg.runner.only_eval = True
@@ -57,12 +58,14 @@ def main(cfg) -> None:
 
     # Create rollout worker group
     rollout_placement = component_placement.get_strategy("rollout")
-    rollout_group = LogitsPrecomputeWorker.create_group(cfg).launch(
+    # rollout_group = LogitsPrecomputeWorker.create_group(cfg).launch(
+    #     cluster, name=cfg.rollout.group_name, placement_strategy=rollout_placement
+    # )
+    rollout_group = RLDSLogitsPrecomputeWorker.create_group(cfg).launch(
         cluster, name=cfg.rollout.group_name, placement_strategy=rollout_placement
     )
-
     rollout_group.init_worker().wait()
-    rollout_group.process_all_files().wait()
+    rollout_group.process_all_tasks().wait()
 
 
 if __name__ == "__main__":

@@ -22,3 +22,4 @@ openvla_image.tar
 wandb/*
 LIBERO/libero/datasets*
 trajectory_logs/
+rlds_demo_videos/

@@ -96,7 +96,8 @@ env:
     num_envs: 80
     eval_per_task: ${int_div:${env.eval.num_envs}, 10}
   enable_offload: False
-  fixed_task_ids: [3]
+  fixed_task_ids: null
+  log_trajectories: False
 
 rollout:
   group_name: "RolloutGroup"
@@ -107,7 +108,7 @@ rollout:
   mode: "colocate"
   generation_backend: "huggingface"
   model_dir: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
-  enable_offload: True
+  enable_offload: False
   pipeline_stage_num: 1
 
 actor:
@@ -122,7 +123,8 @@ actor:
   micro_batch_size: 16
   global_batch_size: 8192
   seed: 1234
-  enable_offload: True
+  enable_offload: False
+  preallocate: 22   # preallocates for actor worker (GB)
 
   model:
     model_name: "openvla_oft"

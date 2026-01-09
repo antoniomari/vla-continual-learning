@@ -13,9 +13,7 @@ hydra:
 cluster:
   num_nodes: 1
   component_placement:
-    env: 0
-    rollout: 1-3
-    actor: 1-3
+    env,rollout,actor: all
   ray_object_store_memory: 461708984320  # Ray object store memory in bytes (~200GB)
 
 
@@ -48,7 +46,7 @@ algorithm:
   n_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   num_group_envs: 6 # group_size * num_group_envs must be divisble by num of processes running rollout
-  rollout_epoch: 16
+  rollout_epoch: 3
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
   entropy_type: token_level
@@ -94,8 +92,12 @@ env:
     name: "env_buffer_list"
     queue_name: "obs_buffer"
     queue_size: 0
+  eval:
+    num_envs: 80
+    eval_per_task: ${int_div:${env.eval.num_envs}, 10}
   enable_offload: False
   fixed_task_ids: [0]
+  log_trajectories: False
 
 rollout:
   group_name: "RolloutGroup"

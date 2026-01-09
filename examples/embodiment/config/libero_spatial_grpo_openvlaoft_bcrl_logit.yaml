@@ -45,6 +45,7 @@ algorithm:
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   num_group_envs: 8
   rollout_epoch: 16
+  eval_rollout_epoch: 20
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
   entropy_type: token_level
@@ -97,7 +98,8 @@ env:
   eval:
     num_envs: 120
     eval_per_task: ${int_div:${env.eval.num_envs}, 10}
-  fixed_task_ids: [0]
+  fixed_task_ids: null
+  log_trajectories: False
 
 rollout:
   group_name: "RolloutGroup"
