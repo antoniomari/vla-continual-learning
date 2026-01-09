@@ -19,14 +19,24 @@ class LiberoSFTDataset(Dataset):
         demos_per_task=1,
         rank=0,
         world_size=1,
+        use_preprocessed=True,
         use_cached_logits=False,
         logits_type="",
     ):
         self.cfg = cfg
         self.logits_type = logits_type
-        task_suite_name = cfg.env.train.task_suite_name
-        dataset_dir = "datasets" if not use_cached_logits else "datasets_with_logits"
+        task_suite_name = (
+            cfg.env.train.task_suite_name
+            if not use_preprocessed
+            else f"{cfg.env.train.task_suite_name}_simplevla"
+        )
+        dataset_dir = (
+            "datasets"
+            if not use_cached_logits and not use_preprocessed
+            else "datasets_with_logits"
+        )
         self.root_dir = os.path.join(root_dir, "libero", dataset_dir, task_suite_name)
+        print(f"root dir: {self.root_dir}")
         self.task_files = [
             os.path.join(self.root_dir, f)
             for f in os.listdir(self.root_dir)
@@ -43,7 +53,7 @@ class LiberoSFTDataset(Dataset):
             filename = os.path.basename(path)
             task_desc = self._extract_task_description(filename)
             with h5py.File(path, "r") as f:
-                demo_names = sorted(list(f["data"].keys()))[:demos_per_task]
+                demo_names = sorted(list(f["data"].keys()))[1 : 1 + demos_per_task]
                 for name in demo_names:
                     traj_len = len(f["data"][name]["actions"])
                     self.trajectories.append((path, name, traj_len, task_desc))
@@ -62,7 +72,7 @@ class LiberoSFTDataset(Dataset):
 
     def _extract_task_description(self, filename):
         name = filename.replace(".hdf5", "")
-        parts = name.split("_")
+        parts = name.split("_")[:-1]  # remove the word demo
         return " ".join(parts)
 
     def __len__(self):
@@ -148,6 +158,7 @@ def main(cfg):
         demos_per_task=1,
         rank=0,
         world_size=4,
+        use_preprocessed=True,
         use_cached_logits=True,
         logits_type="processed",
     )
@@ -176,11 +187,10 @@ def main(cfg):
         t1 = time.perf_counter()
         times.append(t1 - t0)
 
-    print(times)
-    print("action shape:", batch["action_tokens"].shape)
-    if "processed_action_logits" in batch:
-        print("logits shape:", batch["processed_action_logits"].shape)
-    print("avg batch time:", sum(times) / len(times))
+    print(f"input_ids shape: {batch['input_ids'].shape}")
+    print(f"attention_mask shape: {batch['attention_mask'].shape}")
+    print(f"pixel_values shape: {batch['pixel_values'].shape}")
+    print(f"actions shape: {batch['actions'].shape}")
 
 
 if __name__ == "__main__":

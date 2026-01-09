@@ -88,6 +88,7 @@ class MultiStepRolloutWorker(Worker):
             self.cfg.algorithm.sampling_params, resolve=True
         )
         self._train_sampling_params = {
+            "do_sample": not self._sampling_params["use_greedy"],
             "temperature": self._sampling_params["temperature_train"],
             "top_k": self._sampling_params["top_k"],
             "top_p": self._sampling_params["top_p"],
@@ -96,19 +97,15 @@ class MultiStepRolloutWorker(Worker):
         }
 
         self._eval_sampling_params = {
+            "do_sample": not self._sampling_params["use_greedy"],
+            "temperature": self._sampling_params["temperature_eval"],
+            "top_k": self._sampling_params["top_k"],
+            "top_p": self._sampling_params["top_p"],
             "max_new_tokens": self._length_params["max_new_token"],
         }
 
-        if not self._sampling_params["use_greedy"]:
-            self._eval_sampling_params.update(
-                {
-                    "temperature": self._sampling_params["temperature_eval"],
-                    "top_k": self._sampling_params["top_k"],
-                    "top_p": self._sampling_params["top_p"],
-                }
-            )
-
-    def predict(self, processed_obs, do_sample=True, mode="train"):
+    def predict(self, processed_obs, mode="train"):
+        # BUG: don't use do_sample variable
         action_token_len = self.hf_model.action_dim * self.hf_model.num_action_chunks
 
         sample_kwargs = (
@@ -123,7 +120,6 @@ class MultiStepRolloutWorker(Worker):
                     input_ids=processed_obs["input_ids"],
                     attention_mask=processed_obs["attention_mask"],
                     pixel_values=processed_obs["pixel_values"],
-                    do_sample=do_sample,
                     **sample_kwargs,
                 )
             )
@@ -302,10 +298,8 @@ class MultiStepRolloutWorker(Worker):
                 )
                 chunk_actions, _, _, _ = self.predict(
                     processed_obs,
-                    do_sample=not self._sampling_params["use_greedy"],
                     mode="eval",
                 )
-
                 await self.send_chunk_actions(chunk_actions)
 
                 if "meta" in env_batch:

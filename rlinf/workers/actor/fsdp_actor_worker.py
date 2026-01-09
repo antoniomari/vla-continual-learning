@@ -132,6 +132,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             world_size=self._world_size,
             use_cached_logits=use_cached_logits,
             logits_type=self.logits_type if self.use_reference_logits_bc else "",
+            use_preprocessed=True,
         )
 
         self.sft_dataloader = cycle(

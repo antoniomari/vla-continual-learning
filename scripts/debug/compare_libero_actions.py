@@ -7,8 +7,8 @@ EMBODIED_PATH = os.path.dirname(os.path.abspath(__file__))
 REPO_PATH = os.path.dirname(EMBODIED_PATH)
 LIBERO_REPO_PATH = os.path.join(REPO_PATH, "LIBERO")
 
-dataset_a = "libero_spatial2"
-dataset_b = "libero_spatial3"
+dataset_a = "libero_spatial4"
+dataset_b = "libero_spatial2"
 
 path_a = f"{LIBERO_REPO_PATH}/libero/datasets_with_logits/{dataset_a}"
 path_b = f"{LIBERO_REPO_PATH}/libero/datasets_with_logits/{dataset_b}"
@@ -28,17 +28,9 @@ for task_file in task_files_b:
         demo_a = fa["data"]["demo_0"]
         demo_b = fb["data"]["demo_0"]
 
-        # ---- Load observations ----
-        obs_a = demo_a["obs"]["agentview_rgb"][:]
-        obs_b = demo_b["obs"]["agentview_rgb"][:]
-
-        if obs_a.shape != obs_b.shape:
-            print("  ❌ Observation shape mismatch:", obs_a.shape, obs_b.shape)
-            continue
-
         # ---- Load actions ----
-        actions_a = demo_a["actions"][:]
-        actions_b = demo_b["actions"][:]
+        actions_a = demo_a["predicted_actions"][:]
+        actions_b = demo_b["predicted_actions"][:]
 
         if actions_a.shape != actions_b.shape:
             print("  ❌ Action shape mismatch:", actions_a.shape, actions_b.shape)
@@ -52,7 +44,7 @@ for task_file in task_files_b:
             if np.allclose(actions_a, actions_b, atol=1e-6):
                 print("  ⚠️ Actions match within tolerance")
             else:
-                diff = np.abs(actions_a - actions_b).max()
-                print(f"  ❌ Actions differ! max |Δ| = {diff}")
+                diff = np.abs(actions_a - actions_b)
+                print(f"  ❌ Actions differ! |Δ| = {diff}")
 
     print("--------------------------------------")

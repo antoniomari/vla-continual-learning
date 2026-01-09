@@ -40,12 +40,15 @@ class LogitsPrecomputeWorker(Worker):
 
         task_suite_name = cfg.env.train.task_suite_name
         self.dataset_path = os.path.join(
-            self.root_dir, "libero", "datasets", task_suite_name
+            self.root_dir, "libero", "datasets", f"{task_suite_name}_simplevla"
         )
 
         if self.output_dir is None:
             self.output_dir = os.path.join(
-                self.root_dir, "libero", "datasets_with_logits", task_suite_name
+                self.root_dir,
+                "libero",
+                "datasets_with_logits",
+                f"{task_suite_name}_simplevla",
             )
 
         # Get task files and shard them across workers
@@ -85,7 +88,8 @@ class LogitsPrecomputeWorker(Worker):
     def _extract_task_description(self, filename):
         """Extract task description from filename."""
         name = os.path.basename(filename).replace(".hdf5", "")
-        parts = name.split("_")
+        parts = name.split("_")[:-1]
+        print(parts)
         return " ".join(parts)
 
     def compute_logits(self, processed_obs):
@@ -155,7 +159,7 @@ class LogitsPrecomputeWorker(Worker):
                     # Compute and save logits for each timestep
                     traj_len = len(demo_in["actions"])
 
-                    all_raw_action_logits = []
+                    # all_raw_action_logits = []
                     all_processed_action_logits = []
                     all_predicted_actions = []
 
@@ -184,16 +188,16 @@ class LogitsPrecomputeWorker(Worker):
 
                         logits_dict = self.compute_logits(processed_obs)
 
-                        all_raw_action_logits.append(logits_dict["raw_action_logits"])
+                        # all_raw_action_logits.append(logits_dict["raw_action_logits"])
                         all_processed_action_logits.append(
                             logits_dict["processed_action_logits"]
                         )
                         all_predicted_actions.append(logits_dict["actions"])
 
-                    demo_out.create_dataset(
-                        "raw_action_logits",
-                        data=np.concatenate(all_raw_action_logits, axis=0),
-                    )
+                    # demo_out.create_dataset(
+                    #     "raw_action_logits",
+                    #     data=np.concatenate(all_raw_action_logits, axis=0),
+                    # )
                     demo_out.create_dataset(
                         "processed_action_logits",
                         data=np.concatenate(all_processed_action_logits, axis=0),

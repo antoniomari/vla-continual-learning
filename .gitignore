@@ -21,3 +21,4 @@ openvla_image.tar
 .ray_tmp*
 wandb/*
 LIBERO/libero/datasets*
+trajectory_logs/

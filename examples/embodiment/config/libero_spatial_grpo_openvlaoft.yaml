@@ -14,7 +14,7 @@ cluster:
   num_nodes: 1
   component_placement:
     actor,env,rollout: all
-  ray_object_store_memory: 461708984320  # Ray object store memory in bytes (default: ~430GB)
+  # sray_object_store_memory: 461708984320  # Ray object store memory in bytes (default: ~430GB)
 
 runner:
   task_type: embodied
@@ -24,7 +24,7 @@ runner:
     experiment_name: "test_openvla"
     logger_backends: ["wandb"] # wandb, swanlab
 
-  max_epochs: 50
+  max_epochs: 10
   max_steps: -1
 
   only_eval: False
@@ -46,7 +46,7 @@ algorithm:
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   num_group_envs: 8
   rollout_epoch: 16
-  eval_rollout_epoch: 8
+  eval_rollout_epoch: 20
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
   entropy_type: token_level
@@ -69,7 +69,7 @@ algorithm:
 
   sampling_params:
     use_greedy: False
-    temperature_train: 1.6
+    temperature_train: 2.0
     temperature_eval: 1.6
     top_k: -1
     top_p: 1.0
@@ -96,7 +96,8 @@ env:
     num_envs: 80
     eval_per_task: ${int_div:${env.eval.num_envs}, 10}
   enable_offload: False
-  fixed_task_ids: [0, 1, 2, 3, 4]
+  fixed_task_ids: null
+  log_trajectories: False
 
 rollout:
   group_name: "RolloutGroup"
@@ -123,19 +124,10 @@ actor:
   global_batch_size: 8192
   seed: 1234
   enable_offload: False
+  preallocate: 18   # preallocates for actor worker (GB)
 
   model:
     model_name: "openvla_oft"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_5/"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_10/"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_15/"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_20/"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_25/"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_30/"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_35/"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_40/"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_45/"
-    # lora_path: "${oc.env:REPO_PATH}/logs/multitask/global_step_50/"
     value_type: ${algorithm.reward_type}  # 'action' or 'token'
     action_dim: 7
     num_action_chunks: 8

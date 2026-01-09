@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import hydra
+import torch
 import torch.multiprocessing as mp
 
 from rlinf.config import validate_cfg
@@ -30,13 +32,17 @@ mp.set_start_method("spawn", force=True)
     version_base="1.1", config_path="config", config_name="maniskill_ppo_openvlaoft"
 )
 def main(cfg) -> None:
+    import os
+
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
     cfg = validate_cfg(cfg)
     cfg.runner.only_eval = True
 
     # Export Ray object store memory from config to environment variable
     # This allows start_ray.sh to use the configured value
-    import os
-
     ray_memory = cfg.cluster.get("ray_object_store_memory", 461708984320)
     os.environ["RAY_OBJECT_STORE_MEMORY"] = str(ray_memory)
 
