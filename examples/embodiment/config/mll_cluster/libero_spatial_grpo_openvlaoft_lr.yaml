@@ -122,7 +122,7 @@ actor:
   micro_batch_size: 32
   global_batch_size: 8192
   seed: 1234
-  enable_offload: False
+  enable_offload: True
 
   model:
     model_name: "openvla_oft"

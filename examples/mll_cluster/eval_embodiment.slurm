@@ -4,17 +4,18 @@
 #SBATCH --ntasks-per-node=1             # Number of tasks per node
 #SBATCH --cpus-per-task=80              # Number of CPUs per task
 #SBATCH --gres=gpu:4                    # Number of GPUs (RECOMMENDED: 4+ GPUs)
-#SBATCH --time=4:00:00                  # Maximum execution time (HH:MM:SS)
+#SBATCH --time=24:00:00                  # Maximum execution time (HH:MM:SS)
 #SBATCH --mem=490G                       # Memory per node (adjust as needed)
 # #SBATCH --partition=mll            # Partition name (adjust to your cluster's partition)
 #SBATCH --mail-type=FAIL,END
 #SBATCH --mail-user=jiahengh@utexas.edu
 #SBATCH --exclude=slurm-node-008,slurm-node-011
+#SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
+#SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
 # =============================================================================
 # MODULE LOADING
 # =============================================================================
-# #SBATCH --output=%x-%j.out              # Output file name (%x = job name, %j = job ID)
 # Common modules to load (uncomment and adjust for your cluster):
 # module purge                          # Clear existing modules
 # module load cuda/11.8                 # CUDA toolkit (adjust version)
@@ -39,6 +40,7 @@ fi
 # Get workspace root (SLURM_SUBMIT_DIR is the directory where sbatch was run from)
 cd $SLURM_SUBMIT_DIR
 WORKSPACE_ROOT=$(pwd)
+mkdir -p logs/slurm
 
 # Construct full checkpoint path (remove any trailing slashes from CHECKPOINT_LOCATION first)
 CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION%/}"
@@ -72,7 +74,7 @@ echo "Checkpoint Location: $CHECKPOINT_LOCATION"
 echo "Full Checkpoint Path: $CHECKPOINT_PATH"
 echo ""
 
-bash examples/embodiment/eval_embodiment.sh libero_spatial_grpo_openvlaoft_eval +actor.model.lora_path="${CHECKPOINT_PATH}"
+bash examples/embodiment/eval_embodiment.sh mll_cluster/libero_spatial_grpo_openvlaoft_eval +actor.model.lora_path="${CHECKPOINT_PATH}"
 
 # Print completion time
 echo "End Time: $(date)"

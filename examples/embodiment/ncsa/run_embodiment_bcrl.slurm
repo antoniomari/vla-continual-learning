@@ -32,6 +32,7 @@ fi
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate rlinf
 
+mkdir -p logs/slurm
 mkdir -p logs/bcrl
 mkdir -p logs/bcrl/${BC_COEFF}
 LOG_DIR="./logs/bcrl/${BC_COEFF}/task_${TASK_ID}"
@@ -97,7 +98,7 @@ if [ $EXIT_CODE -eq 0 ]; then
     echo "Checkpoint saved to: ${LOG_DIR}/global_step_10"
 else
     echo "✗ Task $TASK_ID failed with exit code $EXIT_CODE"
-    echo "  Check logs at: logs/task_${TASK_ID}_bc_${BC_COEFF}_${SLURM_JOB_ID}.out"
+    echo "  Check logs at: logs/slurm/task_${TASK_ID}_bc_${BC_COEFF}_${SLURM_JOB_ID}.out"
 fi
 echo "Finished at: $(date)"
 echo "========================================="

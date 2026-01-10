@@ -4,12 +4,14 @@
 #SBATCH --ntasks-per-node=1                     # Number of tasks per node
 #SBATCH --cpus-per-task=90                      # Number of CPUs per task
 #SBATCH --gres=gpu:8                            # Number of GPUs
-#SBATCH --time=35:00:00                         # Maximum execution time (HH:MM:SS)
+#SBATCH --time=70:00:00                         # Maximum execution time (HH:MM:SS)
 #SBATCH --mem=900G                              # Memory per node (adjust as needed)
 #SBATCH --partition=mll                         # Partition name
 #SBATCH --mail-type=FAIL,END
 #SBATCH --mail-user=jiahengh@utexas.edu
 #SBATCH --exclude=slurm-node-004,slurm-node-011
+#SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
+#SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
 ### Usage: sbatch examples/mll_cluster/run_embodiment_multilora.slurm TASK_ID [MERGE_COEFFICIENT] [CONFIG_NAME]
 ### Example: sbatch examples/mll_cluster/run_embodiment_multilora.slurm 0
@@ -71,6 +73,7 @@ fi
 COEFFICIENT_PATH=$(echo "$MERGE_COEFFICIENT" | tr '.' '_')
 
 # Include coefficient in the log directory path
+mkdir -p logs/slurm
 mkdir -p logs/naive_lora_multilora
 if [ "$TASK_ID" -eq 0 ]; then
     # Task 0 doesn't use coefficient in path (no previous adapters to merge)
@@ -173,7 +176,7 @@ if [ $EXIT_CODE -eq 0 ]; then
     echo "  (Merge coefficient is automatically saved with checkpoint)"
 else
     echo "✗ Task $TASK_ID (Multi-LoRA) failed with exit code $EXIT_CODE"
-    echo "  Check logs at: ${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"
+    echo "  Check logs at: logs/slurm/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"
 fi
 echo "Finished at: $(date)"
 echo "========================================="

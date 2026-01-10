@@ -13,7 +13,7 @@ hydra:
 cluster:
   num_nodes: 1
   component_placement:
-    actor,env,rollout: 0,5,6,7 # all
+    actor,env,rollout: all
   ray_object_store_memory: 461708984320  # Ray object store memory in bytes (~200GB, lower than training)
 
 runner:
@@ -21,7 +21,7 @@ runner:
   logger:
     log_path: "../results"
     project_name: rlinf
-    experiment_name: "mll_eval"
+    experiment_name: "eval_openvla"
     logger_backends: ["tensorboard"] # wandb, swanlab
 
   max_epochs: 1000
@@ -46,7 +46,7 @@ algorithm:
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   num_group_envs: 8
   rollout_epoch: 16
-  eval_rollout_epoch: 8
+  eval_rollout_epoch: 40 # 20 # 8
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
   entropy_type: token_level
@@ -93,8 +93,8 @@ env:
   enable_offload: False
   fixed_task_ids: null
   eval:
-    num_envs: 200  # Number of parallel evaluation environments (default: 200)
-    eval_per_task: 8
+    num_envs: 80 # 200  # Number of parallel evaluation environments (default: 200) # try 180 for 3 PGU
+    eval_per_task: null  # Expected evaluations per task (for 10 tasks: num_envs // 10)
 
 rollout:
   group_name: "RolloutGroup"
@@ -107,6 +107,7 @@ rollout:
   model_dir: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
   enable_offload: False
   pipeline_stage_num: 1
+  random_action: False
 
 actor:
   group_name: "ActorGroup"
@@ -124,14 +125,8 @@ actor:
 
   model:
     model_name: "openvla_oft"
-    # lora_path: "${oc.env:REPO_PATH}/logs/base_to_task0_LoRA_grpo/checkpoints/global_step_10/actor/"
-    # lora_path: "${oc.env:REPO_PATH}/logs/task0_to_task1_LoRA_grpo/checkpoints/global_step_10/actor/"
-    # lora_path: "/scratch/cluster/jshim12/RLinf/logs/base_to_task0_LoRA_grpo/checkpoints/global_step_10/actor/"
-    # lora_path: "/scratch/cluster/jshim12/RLinf/logs/task0_to_task1_LoRA_grpo/checkpoints/global_step_10/actor/"
-    # lora_path: "/scratch/cluster/jshim12/RLinf/logs/task1_to_task2_LoRA_grpo/checkpoints/global_step_10/actor/"
-    # lora_path: "/scratch/cluster/jshim12/RLinf/logs/task2_to_task3_LoRA_grpo/checkpoints/global_step_10/actor/"
-    # lora_path: "/scratch/cluster/jshim12/RLinf/logs/task3_to_task4_LoRA_grpo/checkpoints/global_step_10/actor/"
-    lora_path: "specified_later"
+    # lora_path: "${oc.env:REPO_PATH}/logs/best_LoRA/base_to_task2_LoRA_grpo/checkpoints/global_step_10/actor/"
+    # lora_path: "${oc.env:REPO_PATH}/logs/best_LoRA/task1_to_task3_LoRA_grpo/checkpoints/global_step_10/actor/"
     lora_scale: 1.0
     value_type: ${algorithm.reward_type}  # 'action' or 'token'
     action_dim: 7

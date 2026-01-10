@@ -5,8 +5,8 @@
 #SBATCH --cpus-per-task=80              # Number of CPUs per task
 #SBATCH --gres=gpu:3                    # Number of GPUs (RECOMMENDED: 4+ GPUs)
 #SBATCH --time=4:00:00                  # Maximum execution time (HH:MM:SS)
-#SBATCH --output=%x-%j.out              # Output file name (%x = job name, %j = job ID)
-#SBATCH --error=%x-%j.err               # Error file name
+#SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
+#SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 #SBATCH --mem=256G                       # Memory per node (adjust as needed)
 #SBATCH --partition=mll            # Partition name (adjust to your cluster's partition)
 #SBATCH --mail-type=FAIL,END
@@ -23,6 +23,9 @@
 # module load python/3.11               # Python (if not using conda/venv)
 # module load gcc/9.3.0                 # Compiler (if needed)
 # module list                           # Verify loaded modules
+
+# Create logs directory
+mkdir -p logs/slurm
 
 # Print job information
 echo "Job ID: $SLURM_JOB_ID"

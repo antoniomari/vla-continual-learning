@@ -4,12 +4,14 @@
 #SBATCH --ntasks-per-node=1             # Number of tasks per node
 #SBATCH --cpus-per-task=90              # Number of CPUs per task
 #SBATCH --gres=gpu:8                    # Number of GPUs (RECOMMENDED: 4+ GPUs)
-#SBATCH --time=35:00:00                  # Maximum execution time (HH:MM:SS)
+#SBATCH --time=70:00:00                  # Maximum execution time (HH:MM:SS)
 #SBATCH --mem=900G                      # Memory per node (adjust as needed)
 #SBATCH --partition=mll                 # Partition name (adjust to your cluster's partition)
 #SBATCH --mail-type=FAIL,END
 #SBATCH --mail-user=jiahengh@utexas.edu
 #SBATCH --exclude=slurm-node-004,slurm-node-008
+#SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
+#SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
 
 ### Usage: sbatch examples/mll_cluster/run_embodiment_bcrl_logit.slurm TASK_ID BC_COEFF [CHECKPOINT_PATH] [CONFIG_NAME]
@@ -52,6 +54,7 @@ echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
 echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
 echo ""
 
+mkdir -p logs/slurm
 mkdir -p logs/bcrl_logit
 mkdir -p logs/bcrl_logit/${BC_COEFF}
 LOG_DIR="./logs/bcrl_logit/${BC_COEFF}/task_${TASK_ID}"
@@ -126,7 +129,7 @@ if [ $EXIT_CODE -eq 0 ]; then
     echo "Checkpoint saved to: ${LOG_DIR}"
 else
     echo "✗ Task $TASK_ID failed with exit code $EXIT_CODE"
-    echo "  Check logs at: ${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"
+    echo "  Check logs at: logs/slurm/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"
 fi
 echo "Finished at: $(date)"
 echo "========================================="
