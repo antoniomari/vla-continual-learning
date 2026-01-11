@@ -87,6 +87,15 @@ if [[ " ${HYDRA_OVERRIDES} " =~ actor\.model\.previous_lora_merge_coefficient=([
     PREVIOUS_LORA_COEFF="${PREVIOUS_LORA_COEFF%\'}"; PREVIOUS_LORA_COEFF="${PREVIOUS_LORA_COEFF#\'}"
 fi
 
+# Extract temperature_eval from Hydra overrides
+TEMPERATURE_EVAL=""
+if [[ " ${HYDRA_OVERRIDES} " =~ algorithm\.sampling_params\.temperature_eval=([^[:space:]]+) ]]; then
+    TEMPERATURE_EVAL="${BASH_REMATCH[1]}"
+    # Strip optional single/double quotes around the value
+    TEMPERATURE_EVAL="${TEMPERATURE_EVAL%\"}"; TEMPERATURE_EVAL="${TEMPERATURE_EVAL#\"}"
+    TEMPERATURE_EVAL="${TEMPERATURE_EVAL%\'}"; TEMPERATURE_EVAL="${TEMPERATURE_EVAL#\'}"
+fi
+
 # Check if this is multi-LoRA (has lora_paths)
 IS_MULTILORA=false
 if [[ " ${HYDRA_OVERRIDES} " =~ actor\.model\.lora_paths= ]]; then
@@ -126,6 +135,13 @@ elif [ -n "${LORA_SCALE}" ]; then
     # Format lora_scale for use in path (replace dot with underscore, e.g., 0.5 -> 0_5)
     LORA_SCALE_PATH=$(echo "$LORA_SCALE" | tr '.' '_')
     LOG_SUBDIR="${LOG_SUBDIR}_lora_scale/lora_scale_${LORA_SCALE_PATH}"
+fi
+
+# Append temperature_eval to LOG_SUBDIR if provided
+if [ -n "${TEMPERATURE_EVAL}" ]; then
+    # Format temperature_eval for use in path (replace dot with underscore, e.g., 2.0 -> 2_0)
+    TEMPERATURE_PATH=$(echo "$TEMPERATURE_EVAL" | tr '.' '_')
+    LOG_SUBDIR="${LOG_SUBDIR}_temp_${TEMPERATURE_PATH}"
 fi
 
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")

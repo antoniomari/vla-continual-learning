@@ -2,14 +2,14 @@
 #SBATCH --job-name=eval_embodiment      # Job name
 #SBATCH --nodes=1                       # Number of nodes
 #SBATCH --ntasks-per-node=1             # Number of tasks per node
-#SBATCH --cpus-per-task=80              # Number of CPUs per task
-#SBATCH --gres=gpu:4                    # Number of GPUs (RECOMMENDED: 4+ GPUs)
+#SBATCH --cpus-per-task=96              # Number of CPUs per task
+#SBATCH --gres=gpu:8                    # Number of GPUs (RECOMMENDED: 8 GPUs for evaluation)
 #SBATCH --time=24:00:00                  # Maximum execution time (HH:MM:SS)
-#SBATCH --mem=490G                       # Memory per node (adjust as needed)
+#SBATCH --mem=980G                       # Memory per node (adjusted as needed)
 # #SBATCH --partition=mll            # Partition name (adjust to your cluster's partition)
 #SBATCH --mail-type=FAIL,END
 #SBATCH --mail-user=jiahengh@utexas.edu
-#SBATCH --exclude=slurm-node-008,slurm-node-011
+# #SBATCH --exclude=slurm-node-008,slurm-node-011
 #SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
@@ -42,16 +42,6 @@ cd $SLURM_SUBMIT_DIR
 WORKSPACE_ROOT=$(pwd)
 mkdir -p logs/slurm
 
-# Construct full checkpoint path (remove any trailing slashes from CHECKPOINT_LOCATION first)
-CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION%/}"
-CHECKPOINT_PATH="${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_10/actor/"
-
-# Verify checkpoint exists
-if [ ! -d "$CHECKPOINT_PATH" ]; then
-    echo "ERROR: Checkpoint not found at $CHECKPOINT_PATH"
-    exit 1
-fi
-
 # Update SLURM job name to be more descriptive (based on CHECKPOINT_LOCATION)
 # Extract meaningful path components from CHECKPOINT_LOCATION
 # e.g., "logs/bcrl_logit/0.3/task_0" -> "bcrl_logit_0.3_task_0"
@@ -61,7 +51,7 @@ if command -v scontrol &> /dev/null && [ -n "$SLURM_JOB_ID" ]; then
     scontrol update job=$SLURM_JOB_ID name="${JOB_NAME}" 2>/dev/null || true
 fi
 
-# Print job information
+# Print SLURM job information
 echo "Job ID: $SLURM_JOB_ID"
 echo "Job Name: $SLURM_JOB_NAME"
 echo "Node: $SLURM_NODELIST"
@@ -70,12 +60,11 @@ echo "Working Directory: $(pwd)"
 echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
 echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
 echo ""
-echo "Checkpoint Location: $CHECKPOINT_LOCATION"
-echo "Full Checkpoint Path: $CHECKPOINT_PATH"
-echo ""
 
-bash examples/embodiment/eval_embodiment.sh mll_cluster/libero_spatial_grpo_openvlaoft_eval +actor.model.lora_path="${CHECKPOINT_PATH}"
+# Call the bash script that contains the core evaluation logic
+bash examples/mll_cluster/eval_embodiment.sh "$CHECKPOINT_LOCATION"
 
 # Print completion time
-echo "End Time: $(date)"
+echo ""
+echo "SLURM Job End Time: $(date)"
 

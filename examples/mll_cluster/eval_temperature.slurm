@@ -2,14 +2,14 @@
 #SBATCH --job-name=eval_temperature      # Job name
 #SBATCH --nodes=1                       # Number of nodes
 #SBATCH --ntasks-per-node=1             # Number of tasks per node
-#SBATCH --cpus-per-task=80              # Number of CPUs per task
-#SBATCH --gres=gpu:4                    # Number of GPUs (RECOMMENDED: 4+ GPUs)
+#SBATCH --cpus-per-task=96              # Number of CPUs per task
+#SBATCH --gres=gpu:8                    # Number of GPUs (RECOMMENDED: 8 GPUs for evaluation)
 #SBATCH --time=24:00:00                  # Maximum execution time (HH:MM:SS)
-#SBATCH --mem=490G                       # Memory per node (adjust as needed)
+#SBATCH --mem=980G                       # Memory per node (adjusted as needed)
 # #SBATCH --partition=mll            # Partition name (adjust to your cluster's partition)
 #SBATCH --mail-type=FAIL,END
 #SBATCH --mail-user=jiahengh@utexas.edu
-#SBATCH --exclude=slurm-node-008,slurm-node-011
+# #SBATCH --exclude=slurm-node-008,slurm-node-011
 #SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
@@ -23,35 +23,57 @@
 # module load gcc/9.3.0                 # Compiler (if needed)
 # module list                           # Verify loaded modules
 
-### Usage: sbatch examples/mll_cluster/eval_temperature.slurm TASK_ID1 [TASK_ID2 ...]
-### Example: sbatch examples/mll_cluster/eval_temperature.slurm 0 1 2 3 4
-### Example: sbatch examples/mll_cluster/eval_temperature.slurm 2 3
-### Note: Task IDs should correspond to directories in logs/naive_LoRA/task_{TASK_ID}/
-###       The script will automatically find checkpoints at:
-###       logs/naive_LoRA/task_{TASK_ID}/checkpoints/global_step_10/actor/
-###       Temperature is set to 2.0 to match training temperature_train from libero_spatial_grpo_openvlaoft.yaml
+### Usage: sbatch examples/mll_cluster/eval_temperature.slurm CHECKPOINT_LOCATION TEMPERATURE [STEP_NUMBER]
+### Example: sbatch examples/mll_cluster/eval_temperature.slurm logs/naive_LoRA/task_0 2.0
+### Example: sbatch examples/mll_cluster/eval_temperature.slurm logs/bcrl_logit/0.3/task_0 1.5 20
+### Note: CHECKPOINT_LOCATION should be relative to workspace root (e.g., logs/naive_LoRA/task_0)
+###       The script will construct the full path: ${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/
+###       TEMPERATURE: evaluation temperature to use (default: 2.0)
+###       STEP_NUMBER: global step number (default: 10)
+
+CHECKPOINT_LOCATION=$1
+TEMPERATURE=$2
+STEP_NUMBER=$3
+
+# Default STEP_NUMBER to 10 if not provided
+if [ -z "$STEP_NUMBER" ]; then
+    STEP_NUMBER=10
+fi
 
 # Get workspace root (SLURM_SUBMIT_DIR is the directory where sbatch was run from)
 cd $SLURM_SUBMIT_DIR
 WORKSPACE_ROOT=$(pwd)
 mkdir -p logs/slurm
 
-# Get task IDs from command line arguments
-TASK_IDS=("$@")
-
-if [ ${#TASK_IDS[@]} -eq 0 ]; then
+if [ -z "$CHECKPOINT_LOCATION" ] || [ -z "$TEMPERATURE" ]; then
     echo "ERROR: Missing required argument(s)"
-    echo "Usage: sbatch examples/mll_cluster/eval_temperature.slurm TASK_ID1 [TASK_ID2 ...]"
-    echo "Example: sbatch examples/mll_cluster/eval_temperature.slurm 0 1 2 3 4"
-    echo "Example: sbatch examples/mll_cluster/eval_temperature.slurm 2 3"
+    echo "Usage: sbatch examples/mll_cluster/eval_temperature.slurm CHECKPOINT_LOCATION TEMPERATURE [STEP_NUMBER]"
+    echo "Example: sbatch examples/mll_cluster/eval_temperature.slurm logs/naive_LoRA/task_0 2.0"
+    echo "Example: sbatch examples/mll_cluster/eval_temperature.slurm logs/bcrl_logit/0.3/task_0 1.5 20"
     exit 1
 fi
 
-# Base log directory for naive LoRA checkpoints
-BASE_LOG_DIR="${WORKSPACE_ROOT}/logs/naive_LoRA"
+# Validate TEMPERATURE
+if ! [[ "$TEMPERATURE" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+    echo "ERROR: TEMPERATURE must be a number, got: $TEMPERATURE"
+    exit 1
+fi
 
-# Temperature to use for evaluation (matches temperature_train from training config)
-EVAL_TEMPERATURE=2.0
+# Validate STEP_NUMBER
+if ! [[ "$STEP_NUMBER" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: STEP_NUMBER must be a positive integer, got: $STEP_NUMBER"
+    exit 1
+fi
+
+# Construct full checkpoint path (remove any trailing slashes from CHECKPOINT_LOCATION first)
+CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION%/}"
+CHECKPOINT_PATH="${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/"
+
+# Verify checkpoint exists
+if [ ! -d "$CHECKPOINT_PATH" ]; then
+    echo "ERROR: Checkpoint not found at $CHECKPOINT_PATH"
+    exit 1
+fi
 
 # Print job information
 echo "Job ID: $SLURM_JOB_ID"
@@ -62,54 +84,42 @@ echo "Working Directory: $(pwd)"
 echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
 echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
 echo ""
-echo "Task IDs to evaluate: ${TASK_IDS[@]}"
-echo "Base Log Directory: ${BASE_LOG_DIR}"
-echo "Evaluation Temperature: ${EVAL_TEMPERATURE} (matching training temperature_train)"
+echo "Checkpoint Location: $CHECKPOINT_LOCATION"
+echo "Full Checkpoint Path: $CHECKPOINT_PATH"
+echo "Global Step Number: $STEP_NUMBER"
+echo "Evaluation Temperature: $TEMPERATURE"
+echo ""
+echo "Note: Log path will be automatically constructed by eval_embodiment.sh"
+echo "      and will include temperature in the directory name."
 echo ""
 
-# Loop through each task ID and evaluate
-for TASK_ID in "${TASK_IDS[@]}"; do
+# Update SLURM job name to be more descriptive (based on CHECKPOINT_LOCATION and temperature)
+# Convert CHECKPOINT_LOCATION path to job name, then add temperature info
+# e.g., "logs/naive_LoRA/task_0" -> "naive_LoRA_task_0_temp_2_0"
+if command -v scontrol &> /dev/null && [ -n "$SLURM_JOB_ID" ]; then
+    # Convert path to job name by replacing slashes with underscores and removing "logs/" prefix if present
+    JOB_NAME_BASE=$(echo "$CHECKPOINT_LOCATION" | sed 's|^logs/||' | tr '/' '_')
+    # Add temperature info
+    TEMP_STR=$(echo "$TEMPERATURE" | tr '.' '_')
+    JOB_NAME="${JOB_NAME_BASE}_temp_${TEMP_STR}"
+    scontrol update job=$SLURM_JOB_ID name="${JOB_NAME}" 2>/dev/null || true
+fi
+
+# Run evaluation with temperature override
+bash examples/embodiment/eval_embodiment.sh mll_cluster/libero_spatial_grpo_openvlaoft_eval \
+    +actor.model.lora_path="${CHECKPOINT_PATH}" \
+    algorithm.sampling_params.temperature_eval=${TEMPERATURE}
+
+# Check if evaluation succeeded
+if [ $? -ne 0 ]; then
     echo ""
-    echo "========================================================================"
-    echo "Evaluating Task ${TASK_ID}"
-    echo "========================================================================"
-    
-    # Construct checkpoint path
-    TASK_LOG_DIR="${BASE_LOG_DIR}/task_${TASK_ID}"
-    CHECKPOINT_PATH="${TASK_LOG_DIR}/checkpoints/global_step_10/actor/"
-    
-    # Verify checkpoint exists
-    if [ ! -d "$CHECKPOINT_PATH" ]; then
-        echo "ERROR: Checkpoint not found at $CHECKPOINT_PATH"
-        echo "Skipping task ${TASK_ID}..."
-        continue
-    fi
-    
-    echo "Task ID: ${TASK_ID}"
-    echo "Checkpoint Path: ${CHECKPOINT_PATH}"
-    echo ""
-    
-    # Run evaluation with temperature override to match training temperature
-    # Using libero_spatial_grpo_openvlaoft_eval config with temperature_eval override
-    bash examples/embodiment/eval_embodiment.sh mll_cluster/libero_spatial_grpo_openvlaoft_eval \
-        +actor.model.lora_path="${CHECKPOINT_PATH}" \
-        algorithm.sampling_params.temperature_eval=${EVAL_TEMPERATURE}
-    
-    # Check if evaluation succeeded
-    if [ $? -ne 0 ]; then
-        echo ""
-        echo "ERROR: Evaluation failed for task ${TASK_ID}"
-        echo "Checkpoint path: ${CHECKPOINT_PATH}"
-        # Continue with next task instead of exiting
-        continue
-    fi
-    
-    echo ""
-    echo "Task ${TASK_ID} evaluation completed successfully"
-    echo "========================================================================"
-done
+    echo "ERROR: Evaluation failed"
+    echo "Checkpoint path: ${CHECKPOINT_PATH}"
+    echo "Temperature: ${TEMPERATURE}"
+    exit 1
+fi
 
 # Print completion time
 echo ""
-echo "All evaluations completed!"
+echo "Evaluation completed successfully!"
 echo "End Time: $(date)"
