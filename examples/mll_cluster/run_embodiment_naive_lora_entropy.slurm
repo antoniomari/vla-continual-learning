@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=train_embodiment      # Job name
+#SBATCH --job-name=train_embodiment_entropy      # Job name
 #SBATCH --nodes=1                       # Number of nodes
 #SBATCH --ntasks-per-node=1             # Number of tasks per node
 #SBATCH --cpus-per-task=90              # Number of CPUs per task
@@ -14,22 +14,30 @@
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
 
-### Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm TASK_ID [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME]
-### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm 0
-### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm 1
-### Example (with max_epoch): sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm 0 "" 15
-### Example (continue from checkpoint): sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm 0 ./logs/naive_lora/task_0/checkpoints/global_step_10/actor 20
-### Note: CHECKPOINT_PATH is optional and will be auto-generated from previous task if not provided
+### Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm TASK_ID ENTROPY_BONUS [CHECKPOINT_PATH] [MAX_EPOCH]
+### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm 0 0.01
+### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm 1 0.01
+### Example (with max_epoch): sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm 0 0.01 "" 15
+### Example (continue from checkpoint): sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm 0 0.01 ./logs/naive_lora_entropy/task_0_ent0.01/checkpoints/global_step_10/actor 20
+### Note: ENTROPY_BONUS is required (e.g., 0.01, 0.001, 0.0)
+###       CHECKPOINT_PATH is optional and will be auto-generated from previous task if not provided
 ###       MAX_EPOCH is optional and can always be specified to override the default max_epochs
 
 TASK_ID=$1
-MANUAL_CHECKPOINT_PATH=$2
-MAX_EPOCH=$3
-CONFIG_NAME=${4:-mll_cluster/libero_spatial_grpo_openvlaoft}
+ENTROPY_BONUS=$2
+MANUAL_CHECKPOINT_PATH=$3
+MAX_EPOCH=$4
+CONFIG_NAME="mll_cluster/libero_spatial_grpo_openvlaoft"
 
-if [ -z "$TASK_ID" ]; then
-    echo "ERROR: Missing required argument"
-    echo "Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm TASK_ID [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME]"
+if [ -z "$TASK_ID" ] || [ -z "$ENTROPY_BONUS" ]; then
+    echo "ERROR: Missing required arguments"
+    echo "Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm TASK_ID ENTROPY_BONUS [CHECKPOINT_PATH] [MAX_EPOCH]"
+    exit 1
+fi
+
+# Validate entropy_bonus is a valid number
+if ! [[ "$ENTROPY_BONUS" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+    echo "ERROR: ENTROPY_BONUS must be a valid number, got: $ENTROPY_BONUS"
     exit 1
 fi
 
@@ -39,35 +47,14 @@ if [ -z "$MANUAL_CHECKPOINT_PATH" ]; then
         CHECKPOINT_PATH=""
     else
         PREV_TASK_ID=$((TASK_ID - 1))
-        CHECKPOINT_PATH="./logs/naive_lora/task_${PREV_TASK_ID}/checkpoints/global_step_10/actor"
+        CHECKPOINT_PATH="./logs/naive_lora_entropy/task_${PREV_TASK_ID}_ent${ENTROPY_BONUS}/checkpoints/global_step_10/actor"
     fi
 else
     CHECKPOINT_PATH="$MANUAL_CHECKPOINT_PATH"
 fi
 
-# Determine LOG_DIR based on checkpoint path
-if [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
-    # Extract task ID and global_step from checkpoint path
-    # e.g., .../task_0/checkpoints/global_step_10/actor -> task_0, step_10
-    if [[ "$CHECKPOINT_PATH" =~ task_([0-9]+) ]]; then
-        SOURCE_TASK="${BASH_REMATCH[1]}"
-        if [[ "$CHECKPOINT_PATH" =~ global_step_([0-9]+) ]]; then
-            SOURCE_STEP="${BASH_REMATCH[1]}"
-            LOG_DIR="./logs/naive_lora/task_${TASK_ID}_from_task_${SOURCE_TASK}_step_${SOURCE_STEP}"
-        else
-            echo "ERROR: Could not extract global_step from checkpoint path: $CHECKPOINT_PATH"
-            echo "       Expected format: .../checkpoints/global_step_<M>/actor"
-            exit 1
-        fi
-    else
-        echo "ERROR: Could not extract task ID from checkpoint path: $CHECKPOINT_PATH"
-        echo "       Expected format: .../task_<N>/checkpoints/global_step_<M>/actor"
-        exit 1
-    fi
-else
-    # Standard case: use TASK_ID
-    LOG_DIR="./logs/naive_lora/task_${TASK_ID}"
-fi
+# Determine LOG_DIR - always include entropy bonus in the name
+LOG_DIR="./logs/naive_lora_entropy/task_${TASK_ID}_ent${ENTROPY_BONUS}"
 
 # Print job information
 echo "Job ID: $SLURM_JOB_ID"
@@ -80,7 +67,7 @@ echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
 echo ""
 
 mkdir -p logs/slurm
-mkdir -p logs/naive_lora
+mkdir -p logs/naive_lora_entropy
 export LOG_DIR
 
 # Set experiment name based on LOG_DIR (for wandb)
@@ -92,10 +79,11 @@ if command -v scontrol &> /dev/null && [ -n "$SLURM_JOB_ID" ]; then
 fi
 
 echo "========================================="
-echo "Lifelong Learning - Single Task Training (Naive LoRA)"
+echo "Lifelong Learning - Single Task Training (Naive LoRA with Entropy Bonus)"
 echo "========================================="
 echo "Configuration:"
 echo "  Task ID: $TASK_ID"
+echo "  Entropy Bonus: $ENTROPY_BONUS"
 echo "  Experiment Name: $EXPERIMENT_NAME"
 echo "  Checkpoint Save Path: $LOG_DIR"
 echo "  Config Name: $CONFIG_NAME"
@@ -126,7 +114,8 @@ cd $SLURM_SUBMIT_DIR
 # Build Hydra overrides
 OVERRIDES="env.fixed_task_ids=[${TASK_ID}] \
 	runner.logger.experiment_name=${EXPERIMENT_NAME} \
-	actor.checkpoint_save_path=${LOG_DIR}"
+	actor.checkpoint_save_path=${LOG_DIR} \
+	algorithm.entropy_bonus=${ENTROPY_BONUS}"
 
 if [ -n "$CHECKPOINT_PATH" ]; then
     OVERRIDES="$OVERRIDES +actor.model.lora_path=${CHECKPOINT_PATH}"

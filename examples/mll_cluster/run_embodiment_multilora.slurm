@@ -9,7 +9,7 @@
 #SBATCH --partition=mll                         # Partition name
 #SBATCH --mail-type=FAIL,END
 #SBATCH --mail-user=jiahengh@utexas.edu
-# #SBATCH --exclude=slurm-node-004,slurm-node-011
+#SBATCH --exclude=slurm-node-007
 #SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
@@ -174,6 +174,12 @@ if [ $EXIT_CODE -eq 0 ]; then
     echo ""
     echo "Checkpoint saved to: ${LOG_DIR}"
     echo "  (Merge coefficient is automatically saved with checkpoint)"
+    
+    # Run evaluation
+    CHECKPOINT_LOCATION=$(echo "$LOG_DIR" | sed 's|^\./||')
+    echo ""
+    echo "Running evaluation for: ${CHECKPOINT_LOCATION}"
+    bash examples/mll_cluster/eval_embodiment.sh "${CHECKPOINT_LOCATION}"
 else
     echo "✗ Task $TASK_ID (Multi-LoRA) failed with exit code $EXIT_CODE"
     echo "  Check logs at: logs/slurm/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"

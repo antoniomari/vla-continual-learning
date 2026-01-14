@@ -145,7 +145,22 @@ if [ -n "${TEMPERATURE_EVAL}" ]; then
 fi
 
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_DIR="${REPO_PATH}/logs/evals/${LOG_SUBDIR}_${TIMESTAMP}"
+
+# Extract step number from lora_path if available, or use environment variable
+STEP_NUMBER=""
+if [[ "${LORA_PATH}" =~ global_step_([0-9]+) ]]; then
+    STEP_NUMBER="${BASH_REMATCH[1]}"
+elif [ -n "${EVAL_STEP_NUMBER}" ]; then
+    STEP_NUMBER="${EVAL_STEP_NUMBER}"
+fi
+
+# Include step number in log directory name if available
+if [ -n "${STEP_NUMBER}" ]; then
+    LOG_DIR="${REPO_PATH}/logs/evals/${LOG_SUBDIR}_step_${STEP_NUMBER}_${TIMESTAMP}"
+else
+    LOG_DIR="${REPO_PATH}/logs/evals/${LOG_SUBDIR}_${TIMESTAMP}"
+fi
+
 MEGA_LOG_FILE="${LOG_DIR}/eval_embodiment.log"
 mkdir -p "${LOG_DIR}"
 CMD="python ${SRC_FILE} --config-path ${CONFIG_PATH} --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR} ${HYDRA_OVERRIDES}"

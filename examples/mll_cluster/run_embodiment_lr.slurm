@@ -9,7 +9,7 @@
 #SBATCH --partition=mll                     # Partition name (adjust to your cluster's partition)
 #SBATCH --mail-type=FAIL,END
 #SBATCH --mail-user=jiahengh@utexas.edu
-# #SBATCH --exclude=slurm-node-004,slurm-node-011
+#SBATCH --exclude=slurm-node-007
 #SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
@@ -201,6 +201,12 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "Task $TASK_ID completed successfully"
         echo ""
         echo "Checkpoint saved to: ${TASK_LOG_DIR}"
+        
+        # Run evaluation
+        CHECKPOINT_LOCATION=$(echo "$TASK_LOG_DIR" | sed 's|^\./||')
+        echo ""
+        echo "Running evaluation for: ${CHECKPOINT_LOCATION}"
+        bash examples/mll_cluster/eval_embodiment.sh "${CHECKPOINT_LOCATION}"
     else
         echo "✗ Task $TASK_ID failed with exit code $EXIT_CODE"
         echo "  Check logs at: logs/slurm/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"

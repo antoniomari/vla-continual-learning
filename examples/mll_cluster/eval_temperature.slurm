@@ -9,7 +9,7 @@
 # #SBATCH --partition=mll            # Partition name (adjust to your cluster's partition)
 #SBATCH --mail-type=FAIL,END
 #SBATCH --mail-user=jiahengh@utexas.edu
-# #SBATCH --exclude=slurm-node-008,slurm-node-011
+#SBATCH --exclude=slurm-node-007
 #SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
@@ -35,16 +35,6 @@ CHECKPOINT_LOCATION=$1
 TEMPERATURE=$2
 STEP_NUMBER=$3
 
-# Default STEP_NUMBER to 10 if not provided
-if [ -z "$STEP_NUMBER" ]; then
-    STEP_NUMBER=10
-fi
-
-# Get workspace root (SLURM_SUBMIT_DIR is the directory where sbatch was run from)
-cd $SLURM_SUBMIT_DIR
-WORKSPACE_ROOT=$(pwd)
-mkdir -p logs/slurm
-
 if [ -z "$CHECKPOINT_LOCATION" ] || [ -z "$TEMPERATURE" ]; then
     echo "ERROR: Missing required argument(s)"
     echo "Usage: sbatch examples/mll_cluster/eval_temperature.slurm CHECKPOINT_LOCATION TEMPERATURE [STEP_NUMBER]"
@@ -53,45 +43,10 @@ if [ -z "$CHECKPOINT_LOCATION" ] || [ -z "$TEMPERATURE" ]; then
     exit 1
 fi
 
-# Validate TEMPERATURE
-if ! [[ "$TEMPERATURE" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-    echo "ERROR: TEMPERATURE must be a number, got: $TEMPERATURE"
-    exit 1
-fi
-
-# Validate STEP_NUMBER
-if ! [[ "$STEP_NUMBER" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: STEP_NUMBER must be a positive integer, got: $STEP_NUMBER"
-    exit 1
-fi
-
-# Construct full checkpoint path (remove any trailing slashes from CHECKPOINT_LOCATION first)
-CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION%/}"
-CHECKPOINT_PATH="${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/"
-
-# Verify checkpoint exists
-if [ ! -d "$CHECKPOINT_PATH" ]; then
-    echo "ERROR: Checkpoint not found at $CHECKPOINT_PATH"
-    exit 1
-fi
-
-# Print job information
-echo "Job ID: $SLURM_JOB_ID"
-echo "Job Name: $SLURM_JOB_NAME"
-echo "Node: $SLURM_NODELIST"
-echo "Start Time: $(date)"
-echo "Working Directory: $(pwd)"
-echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
-echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
-echo ""
-echo "Checkpoint Location: $CHECKPOINT_LOCATION"
-echo "Full Checkpoint Path: $CHECKPOINT_PATH"
-echo "Global Step Number: $STEP_NUMBER"
-echo "Evaluation Temperature: $TEMPERATURE"
-echo ""
-echo "Note: Log path will be automatically constructed by eval_embodiment.sh"
-echo "      and will include temperature in the directory name."
-echo ""
+# Get workspace root (SLURM_SUBMIT_DIR is the directory where sbatch was run from)
+cd $SLURM_SUBMIT_DIR
+WORKSPACE_ROOT=$(pwd)
+mkdir -p logs/slurm
 
 # Update SLURM job name to be more descriptive (based on CHECKPOINT_LOCATION and temperature)
 # Convert CHECKPOINT_LOCATION path to job name, then add temperature info
@@ -105,21 +60,19 @@ if command -v scontrol &> /dev/null && [ -n "$SLURM_JOB_ID" ]; then
     scontrol update job=$SLURM_JOB_ID name="${JOB_NAME}" 2>/dev/null || true
 fi
 
-# Run evaluation with temperature override
-bash examples/embodiment/eval_embodiment.sh mll_cluster/libero_spatial_grpo_openvlaoft_eval \
-    +actor.model.lora_path="${CHECKPOINT_PATH}" \
-    algorithm.sampling_params.temperature_eval=${TEMPERATURE}
+# Print SLURM job information
+echo "Job ID: $SLURM_JOB_ID"
+echo "Job Name: $SLURM_JOB_NAME"
+echo "Node: $SLURM_NODELIST"
+echo "Start Time: $(date)"
+echo "Working Directory: $(pwd)"
+echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
+echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
+echo ""
 
-# Check if evaluation succeeded
-if [ $? -ne 0 ]; then
-    echo ""
-    echo "ERROR: Evaluation failed"
-    echo "Checkpoint path: ${CHECKPOINT_PATH}"
-    echo "Temperature: ${TEMPERATURE}"
-    exit 1
-fi
+# Call the bash script that contains the core evaluation logic
+bash examples/mll_cluster/eval_temperature.sh "$CHECKPOINT_LOCATION" "$TEMPERATURE" "$STEP_NUMBER"
 
 # Print completion time
 echo ""
-echo "Evaluation completed successfully!"
-echo "End Time: $(date)"
+echo "SLURM Job End Time: $(date)"
