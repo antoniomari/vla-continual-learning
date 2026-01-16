@@ -48,7 +48,7 @@ algorithm:
   n_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   num_group_envs: 8  # Reduced from 8 to 4 for faster rollout (but still reasonable memory)
-  rollout_epoch: 1  # Reduced from 16 to 4 for faster rollout (but still reasonable memory)
+  rollout_epoch: 16 # 1  # Reduced from 16 to 4 for faster rollout (but still reasonable memory)
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
   entropy_type: token_level

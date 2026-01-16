@@ -123,47 +123,52 @@ if [ $EXIT_CODE -eq 0 ]; then
     echo "Checkpoint saved to: ${LOG_DIR}"
     echo ""
     
-    # Discover and evaluate all checkpoints
-    CHECKPOINTS_DIR="${LOG_DIR}/checkpoints"
-    if [ ! -d "$CHECKPOINTS_DIR" ]; then
-        echo "Warning: Checkpoints directory not found at $CHECKPOINTS_DIR"
+    # Skip evaluation if using test config
+    if [[ "$CONFIG_NAME" == *"test"* ]] || [[ "$CONFIG_NAME" == *"libero_spatial_grpo_openvlaoft_test"* ]]; then
+        echo "Skipping evaluation (test config detected: $CONFIG_NAME)"
     else
-        echo "Discovering checkpoints for evaluation..."
-        # Find all global_step directories and extract step numbers
-        # Use find to get directories, extract step numbers, sort numerically
-        CHECKPOINT_STEPS=($(find "$CHECKPOINTS_DIR" -maxdepth 1 -type d -name "global_step_*" | sed 's|.*/global_step_||' | sort -n))
-        
-        if [ ${#CHECKPOINT_STEPS[@]} -eq 0 ]; then
-            echo "Warning: No checkpoints found in $CHECKPOINTS_DIR"
+        # Discover and evaluate all checkpoints
+        CHECKPOINTS_DIR="${LOG_DIR}/checkpoints"
+        if [ ! -d "$CHECKPOINTS_DIR" ]; then
+            echo "Warning: Checkpoints directory not found at $CHECKPOINTS_DIR"
         else
-            echo "Found ${#CHECKPOINT_STEPS[@]} checkpoint(s) at steps: ${CHECKPOINT_STEPS[*]}"
-            echo ""
-            echo "Running evaluation for each checkpoint..."
-            echo ""
+            echo "Discovering checkpoints for evaluation..."
+            # Find all global_step directories and extract step numbers
+            # Use find to get directories, extract step numbers, sort numerically
+            CHECKPOINT_STEPS=($(find "$CHECKPOINTS_DIR" -maxdepth 1 -type d -name "global_step_*" | sed 's|.*/global_step_||' | sort -n))
             
-            CHECKPOINT_LOCATION=$(echo "$LOG_DIR" | sed 's|^\./||')
-            EVAL_EXIT_CODE=0
-            
-            for STEP in "${CHECKPOINT_STEPS[@]}"; do
-                echo "========================================="
-                echo "Evaluating checkpoint at global_step_${STEP}"
-                echo "========================================="
-                bash examples/mll_cluster/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "${STEP}"
-                
-                STEP_EXIT_CODE=$?
-                if [ $STEP_EXIT_CODE -ne 0 ]; then
-                    echo "  Warning: Evaluation for step ${STEP} failed (exit code: $STEP_EXIT_CODE)"
-                    EVAL_EXIT_CODE=$STEP_EXIT_CODE
-                else
-                    echo "  ✓ Evaluation for step ${STEP} completed successfully"
-                fi
-                echo ""
-            done
-            
-            if [ $EVAL_EXIT_CODE -eq 0 ]; then
-                echo "All checkpoint evaluations completed successfully"
+            if [ ${#CHECKPOINT_STEPS[@]} -eq 0 ]; then
+                echo "Warning: No checkpoints found in $CHECKPOINTS_DIR"
             else
-                echo "Some checkpoint evaluations failed (last exit code: $EVAL_EXIT_CODE)"
+                echo "Found ${#CHECKPOINT_STEPS[@]} checkpoint(s) at steps: ${CHECKPOINT_STEPS[*]}"
+                echo ""
+                echo "Running evaluation for each checkpoint..."
+                echo ""
+                
+                CHECKPOINT_LOCATION=$(echo "$LOG_DIR" | sed 's|^\./||')
+                EVAL_EXIT_CODE=0
+                
+                for STEP in "${CHECKPOINT_STEPS[@]}"; do
+                    echo "========================================="
+                    echo "Evaluating checkpoint at global_step_${STEP}"
+                    echo "========================================="
+                    bash examples/mll_cluster/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "${STEP}"
+                    
+                    STEP_EXIT_CODE=$?
+                    if [ $STEP_EXIT_CODE -ne 0 ]; then
+                        echo "  Warning: Evaluation for step ${STEP} failed (exit code: $STEP_EXIT_CODE)"
+                        EVAL_EXIT_CODE=$STEP_EXIT_CODE
+                    else
+                        echo "  ✓ Evaluation for step ${STEP} completed successfully"
+                    fi
+                    echo ""
+                done
+                
+                if [ $EVAL_EXIT_CODE -eq 0 ]; then
+                    echo "All checkpoint evaluations completed successfully"
+                else
+                    echo "Some checkpoint evaluations failed (last exit code: $EVAL_EXIT_CODE)"
+                fi
             fi
         fi
     fi
