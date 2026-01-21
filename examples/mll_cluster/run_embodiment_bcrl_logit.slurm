@@ -14,18 +14,27 @@
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
 
-### Usage: sbatch examples/mll_cluster/run_embodiment_bcrl_logit.slurm TASK_ID BC_COEFF [CHECKPOINT_PATH] [CONFIG_NAME]
+### Usage: sbatch examples/mll_cluster/run_embodiment_bcrl_logit.slurm TASK_ID BC_COEFF [CHECKPOINT_PATH] [CONFIG_NAME] [SEED]
 ### Example: sbatch examples/mll_cluster/run_embodiment_bcrl_logit.slurm 0 0.1 libero_spatial_grpo_openvlaoft_bcrl_logit
+### Example (with seed): sbatch examples/mll_cluster/run_embodiment_bcrl_logit.slurm 0 0.1 "" "" 42
 ### Note: CHECKPOINT_PATH is now optional and will be auto-generated from previous task if not provided
+###       SEED is optional and defaults to 1234 if not provided
 
 TASK_ID=$1
 BC_COEFF=$2
 MANUAL_CHECKPOINT_PATH=$3
 CONFIG_NAME=${4:-libero_spatial_grpo_openvlaoft_bcrl_logit}  # Default config if not provided
+SEED=${5:-1234}
 
 if [ -z "$TASK_ID" ] || [ -z "$BC_COEFF" ]; then
     echo "ERROR: Missing required arguments"
-    echo "Usage: sbatch examples/mll_cluster/run_embodiment_bcrl_logit.slurm TASK_ID BC_COEFF [CHECKPOINT_PATH] [CONFIG_NAME]"
+    echo "Usage: sbatch examples/mll_cluster/run_embodiment_bcrl_logit.slurm TASK_ID BC_COEFF [CHECKPOINT_PATH] [CONFIG_NAME] [SEED]"
+    exit 1
+fi
+
+# Validate seed is a number
+if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: SEED must be a non-negative integer, got: $SEED"
     exit 1
 fi
 
@@ -37,7 +46,7 @@ if [ -z "$MANUAL_CHECKPOINT_PATH" ]; then
     else
         # Use checkpoint from previous task
         PREV_TASK_ID=$((TASK_ID - 1))
-        CHECKPOINT_PATH="./logs/bcrl_logit/${BC_COEFF}/task_${PREV_TASK_ID}/checkpoints/global_step_10/actor"
+        CHECKPOINT_PATH="./logs/bcrl_logit/${BC_COEFF}/task_${PREV_TASK_ID}_seed${SEED}/checkpoints/global_step_10/actor"
     fi
 else
     # Use manually provided checkpoint path
@@ -57,7 +66,7 @@ echo ""
 mkdir -p logs/slurm
 mkdir -p logs/bcrl_logit
 mkdir -p logs/bcrl_logit/${BC_COEFF}
-LOG_DIR="./logs/bcrl_logit/${BC_COEFF}/task_${TASK_ID}"
+LOG_DIR="./logs/bcrl_logit/${BC_COEFF}/task_${TASK_ID}_seed${SEED}"
 export LOG_DIR
 
 EXPERIMENT_NAME="bcrl_logit_task_${TASK_ID}_${BC_COEFF}"
@@ -81,6 +90,7 @@ echo "  BC Coefficient: $BC_COEFF"
 echo "  Experiment Name: $EXPERIMENT_NAME"
 echo "  Checkpoint Save Path: $LOG_DIR"
 echo "  Config Name: $CONFIG_NAME"
+echo "  Random Seed: $SEED"
 
 if [ -n "$CHECKPOINT_PATH" ]; then
     if [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
@@ -108,7 +118,8 @@ cd $SLURM_SUBMIT_DIR
 OVERRIDES="algorithm.bc_coeff=${BC_COEFF} \
 	env.fixed_task_ids=[${TASK_ID}] \
 	runner.logger.experiment_name=${EXPERIMENT_NAME} \
-	actor.checkpoint_save_path=${LOG_DIR}"
+	actor.checkpoint_save_path=${LOG_DIR} \
+	actor.seed=${SEED}"
 
 if [ -n "$CHECKPOINT_PATH" ]; then
     OVERRIDES="$OVERRIDES ${CHECKPOINT_ARG}"

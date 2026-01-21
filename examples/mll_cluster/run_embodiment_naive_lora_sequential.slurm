@@ -13,28 +13,38 @@
 #SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
-
-### Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm TASK_IDS [RUN_ID] [MAX_EPOCH] [CONFIG_NAME]
+### NOTE: this script is meant for sequential launching of tasks in hand-crafted order. 
+###       The first task will always load from base model.
+### Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm TASK_IDS [RUN_ID] [MAX_EPOCH] [CONFIG_NAME] [SEED]
 ### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm "0,1,2"
 ### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm "0 1 2"
 ### Example (with run_id): sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm "0,1,2" "run1"
 ### Example (with max_epoch): sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm "0,1,2" "" 15
+### Example (with seed): sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm "0,1,2" "" "" "" 42
 ### Note: TASK_IDS can be comma-separated (e.g., "0,1,2") or space-separated (e.g., "0 1 2")
 ###       IMPORTANT: Order matters! Tasks are trained in the exact order provided
 ###       Tasks are trained sequentially, with each task loading from the previous one
 ###       Evaluation runs after each task completes training
 ###       RUN_ID is optional - if not provided, uses task sequence (e.g., "0_1_2") to identify the sequence run
 ###       MAX_EPOCH is optional and can override the default max_epochs for all tasks
+###       SEED is optional and defaults to 1234 if not provided
 
 TASK_IDS_STR=$1
 RUN_ID=$2
 MAX_EPOCH=$3
 CONFIG_NAME=${4:-mll_cluster/libero_spatial_grpo_openvlaoft}
+SEED=${5:-1234}
 
 if [ -z "$TASK_IDS_STR" ]; then
     echo "ERROR: Missing required argument"
-    echo "Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm TASK_IDS [RUN_ID] [MAX_EPOCH] [CONFIG_NAME]"
+    echo "Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm TASK_IDS [RUN_ID] [MAX_EPOCH] [CONFIG_NAME] [SEED]"
     echo "Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm \"0,1,2\""
+    exit 1
+fi
+
+# Validate seed is a number
+if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: SEED must be a non-negative integer, got: $SEED"
     exit 1
 fi
 
@@ -110,8 +120,8 @@ for i in "${!TASK_IDS_ARRAY[@]}"; do
     echo "Run ID: $RUN_ID"
     echo "========================================="
     
-    # Create task-specific log directory with run_id to reflect non-ordered runs
-    TASK_LOG_DIR="./logs/naive_lora_sequential/${RUN_ID}/task_${TASK_ID}"
+    # Create task-specific log directory with run_id and seed to reflect non-ordered runs
+    TASK_LOG_DIR="./logs/naive_lora_sequential/${RUN_ID}_seed${SEED}/task_${TASK_ID}"
     mkdir -p "${TASK_LOG_DIR}"
     export LOG_DIR="${TASK_LOG_DIR}"
     
@@ -129,6 +139,7 @@ for i in "${!TASK_IDS_ARRAY[@]}"; do
     echo "  Experiment Name: $EXPERIMENT_NAME"
     echo "  Checkpoint Save Path: $TASK_LOG_DIR"
     echo "  Config Name: $CONFIG_NAME"
+    echo "  Random Seed: $SEED"
     
     # Determine checkpoint path
     if [ $TASK_NUM -eq 1 ]; then
@@ -155,7 +166,8 @@ for i in "${!TASK_IDS_ARRAY[@]}"; do
     # Build Hydra overrides
     OVERRIDES="env.fixed_task_ids=[${TASK_ID}] \
     	runner.logger.experiment_name=${EXPERIMENT_NAME} \
-    	actor.checkpoint_save_path=${TASK_LOG_DIR}"
+    	actor.checkpoint_save_path=${TASK_LOG_DIR} \
+    	actor.seed=${SEED}"
     
     if [ -n "$CHECKPOINT_PATH" ]; then
         OVERRIDES="$OVERRIDES +actor.model.lora_path=${CHECKPOINT_PATH}"
@@ -215,7 +227,7 @@ if [ $OVERALL_EXIT_CODE -eq 0 ]; then
     echo ""
     echo "Tasks trained (in order): ${TASK_IDS_ARRAY[*]}"
     echo "Run ID: $RUN_ID"
-    echo "Results directory: ./logs/naive_lora_sequential/${RUN_ID}/"
+    echo "Results directory: ./logs/naive_lora_sequential/${RUN_ID}_seed${SEED}/"
     echo ""
     echo "All tasks completed and evaluated"
 else

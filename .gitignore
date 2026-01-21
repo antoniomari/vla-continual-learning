@@ -24,3 +24,4 @@ LIBERO/libero/datasets*
 trajectory_logs/
 node_update.sh
 rlds_demo_videos/
+success_info.txt

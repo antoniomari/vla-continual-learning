@@ -13,20 +13,23 @@
 #SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
-### Usage: sbatch examples/mll_cluster/run_embodiment_lr.slurm [TASK_ID_OR_RANGE] [LR_STRING] [CONFIG_NAME]
+### Usage: sbatch examples/mll_cluster/run_embodiment_lr.slurm [TASK_ID_OR_RANGE] [LR_STRING] [CONFIG_NAME] [SEED]
 ### Example (single task): sbatch examples/mll_cluster/run_embodiment_lr.slurm 0
 ### Example (task range): sbatch examples/mll_cluster/run_embodiment_lr.slurm "0,3" 
 ### Example (with LR): sbatch examples/mll_cluster/run_embodiment_lr.slurm "1,4" "2e-6,2e-6,1e-5"
 ### Example (with config): sbatch examples/mll_cluster/run_embodiment_lr.slurm "0,2" "2e-6,2e-6,1e-5" mll_cluster/libero_spatial_grpo_openvlaoft_lr
+### Example (with seed): sbatch examples/mll_cluster/run_embodiment_lr.slurm "0,2" "" "" 42
 ### Note: TASK_ID_OR_RANGE can be:
 ###       - A single task ID (e.g., "0") - trains that task only
 ###       - A tuple "a,b" where a < b (e.g., "0,3") - trains tasks from a to b sequentially
 ###       LR_STRING is comma-separated: "vision_lora_lr,llm_lora_lr,llm_head_lora_lr"
 ###       If not provided, uses default values from config
+###       SEED is optional and defaults to 1234 if not provided
 
 TASK_INPUT=${1:-0}
 LR_STRING=$2
 CONFIG_NAME=${3:-mll_cluster/libero_spatial_grpo_openvlaoft_lr}
+SEED=${4:-1234}
 
 # Parse TASK_INPUT to determine if it's a single task or a range
 if [[ "$TASK_INPUT" == *,* ]]; then
@@ -61,6 +64,12 @@ else
     TASK_START=$TASK_INPUT
     TASK_END=$TASK_INPUT
     NUM_TASKS=1
+fi
+
+# Validate seed is a number
+if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: SEED must be a non-negative integer, got: $SEED"
+    exit 1
 fi
 
 mkdir -p logs/slurm
@@ -112,9 +121,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     
     # Determine task log directory
     if [ -n "$LR_STRING" ]; then
-        TASK_LOG_DIR="./logs/lr_experiment/task_${TASK_ID}_lr_v${V_LR_STR}_l${L_LR_STR}_h${H_LR_STR}"
+        TASK_LOG_DIR="./logs/lr_experiment/task_${TASK_ID}_lr_v${V_LR_STR}_l${L_LR_STR}_h${H_LR_STR}_seed${SEED}"
     else
-        TASK_LOG_DIR="./logs/lr_experiment/task_${TASK_ID}_lr_default"
+        TASK_LOG_DIR="./logs/lr_experiment/task_${TASK_ID}_lr_default_seed${SEED}"
     fi
     
     export LOG_DIR="${TASK_LOG_DIR}"
@@ -140,6 +149,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo "  Experiment Name: $EXPERIMENT_NAME"
     echo "  Checkpoint Save Path: $TASK_LOG_DIR"
     echo "  Config Name: $CONFIG_NAME"
+    echo "  Random Seed: $SEED"
     
     if [ -n "$LR_STRING" ]; then
         echo "  Vision LoRA LR: $VISION_LR"
@@ -153,9 +163,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ $TASK_ID -gt $TASK_START ]; then
         PREV_TASK_ID=$((TASK_ID - 1))
         if [ -n "$LR_STRING" ]; then
-            PREV_TASK_LOG_DIR="./logs/lr_experiment/task_${PREV_TASK_ID}_lr_v${V_LR_STR}_l${L_LR_STR}_h${H_LR_STR}"
+            PREV_TASK_LOG_DIR="./logs/lr_experiment/task_${PREV_TASK_ID}_lr_v${V_LR_STR}_l${L_LR_STR}_h${H_LR_STR}_seed${SEED}"
         else
-            PREV_TASK_LOG_DIR="./logs/lr_experiment/task_${PREV_TASK_ID}_lr_default"
+            PREV_TASK_LOG_DIR="./logs/lr_experiment/task_${PREV_TASK_ID}_lr_default_seed${SEED}"
         fi
         CHECKPOINT_PATH="${PREV_TASK_LOG_DIR}/checkpoints/global_step_10/actor"
         
@@ -175,7 +185,8 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     # Build Hydra overrides
     OVERRIDES="env.fixed_task_ids=[${TASK_ID}] \
     	runner.logger.experiment_name=${EXPERIMENT_NAME} \
-    	actor.checkpoint_save_path=${TASK_LOG_DIR}"
+    	actor.checkpoint_save_path=${TASK_LOG_DIR} \
+    	actor.seed=${SEED}"
     
     if [ -n "$LR_STRING" ]; then
         OVERRIDES="$OVERRIDES actor.optim.vision_lora_lr=${VISION_LR} \

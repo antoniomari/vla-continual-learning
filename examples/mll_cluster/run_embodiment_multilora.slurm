@@ -13,10 +13,11 @@
 #SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
-### Usage: sbatch examples/mll_cluster/run_embodiment_multilora.slurm TASK_ID [MERGE_COEFFICIENT] [CONFIG_NAME]
+### Usage: sbatch examples/mll_cluster/run_embodiment_multilora.slurm TASK_ID [MERGE_COEFFICIENT] [CONFIG_NAME] [SEED]
 ### Example: sbatch examples/mll_cluster/run_embodiment_multilora.slurm 0
 ### Example: sbatch examples/mll_cluster/run_embodiment_multilora.slurm 1 0.8
 ### Example: sbatch examples/mll_cluster/run_embodiment_multilora.slurm 2 0.8
+### Example (with seed): sbatch examples/mll_cluster/run_embodiment_multilora.slurm 0 "" "" 42
 ###
 ### Behavior:
 ###   - TASK_ID=0: Train first LoRA adapter on top of base model (same as naive LoRA)
@@ -31,14 +32,24 @@
 ###   - The coefficient is included in the checkpoint path (e.g., task_1_coeff_0_8)
 ###   - When loading previous adapters, automatically uses adapters trained with the same coefficient
 ###   - If not specified, defaults to 1.0
+### SEED (optional, default=1234):
+###   - Random seed for reproducibility
+###   - Included in the checkpoint path to prevent overwriting runs with different seeds
 
 TASK_ID=$1
 MERGE_COEFFICIENT=$2
 CONFIG_NAME=${3:-mll_cluster/libero_spatial_grpo_openvlaoft}  # Default config if not provided
+SEED=${4:-1234}
 
 if [ -z "$TASK_ID" ]; then
     echo "ERROR: Missing required argument"
-    echo "Usage: sbatch examples/mll_cluster/run_embodiment_multilora.slurm TASK_ID [MERGE_COEFFICIENT] [CONFIG_NAME]"
+    echo "Usage: sbatch examples/mll_cluster/run_embodiment_multilora.slurm TASK_ID [MERGE_COEFFICIENT] [CONFIG_NAME] [SEED]"
+    exit 1
+fi
+
+# Validate seed is a number
+if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: SEED must be a non-negative integer, got: $SEED"
     exit 1
 fi
 
@@ -72,17 +83,17 @@ fi
 # Format coefficient for use in path (replace dot with underscore, e.g., 0.8 -> 0_8)
 COEFFICIENT_PATH=$(echo "$MERGE_COEFFICIENT" | tr '.' '_')
 
-# Include coefficient in the log directory path
+# Include coefficient and seed in the log directory path
 mkdir -p logs/slurm
 mkdir -p logs/naive_lora_multilora
 if [ "$TASK_ID" -eq 0 ]; then
     # Task 0 doesn't use coefficient in path (no previous adapters to merge)
-    LOG_DIR="./logs/naive_lora_multilora/task_${TASK_ID}"
-    EXPERIMENT_NAME="multilora_task_${TASK_ID}"
+    LOG_DIR="./logs/naive_lora_multilora/task_${TASK_ID}_seed${SEED}"
+    EXPERIMENT_NAME="multilora_task_${TASK_ID}_seed${SEED}"
 else
-    # Tasks 1+ include coefficient in path and experiment name
-    LOG_DIR="./logs/naive_lora_multilora/task_${TASK_ID}_coeff_${COEFFICIENT_PATH}"
-    EXPERIMENT_NAME="multilora_task_${TASK_ID}_coeff_${COEFFICIENT_PATH}"
+    # Tasks 1+ include coefficient and seed in path and experiment name
+    LOG_DIR="./logs/naive_lora_multilora/task_${TASK_ID}_coeff_${COEFFICIENT_PATH}_seed${SEED}"
+    EXPERIMENT_NAME="multilora_task_${TASK_ID}_coeff_${COEFFICIENT_PATH}_seed${SEED}"
 fi
 export LOG_DIR
 
@@ -105,6 +116,7 @@ echo "  Experiment Name: $EXPERIMENT_NAME"
 echo "  Checkpoint Save Path: $LOG_DIR"
 echo "  Config Name: $CONFIG_NAME"
 echo "  Merge Coefficient: ${MERGE_COEFFICIENT}"
+echo "  Random Seed: $SEED"
 
 LORA_PATHS_ARG=""
 MERGE_COEFFICIENT_ARG="+actor.model.previous_lora_merge_coefficient=${MERGE_COEFFICIENT}"
@@ -114,12 +126,12 @@ if [ "$TASK_ID" -gt 0 ]; then
     echo "  Looking for previous adapters with coefficient ${MERGE_COEFFICIENT}..."
     LORA_PATHS=()
     for prev_task in $(seq 0 $((TASK_ID - 1))); do
-        # Task 0 adapter comes from naive_lora folder (no coefficient in path)
+        # Task 0 adapter comes from naive_lora folder (no coefficient in path, but includes seed)
         if [ "$prev_task" -eq 0 ]; then
-            prev_adapter_path="./logs/naive_lora/task_${prev_task}/checkpoints/global_step_10/actor"
+            prev_adapter_path="./logs/naive_lora/task_${prev_task}_seed${SEED}/checkpoints/global_step_10/actor"
         else
-            # Tasks 1+ use coefficient in path to find matching adapters
-            prev_adapter_path="./logs/naive_lora_multilora/task_${prev_task}_coeff_${COEFFICIENT_PATH}/checkpoints/global_step_10/actor"
+            # Tasks 1+ use coefficient and seed in path to find matching adapters
+            prev_adapter_path="./logs/naive_lora_multilora/task_${prev_task}_coeff_${COEFFICIENT_PATH}_seed${SEED}/checkpoints/global_step_10/actor"
         fi
         
         if [ -d "$prev_adapter_path" ]; then
@@ -150,7 +162,8 @@ cd $SLURM_SUBMIT_DIR
 # Hydra overrides
 OVERRIDES="env.fixed_task_ids=[${TASK_ID}] \
 	runner.logger.experiment_name=${EXPERIMENT_NAME} \
-	actor.checkpoint_save_path=${LOG_DIR}"
+	actor.checkpoint_save_path=${LOG_DIR} \
+	actor.seed=${SEED}"
 
 if [ -n "$LORA_PATHS_ARG" ]; then
     OVERRIDES="$OVERRIDES ${LORA_PATHS_ARG}"

@@ -14,15 +14,17 @@
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
 
-### Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_multitask.slurm TASK_IDS [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME]
+### Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_multitask.slurm TASK_IDS [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
 ### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_multitask.slurm "0,2,4"
 ### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_multitask.slurm "0 2 4"
 ### Example (with max_epoch): sbatch examples/mll_cluster/run_embodiment_naive_lora_multitask.slurm "0,2,4" "" 15
-### Example (continue from checkpoint): sbatch examples/mll_cluster/run_embodiment_naive_lora_multitask.slurm "0,2,4" ./logs/naive_lora_multitask/tasks_0_2_4/checkpoints/global_step_10/actor 20
+### Example (continue from checkpoint): sbatch examples/mll_cluster/run_embodiment_naive_lora_multitask.slurm "0,2,4" ./logs/naive_lora_multitask/tasks_0_2_4_seed1234/checkpoints/global_step_10/actor 20
+### Example (with seed): sbatch examples/mll_cluster/run_embodiment_naive_lora_multitask.slurm "0,2,4" "" "" "" 42
 ### Note: TASK_IDS can be comma-separated (e.g., "0,2,4") or space-separated (e.g., "0 2 4")
 ###       CHECKPOINT_PATH is optional and will load model weights (LoRA adapter)
 ###       Evaluation runs automatically every 10 global steps during training
 ###       MAX_EPOCH is optional and can override the default max_epochs
+###       SEED is optional and defaults to 1234 if not provided
 
 # Call the shared script with all arguments (path relative to workspace root)
 bash examples/mll_cluster/run_embodiment_naive_lora_multitask.sh "$@"
@@ -40,6 +42,7 @@ if [ $TRAINING_EXIT_CODE -eq 0 ]; then
     # Reconstruct LOG_DIR from arguments (same logic as in .sh file)
     TASK_IDS_STR=$1
     CHECKPOINT_PATH=$2
+    SEED=${5:-1234}
     TASK_IDS_STR=$(echo "$TASK_IDS_STR" | tr ',' ' ')
     read -ra TASK_IDS_ARRAY <<< "$TASK_IDS_STR"
     IFS=$'\n' sorted_task_ids=($(sort -n <<<"${TASK_IDS_ARRAY[*]}"))
@@ -48,11 +51,11 @@ if [ $TRAINING_EXIT_CODE -eq 0 ]; then
     
     if [ -n "$CHECKPOINT_PATH" ] && [[ "$CHECKPOINT_PATH" =~ global_step_([0-9]+) ]]; then
         SOURCE_STEP="${BASH_REMATCH[1]}"
-        LOG_DIR="./logs/naive_lora_multitask/tasks_${TASK_DIR_STR}_from_checkpoint_step_${SOURCE_STEP}"
+        LOG_DIR="./logs/naive_lora_multitask/tasks_${TASK_DIR_STR}_from_checkpoint_step_${SOURCE_STEP}_seed${SEED}"
     elif [ -n "$CHECKPOINT_PATH" ]; then
-        LOG_DIR="./logs/naive_lora_multitask/tasks_${TASK_DIR_STR}_from_checkpoint"
+        LOG_DIR="./logs/naive_lora_multitask/tasks_${TASK_DIR_STR}_from_checkpoint_seed${SEED}"
     else
-        LOG_DIR="./logs/naive_lora_multitask/tasks_${TASK_DIR_STR}"
+        LOG_DIR="./logs/naive_lora_multitask/tasks_${TASK_DIR_STR}_seed${SEED}"
     fi
     
     CONFIG_NAME=${4:-mll_cluster/libero_spatial_grpo_openvlaoft}
