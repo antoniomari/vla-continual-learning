@@ -368,6 +368,23 @@ class ManiskillEnv(gym.Env):
         self.render_images.append(image)
 
     def flush_video(self, video_sub_dir: Optional[str] = None):
+        # Check if video saving is enabled
+        if not self.video_cfg.save_video:
+            self.render_images = []  # Clear images even if not saving
+            return
+        
+        # Check rank-based filtering (only save for specified rank)
+        save_rank = self.video_cfg.get("save_rank", None)
+        if save_rank is not None and self.rank != save_rank:
+            self.render_images = []  # Clear images if not saving
+            return
+        
+        # Check frequency-based filtering (only save every N rollouts)
+        save_frequency = self.video_cfg.get("save_frequency", 1)
+        if save_frequency > 1 and self.video_cnt % save_frequency != 0:
+            self.render_images = []  # Clear images if not saving
+            return
+        
         output_dir = os.path.join(self.video_cfg.video_base_dir, f"rank_{self.rank}")
         if video_sub_dir is not None:
             output_dir = os.path.join(output_dir, f"{video_sub_dir}")

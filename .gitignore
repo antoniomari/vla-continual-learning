@@ -25,3 +25,5 @@ trajectory_logs/
 node_update.sh
 rlds_demo_videos/
 success_info.txt
+delete_video_folders.py
+fill_gpu.py
