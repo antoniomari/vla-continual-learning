@@ -91,6 +91,7 @@ source "examples/mll_cluster/common_functions.sh"
 # Extract config tag and derive eval config name
 CONFIG_TAG=$(extract_config_tag "$CONFIG_NAME")
 EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
+FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 
 # Main training loop
 OVERALL_EXIT_CODE=0
@@ -106,20 +107,20 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo "========================================="
     
     # Determine checkpoint path
-    USE_EXISTING_TASK0=false  # Initialize flag
+    USE_EXISTING_FIRST_TASK=false  # Initialize flag
     if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
         # Use manual checkpoint path for first task if provided
         CHECKPOINT_PATH="$MANUAL_CHECKPOINT_PATH"
-    elif [ "$TASK_ID" -eq 0 ]; then
-        # Check if task 0 weights already exist (from naive_lora training)
-        PREV_LOG_DIR="./logs/naive_lora_ewc/task_0_seed${SEED}"
+    elif [ "$TASK_ID" -eq $FIRST_TASK_ID ]; then
+        # Check if first task weights already exist (from naive_lora training)
+        PREV_LOG_DIR="./logs/naive_lora_ewc/task_${FIRST_TASK_ID}_seed${SEED}"
         # Inject config tag into PREV_LOG_DIR to match where previous task saved checkpoint
         if [ -n "$CONFIG_TAG" ]; then
             # CONFIG_TAG is set, transform the path
             PREV_LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$PREV_LOG_DIR" "$CONFIG_TAG")
             # Validate transformation result
             if [ -z "$PREV_LOG_DIR_TRANSFORMED" ]; then
-                echo "  ERROR: Failed to transform previous task log directory for task 0"
+                echo "  ERROR: Failed to transform previous task log directory for task $FIRST_TASK_ID"
                 echo "         Original PREV_LOG_DIR: [$PREV_LOG_DIR]"
                 echo "         CONFIG_TAG: [$CONFIG_TAG]"
                 OVERALL_EXIT_CODE=1
@@ -129,11 +130,11 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             # CONFIG_TAG is empty, use path as-is (no transformation needed)
             PREV_LOG_DIR_TRANSFORMED="$PREV_LOG_DIR"
         fi
-        EXISTING_TASK0_CHECKPOINT="${PREV_LOG_DIR_TRANSFORMED}/checkpoints/global_step_10/actor"
-        if [ -d "$EXISTING_TASK0_CHECKPOINT" ]; then
-            # Task 0 weights exist - load them and train for 1 epoch to generate rollouts for Fisher
-            CHECKPOINT_PATH="$EXISTING_TASK0_CHECKPOINT"
-            USE_EXISTING_TASK0=true
+        EXISTING_FIRST_TASK_CHECKPOINT="${PREV_LOG_DIR_TRANSFORMED}/checkpoints/global_step_10/actor"
+        if [ -d "$EXISTING_FIRST_TASK_CHECKPOINT" ]; then
+            # First task weights exist - load them and train for 1 epoch to generate rollouts for Fisher
+            CHECKPOINT_PATH="$EXISTING_FIRST_TASK_CHECKPOINT"
+            USE_EXISTING_FIRST_TASK=true
         else
             # First task in sequence, no checkpoint - train from scratch
             CHECKPOINT_PATH=""
@@ -174,7 +175,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     
     # Determine EWC path from previous task
-    if [ "$TASK_ID" -gt 0 ]; then
+    if [ "$TASK_ID" -gt $FIRST_TASK_ID ]; then
         PREV_TASK_ID=$((TASK_ID - 1))
         # Check standard path first
         PREV_LOG_DIR_STANDARD="./logs/naive_lora_ewc/task_${PREV_TASK_ID}_seed${SEED}"
@@ -198,7 +199,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             echo "  Checked locations:"
             echo "    - $STANDARD_EWC_PATH"
             echo "    - $EXISTING_EWC_PATH"
-            echo "  EWC data is required for tasks after task 0. Cannot continue."
+            echo "  EWC data is required for tasks after the first task. Cannot continue."
             OVERALL_EXIT_CODE=1
             break
         fi
@@ -227,8 +228,8 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             OVERALL_EXIT_CODE=1
             break
         fi
-    elif [ "$USE_EXISTING_TASK0" = true ]; then
-        # Using existing task 0 weights - create a special log dir to indicate this
+    elif [ "$USE_EXISTING_FIRST_TASK" = true ]; then
+        # Using existing first task weights - create a special log dir to indicate this
         LOG_DIR="./logs/naive_lora_ewc/task_${TASK_ID}_from_existing_seed${SEED}"
     else
         # Standard case: use TASK_ID
@@ -301,14 +302,14 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             OVERALL_EXIT_CODE=1
             break
         fi
-        if [ "$USE_EXISTING_TASK0" = true ]; then
-            echo "  Loading existing task 0 weights from: $CHECKPOINT_PATH"
+        if [ "$USE_EXISTING_FIRST_TASK" = true ]; then
+            echo "  Loading existing first task weights from: $CHECKPOINT_PATH"
             echo "  (Will train for 1 epoch to generate rollouts for Fisher computation)"
         else
             echo "  Loading from checkpoint: $CHECKPOINT_PATH"
         fi
     else
-        echo "  Training from base model (SFT checkpoint) - Task 0"
+        echo "  Training from base model (SFT checkpoint) - First task (task $FIRST_TASK_ID)"
     fi
     
     if [ -n "$EWC_PATH" ]; then
@@ -317,9 +318,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "  No EWC data (first task or EWC data not found)"
     fi
     
-    # Handle max_epochs: if using existing task 0, train for 1 epoch only (unless overridden)
-    if [ "$USE_EXISTING_TASK0" = true ] && [ -z "$MAX_EPOCH" ]; then
-        # Using existing task 0 weights - train for 1 epoch to generate rollouts for Fisher
+    # Handle max_epochs: if using existing first task, train for 1 epoch only (unless overridden)
+    if [ "$USE_EXISTING_FIRST_TASK" = true ] && [ -z "$MAX_EPOCH" ]; then
+        # Using existing first task weights - train for 1 epoch to generate rollouts for Fisher
         MAX_EPOCH=1
         echo "  Max epochs: 1 (using existing weights, only need rollouts for Fisher computation)"
     elif [ -n "$MAX_EPOCH" ]; then

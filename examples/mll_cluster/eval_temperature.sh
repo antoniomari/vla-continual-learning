@@ -3,18 +3,21 @@
 # Direct evaluation script for embodied agent with temperature override (without SLURM)
 # This script can be run directly on the terminal
 #
-# Usage: ./examples/mll_cluster/eval_temperature.sh CHECKPOINT_LOCATION TEMPERATURE [STEP_NUMBER]
+# Usage: ./examples/mll_cluster/eval_temperature.sh CHECKPOINT_LOCATION TEMPERATURE [STEP_NUMBER] [CONFIG_NAME]
 # Example: ./examples/mll_cluster/eval_temperature.sh logs/naive_LoRA/task_0 2.0
 # Example: ./examples/mll_cluster/eval_temperature.sh logs/bcrl_logit/0.3/task_0 1.5 20
+# Example (libero_10): ./examples/mll_cluster/eval_temperature.sh logs/naive_LoRA/task_0 2.0 "" mll_cluster/libero_10_grpo_openvlaoft_eval_long
 #
 # Note: CHECKPOINT_LOCATION should be relative to workspace root (e.g., logs/naive_LoRA/task_0)
 #       The script will construct the full path: ${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/
 #       TEMPERATURE: evaluation temperature to use (default: 2.0)
 #       STEP_NUMBER: global step number (default: 10)
+#       CONFIG_NAME: config name for evaluation (default: mll_cluster/libero_spatial_grpo_openvlaoft_eval)
 
 CHECKPOINT_LOCATION=$1
 TEMPERATURE=$2
 STEP_NUMBER=$3
+CONFIG_NAME=${4:-mll_cluster/libero_spatial_grpo_openvlaoft_eval}
 
 # Default STEP_NUMBER to 10 if not provided
 if [ -z "$STEP_NUMBER" ]; then
@@ -67,7 +70,7 @@ echo "      and will include temperature in the directory name."
 echo ""
 
 # Run evaluation with temperature override
-bash examples/embodiment/eval_embodiment.sh mll_cluster/libero_spatial_grpo_openvlaoft_eval \
+bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} \
     +actor.model.lora_path="${CHECKPOINT_PATH}" \
     algorithm.sampling_params.temperature_eval=${TEMPERATURE}
 

@@ -40,6 +40,7 @@ source "examples/mll_cluster/common_functions.sh"
 # Extract config tag and derive eval config name
 CONFIG_TAG=$(extract_config_tag "$CONFIG_NAME")
 EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
+FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 
 # Parse TASK_INPUT to determine if it's a single task or a range
 if [[ "$TASK_INPUT" == *,* ]]; then
@@ -112,7 +113,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
         # Use manual checkpoint path for first task if provided
         CHECKPOINT_PATH="$MANUAL_CHECKPOINT_PATH"
-    elif [ "$TASK_ID" -eq 0 ]; then
+    elif [ "$TASK_ID" -eq $FIRST_TASK_ID ]; then
         # First task in sequence, no checkpoint
         CHECKPOINT_PATH=""
     else
@@ -238,7 +239,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ -n "$CHECKPOINT_PATH" ]; then
         if [ ! -d "$CHECKPOINT_PATH" ]; then
             echo "  ERROR: Checkpoint not found at $CHECKPOINT_PATH"
-            if [ "$TASK_ID" -gt 0 ]; then
+            if [ "$TASK_ID" -gt $FIRST_TASK_ID ]; then
                 PREV_TASK_ID=$((TASK_ID - 1))
                 echo "         Task $TASK_ID requires checkpoint from task $PREV_TASK_ID"
                 echo "         Make sure task $PREV_TASK_ID has been trained first, or provide a manual checkpoint path"
@@ -248,7 +249,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         fi
         echo "  Loading from checkpoint: $CHECKPOINT_PATH"
     else
-        echo "  Training from base model (SFT checkpoint) - Task 0"
+        echo "  Training from base model (SFT checkpoint) - First task (task $FIRST_TASK_ID)"
     fi
     
     if [ -n "$MAX_EPOCH" ]; then

@@ -14,23 +14,25 @@
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
 
-### Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm TASK_ID ENTROPY_BONUS [CHECKPOINT_PATH] [MAX_EPOCH] [SEED]
+### Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm TASK_ID ENTROPY_BONUS [CHECKPOINT_PATH] [MAX_EPOCH] [SEED] [CONFIG_NAME]
 ### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm 0 0.01
 ### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm 1 0.01
 ### Example (with max_epoch): sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm 0 0.01 "" 15
 ### Example (continue from checkpoint): sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm 0 0.01 ./logs/naive_lora_entropy/task_0_ent0.01_seed1234/checkpoints/global_step_10/actor 20
 ### Example (with seed): sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm 0 0.01 "" "" 42
+### Example (libero_10): sbatch examples/mll_cluster/run_embodiment_naive_lora_entropy.slurm 0 0.01 "" "" "" mll_cluster/libero_10_grpo_openvlaoft_long
 ### Note: ENTROPY_BONUS is required (e.g., 0.01, 0.001, 0.0)
 ###       CHECKPOINT_PATH is optional and will be auto-generated from previous task if not provided
 ###       MAX_EPOCH is optional and can always be specified to override the default max_epochs
 ###       SEED is optional and defaults to 1234 if not provided
+###       CONFIG_NAME is optional and defaults to mll_cluster/libero_spatial_grpo_openvlaoft
 
 TASK_ID=$1
 ENTROPY_BONUS=$2
 MANUAL_CHECKPOINT_PATH=$3
 MAX_EPOCH=$4
 SEED=${5:-1234}
-CONFIG_NAME="mll_cluster/libero_spatial_grpo_openvlaoft"
+CONFIG_NAME=${6:-mll_cluster/libero_spatial_grpo_openvlaoft}
 
 # Source common functions
 source "examples/mll_cluster/common_functions.sh"
@@ -38,6 +40,7 @@ source "examples/mll_cluster/common_functions.sh"
 # Extract config tag and derive eval config name
 CONFIG_TAG=$(extract_config_tag "$CONFIG_NAME")
 EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
+FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 
 if [ -z "$TASK_ID" ] || [ -z "$ENTROPY_BONUS" ]; then
     echo "ERROR: Missing required arguments"
@@ -59,7 +62,7 @@ fi
 
 # Automatically determine checkpoint path if not manually provided
 if [ -z "$MANUAL_CHECKPOINT_PATH" ]; then
-    if [ "$TASK_ID" -eq 0 ]; then
+    if [ "$TASK_ID" -eq $FIRST_TASK_ID ]; then
         CHECKPOINT_PATH=""
     else
         PREV_TASK_ID=$((TASK_ID - 1))
@@ -157,7 +160,7 @@ echo "  Random Seed: $SEED"
 if [ -n "$CHECKPOINT_PATH" ]; then
     if [ ! -d "$CHECKPOINT_PATH" ]; then
         echo "  ERROR: Checkpoint not found at $CHECKPOINT_PATH"
-        if [ "$TASK_ID" -gt 0 ]; then
+        if [ "$TASK_ID" -gt $FIRST_TASK_ID ]; then
             PREV_TASK_ID=$((TASK_ID - 1))
             echo "         Task $TASK_ID requires checkpoint from task $PREV_TASK_ID"
             echo "         Make sure task $PREV_TASK_ID has been trained first, or provide a manual checkpoint path"
@@ -166,7 +169,7 @@ if [ -n "$CHECKPOINT_PATH" ]; then
     fi
     echo "  Loading from checkpoint: $CHECKPOINT_PATH"
 else
-    echo "  Training from base model (SFT checkpoint) - Task 0"
+    echo "  Training from base model (SFT checkpoint) - First task (task $FIRST_TASK_ID)"
 fi
 
 if [ -n "$MAX_EPOCH" ]; then

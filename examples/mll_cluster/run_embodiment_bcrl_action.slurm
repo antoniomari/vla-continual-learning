@@ -32,6 +32,7 @@ source "examples/mll_cluster/common_functions.sh"
 # Extract config tag and derive eval config name
 CONFIG_TAG=$(extract_config_tag "$CONFIG_NAME")
 EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
+FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 
 if [ -z "$TASK_ID" ] || [ -z "$BC_COEFF" ]; then
     echo "ERROR: Missing required arguments"
@@ -47,8 +48,8 @@ fi
 
 # Automatically determine checkpoint path if not manually provided
 if [ -z "$MANUAL_CHECKPOINT_PATH" ]; then
-    if [ "$TASK_ID" -eq 0 ]; then
-        # Task 0 uses base model, no checkpoint
+    if [ "$TASK_ID" -eq $FIRST_TASK_ID ]; then
+        # First task uses base model, no checkpoint
         CHECKPOINT_PATH=""
     else
         # Use checkpoint from previous task
@@ -162,7 +163,7 @@ if [ -n "$CHECKPOINT_PATH" ]; then
     # Verify checkpoint exists
     if [ ! -d "$CHECKPOINT_PATH" ]; then
         echo "  ERROR: Checkpoint not found at $CHECKPOINT_PATH"
-        if [ "$TASK_ID" -gt 0 ]; then
+        if [ "$TASK_ID" -gt $FIRST_TASK_ID ]; then
             PREV_TASK_ID=$((TASK_ID - 1))
             echo "         Task $TASK_ID requires checkpoint from task $PREV_TASK_ID"
             echo "         Make sure task $PREV_TASK_ID has been trained first, or provide a manual checkpoint path"
@@ -171,7 +172,7 @@ if [ -n "$CHECKPOINT_PATH" ]; then
     fi
     CHECKPOINT_ARG="+actor.model.lora_path=${CHECKPOINT_PATH}"
 else
-    echo "  Training from base model (SFT checkpoint) - Task 0"
+    echo "  Training from base model (SFT checkpoint) - First task (task $FIRST_TASK_ID)"
 fi
 
 echo "========================================="

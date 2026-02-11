@@ -23,12 +23,13 @@
 # module load gcc/9.3.0                 # Compiler (if needed)
 # module list                           # Verify loaded modules
 
-### Usage: sbatch examples/mll_cluster/eval_embodiment_lora_scale.slurm CHECKPOINT_LOCATION [CURRENT_LORA_SCALE] [PREVIOUS_LORA_COEFF] [STEP_NUMBER]
+### Usage: sbatch examples/mll_cluster/eval_embodiment_lora_scale.slurm CHECKPOINT_LOCATION [CURRENT_LORA_SCALE] [PREVIOUS_LORA_COEFF] [STEP_NUMBER] [CONFIG_NAME]
 ### Example (single LoRA): sbatch examples/mll_cluster/eval_embodiment_lora_scale.slurm logs/bcrl_logit/0.3/task_0 0.5
 ### Example (multi-LoRA): sbatch examples/mll_cluster/eval_embodiment_lora_scale.slurm logs/naive_lora_multilora/task_2_coeff_0_9
 ### Example (multi-LoRA with current scale): sbatch examples/mll_cluster/eval_embodiment_lora_scale.slurm logs/naive_lora_multilora/task_2_coeff_0_9 0.7
 ### Example (multi-LoRA with both overrides): sbatch examples/mll_cluster/eval_embodiment_lora_scale.slurm logs/naive_lora_multilora/task_2_coeff_0_9 0.7 0.8
 ### Example (with custom step): sbatch examples/mll_cluster/eval_embodiment_lora_scale.slurm logs/bcrl_logit/0.3/task_0 0.5 "" 20
+### Example (libero_10): sbatch examples/mll_cluster/eval_embodiment_lora_scale.slurm logs/bcrl_logit/0.3/task_0 0.5 "" "" mll_cluster/libero_10_grpo_openvlaoft_eval_long
 ### Note: CHECKPOINT_LOCATION should be relative to workspace root (e.g., logs/bcrl_logit/0.3/task_0)
 ###       The script will construct the full path: ${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/
 ###       For multi-LoRA checkpoints (path contains "multilora" and "coeff_"), the script will:
@@ -37,11 +38,17 @@
 ###       CURRENT_LORA_SCALE: scale for the current adapter (0.0-1.0, default 1.0 for multi-LoRA, required for single LoRA)
 ###       PREVIOUS_LORA_COEFF: coefficient for merging previous adapters (0.0-1.0, auto-extracted from path for multi-LoRA)
 ###       STEP_NUMBER: global step number (default: 10)
+###       CONFIG_NAME: config name for evaluation (default: mll_cluster/libero_spatial_grpo_openvlaoft_eval)
 
 CHECKPOINT_LOCATION=$1
 CURRENT_LORA_SCALE=$2
 PREVIOUS_LORA_COEFF=$3
 STEP_NUMBER=$4
+CONFIG_NAME=${5:-mll_cluster/libero_spatial_grpo_openvlaoft_eval}
+
+# Source common functions
+source "examples/mll_cluster/common_functions.sh"
+FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 
 # Default STEP_NUMBER to 10 if not provided
 if [ -z "$STEP_NUMBER" ]; then
@@ -196,18 +203,18 @@ if [ "$IS_MULTILORA" = true ]; then
         exit 1
     fi
     
-    if [ "$TASK_ID" -gt 0 ]; then
+    if [ "$TASK_ID" -gt $FIRST_TASK_ID ]; then
         # Need to load previous adapters
         COEFFICIENT_PATH=$(echo "$PREVIOUS_LORA_COEFF" | tr '.' '_')
         LORA_PATHS=()
         
-        # Load previous adapters (0 to TASK_ID-1)
-        for prev_task in $(seq 0 $((TASK_ID - 1))); do
-            if [ "$prev_task" -eq 0 ]; then
-                # Task 0 comes from naive_lora folder (no coefficient in path)
+        # Load previous adapters (FIRST_TASK_ID to TASK_ID-1)
+        for prev_task in $(seq $FIRST_TASK_ID $((TASK_ID - 1))); do
+            if [ "$prev_task" -eq $FIRST_TASK_ID ]; then
+                # First task comes from naive_lora folder (no coefficient in path)
                 prev_adapter_path="${WORKSPACE_ROOT}/logs/naive_lora/task_${prev_task}/checkpoints/global_step_${STEP_NUMBER}/actor"
             else
-                # Tasks 1+ use coefficient in path
+                # Subsequent tasks use coefficient in path
                 prev_adapter_path="${WORKSPACE_ROOT}/logs/naive_lora_multilora/task_${prev_task}_coeff_${COEFFICIENT_PATH}/checkpoints/global_step_${STEP_NUMBER}/actor"
             fi
             
@@ -223,7 +230,7 @@ if [ "$IS_MULTILORA" = true ]; then
         
         if [ ${#LORA_PATHS[@]} -eq 0 ]; then
             echo "ERROR: No previous adapters found for task $TASK_ID"
-            echo "       Expected to find adapters for tasks 0 to $((TASK_ID - 1))"
+            echo "       Expected to find adapters for tasks $FIRST_TASK_ID to $((TASK_ID - 1))"
             exit 1
         fi
         
@@ -231,8 +238,8 @@ if [ "$IS_MULTILORA" = true ]; then
         LORA_PATHS_STR=$(IFS=','; echo "${LORA_PATHS[*]}")
         HYDRA_OVERRIDES="${HYDRA_OVERRIDES} +actor.model.lora_paths=[${LORA_PATHS_STR}] +actor.model.previous_lora_merge_coefficient=${PREVIOUS_LORA_COEFF}"
         echo "  Will merge ${#LORA_PATHS[@]} previous adapter(s) with coefficient ${PREVIOUS_LORA_COEFF}"
-    elif [ "$TASK_ID" -eq 0 ]; then
-        echo "  Task 0: No previous adapters to load (this is the first task)"
+    elif [ "$TASK_ID" -eq $FIRST_TASK_ID ]; then
+        echo "  Task $FIRST_TASK_ID: No previous adapters to load (this is the first task)"
     else
         echo "ERROR: Invalid task ID extracted: $TASK_ID"
         exit 1
@@ -240,7 +247,7 @@ if [ "$IS_MULTILORA" = true ]; then
 fi
 
 # Pass overrides to the eval script
-bash examples/embodiment/eval_embodiment.sh mll_cluster/libero_spatial_grpo_openvlaoft_eval ${HYDRA_OVERRIDES}
+bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} ${HYDRA_OVERRIDES}
 
 # Print completion time
 echo "End Time: $(date)"

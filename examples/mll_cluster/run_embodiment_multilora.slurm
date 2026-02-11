@@ -47,6 +47,7 @@ source "examples/mll_cluster/common_functions.sh"
 # Extract config tag and derive eval config name
 CONFIG_TAG=$(extract_config_tag "$CONFIG_NAME")
 EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
+FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 
 if [ -z "$TASK_ID" ]; then
     echo "ERROR: Missing required argument"
@@ -93,8 +94,8 @@ COEFFICIENT_PATH=$(echo "$MERGE_COEFFICIENT" | tr '.' '_')
 # Include coefficient and seed in the log directory path
 mkdir -p logs/slurm
 mkdir -p logs/naive_lora_multilora
-if [ "$TASK_ID" -eq 0 ]; then
-    # Task 0 doesn't use coefficient in path (no previous adapters to merge)
+if [ "$TASK_ID" -eq $FIRST_TASK_ID ]; then
+    # First task doesn't use coefficient in path (no previous adapters to merge)
     LOG_DIR="./logs/naive_lora_multilora/task_${TASK_ID}_seed${SEED}"
     EXPERIMENT_NAME="multilora_task_${TASK_ID}_seed${SEED}"
 else
@@ -154,13 +155,13 @@ echo "  Random Seed: $SEED"
 LORA_PATHS_ARG=""
 MERGE_COEFFICIENT_ARG="+actor.model.previous_lora_merge_coefficient=${MERGE_COEFFICIENT}"
 
-if [ "$TASK_ID" -gt 0 ]; then
-    echo "  Mode: MULTI-LORA - Loading and merging all previous task adapters (0..$((TASK_ID - 1)))"
+if [ "$TASK_ID" -gt $FIRST_TASK_ID ]; then
+    echo "  Mode: MULTI-LORA - Loading and merging all previous task adapters ($FIRST_TASK_ID..$((TASK_ID - 1)))"
     echo "  Looking for previous adapters with coefficient ${MERGE_COEFFICIENT}..."
     LORA_PATHS=()
-    for prev_task in $(seq 0 $((TASK_ID - 1))); do
-        # Task 0 adapter comes from naive_lora folder (no coefficient in path, but includes seed)
-        if [ "$prev_task" -eq 0 ]; then
+    for prev_task in $(seq $FIRST_TASK_ID $((TASK_ID - 1))); do
+        # First task adapter comes from naive_lora folder (no coefficient in path, but includes seed)
+        if [ "$prev_task" -eq $FIRST_TASK_ID ]; then
             prev_log_dir="./logs/naive_lora/task_${prev_task}_seed${SEED}"
         else
             # Tasks 1+ use coefficient and seed in path to find matching adapters

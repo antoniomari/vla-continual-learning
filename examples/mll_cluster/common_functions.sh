@@ -1,6 +1,18 @@
 #!/bin/bash
 # Common functions for mll_cluster run_embodiment scripts
 
+# Get the first task ID for a given config
+# libero_10 (long) starts from task 3, all others start from task 0
+get_first_task_id() {
+    local config_name="$1"
+    local config_tag=$(extract_config_tag "$config_name")
+    if [ "$config_tag" = "long" ]; then
+        echo "3"
+    else
+        echo "0"
+    fi
+}
+
 # Extract config tag from CONFIG_NAME
 # If config ends with _openvlaoft or _eval, don't set CONFIG_TAG
 # Otherwise, extract the part after the last _

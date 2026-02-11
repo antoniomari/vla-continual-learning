@@ -2,11 +2,12 @@
 #
 # Launch multiple evaluation jobs with different lora_scale coefficients
 #
-# Usage: ./examples/mll_cluster/launch_lora_scale_evals.sh CHECKPOINT_LOCATION LORA_SCALE_1 [LORA_SCALE_2 ...] [--step STEP_NUMBER] [--local]
+# Usage: ./examples/mll_cluster/launch_lora_scale_evals.sh CHECKPOINT_LOCATION LORA_SCALE_1 [LORA_SCALE_2 ...] [--step STEP_NUMBER] [--local] [--config CONFIG_NAME]
 # Example: ./examples/mll_cluster/launch_lora_scale_evals.sh logs/bcrl_logit/0.3/task_0 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0
 # Example (with step): ./examples/mll_cluster/launch_lora_scale_evals.sh logs/bcrl_logit/0.3/task_0 0.0 0.1 0.2 --step 20
 # Example (local): ./examples/mll_cluster/launch_lora_scale_evals.sh logs/bcrl_logit/0.3/task_0 0.0 0.1 0.2 --local
 # Example (local with step): ./examples/mll_cluster/launch_lora_scale_evals.sh logs/bcrl_logit/0.3/task_0 0.0 0.1 0.2 --local --step 20
+# Example (libero_10): ./examples/mll_cluster/launch_lora_scale_evals.sh logs/bcrl_logit/0.3/task_0 0.0 0.1 0.2 --config mll_cluster/libero_10_grpo_openvlaoft_eval_long
 #
 # This script will submit one SLURM job (or run locally if --local is specified) for each lora_scale coefficient provided
 
@@ -23,9 +24,13 @@ fi
 CHECKPOINT_LOCATION=$1
 shift
 
+# Source common functions
+source "examples/mll_cluster/common_functions.sh"
+
 # Parse optional arguments
 STEP_NUMBER=""
 LOCAL_MODE=false
+CONFIG_NAME="mll_cluster/libero_spatial_grpo_openvlaoft_eval"
 LORA_SCALES=()
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -40,6 +45,15 @@ while [ $# -gt 0 ]; do
             ;;
         --local)
             LOCAL_MODE=true
+            shift
+            ;;
+        --config)
+            shift
+            if [ $# -eq 0 ]; then
+                echo "ERROR: --config requires a config name"
+                exit 1
+            fi
+            CONFIG_NAME="$1"
             shift
             ;;
         *)
@@ -95,6 +109,7 @@ echo "=========================================="
 echo "Checkpoint Location: $CHECKPOINT_LOCATION"
 echo "LoRA Scales: ${LORA_SCALES[*]}"
 echo "Number of evaluations: ${#LORA_SCALES[@]}"
+echo "Config Name: $CONFIG_NAME"
 if [ -n "$STEP_NUMBER" ]; then
     echo "Global Step Number: $STEP_NUMBER"
 fi
@@ -144,13 +159,14 @@ build_hydra_overrides() {
             task_id="${BASH_REMATCH[1]}"
         fi
         
-        if [ -n "$task_id" ] && [ "$task_id" -gt 0 ]; then
+        local first_task_id=$(get_first_task_id "$CONFIG_NAME")
+        if [ -n "$task_id" ] && [ "$task_id" -gt $first_task_id ]; then
             local coeff_path=$(echo "$prev_coeff" | tr '.' '_')
             local lora_paths=()
             
             # Build previous adapter paths
-            for prev_task in $(seq 0 $((task_id - 1))); do
-                if [ "$prev_task" -eq 0 ]; then
+            for prev_task in $(seq $first_task_id $((task_id - 1))); do
+                if [ "$prev_task" -eq $first_task_id ]; then
                     local prev_path="${WORKSPACE_ROOT}/logs/naive_lora/task_${prev_task}/checkpoints/global_step_${step_num}/actor"
                 else
                     local prev_path="${WORKSPACE_ROOT}/logs/naive_lora_multilora/task_${prev_task}_coeff_${coeff_path}/checkpoints/global_step_${step_num}/actor"
@@ -191,7 +207,7 @@ for scale in "${LORA_SCALES[@]}"; do
         fi
         
         # Run evaluation locally
-        if bash "$EVAL_SCRIPT" mll_cluster/libero_spatial_grpo_openvlaoft_eval ${HYDRA_OVERRIDES}; then
+        if bash "$EVAL_SCRIPT" ${CONFIG_NAME} ${HYDRA_OVERRIDES}; then
             SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
             echo "  ✓ Evaluation completed successfully for lora_scale=$scale"
         else
@@ -201,9 +217,9 @@ for scale in "${LORA_SCALES[@]}"; do
     else
         echo "Submitting job for lora_scale=$scale..."
         if [ -n "$STEP_NUMBER" ]; then
-            JOB_OUTPUT=$(sbatch "$SLURM_SCRIPT" "$CHECKPOINT_LOCATION" "$scale" "" "$STEP_NUMBER" 2>&1)
+            JOB_OUTPUT=$(sbatch "$SLURM_SCRIPT" "$CHECKPOINT_LOCATION" "$scale" "" "$STEP_NUMBER" "$CONFIG_NAME" 2>&1)
         else
-            JOB_OUTPUT=$(sbatch "$SLURM_SCRIPT" "$CHECKPOINT_LOCATION" "$scale" 2>&1)
+            JOB_OUTPUT=$(sbatch "$SLURM_SCRIPT" "$CHECKPOINT_LOCATION" "$scale" "" "" "$CONFIG_NAME" 2>&1)
         fi
         
         if [ $? -eq 0 ]; then
