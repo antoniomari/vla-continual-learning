@@ -16,13 +16,10 @@ import hydra
 import torch.multiprocessing as mp
 
 from rlinf.config import validate_cfg
-from rlinf.runners.embodied_runner import EmbodiedRunner
+from rlinf.custom.bc_only_fsdp_actor_worker import BCOnlyFSDPActor
+from rlinf.custom.bc_runner import BCOnlyRunner
 from rlinf.scheduler import Cluster
 from rlinf.utils.placement import HybridComponentPlacement
-from rlinf.workers.actor.fsdp_actor_worker import EmbodiedFSDPActor
-from rlinf.workers.actor.fsdp2_actor_worker import EmbodiedFSDP2Actor
-from rlinf.workers.env.env_worker import EnvWorker
-from rlinf.workers.rollout.hf.huggingface_worker import MultiStepRolloutWorker
 
 mp.set_start_method("spawn", force=True)
 
@@ -35,7 +32,8 @@ def main(cfg) -> None:
 
     # Export Ray object store memory from config to environment variable
     # This allows start_ray.sh to use the configured value
-    # import os
+    import os
+
     # ray_memory = cfg.cluster.get("ray_object_store_memory", 461708984320)
     # os.environ["RAY_OBJECT_STORE_MEMORY"] = str(ray_memory)
 
@@ -44,32 +42,11 @@ def main(cfg) -> None:
 
     # Create actor worker group
     actor_placement = component_placement.get_strategy("actor")
-    if cfg.actor.get("use_fsdp2", False):
-        actor_group = EmbodiedFSDP2Actor.create_group(cfg).launch(
-            cluster, name=cfg.actor.group_name, placement_strategy=actor_placement
-        )
-    else:
-        actor_group = EmbodiedFSDPActor.create_group(cfg).launch(
-            cluster, name=cfg.actor.group_name, placement_strategy=actor_placement
-        )
-
-    # Create rollout worker group
-    rollout_placement = component_placement.get_strategy("rollout")
-    rollout_group = MultiStepRolloutWorker.create_group(cfg).launch(
-        cluster, name=cfg.rollout.group_name, placement_strategy=rollout_placement
-    )
-    # Create env worker group
-    env_placement = component_placement.get_strategy("env")
-    env_group = EnvWorker.create_group(cfg).launch(
-        cluster, name=cfg.env.group_name, placement_strategy=env_placement
+    actor_group = BCOnlyFSDPActor.create_group(cfg).launch(
+        cluster, name=cfg.actor.group_name, placement_strategy=actor_placement
     )
 
-    runner = EmbodiedRunner(
-        cfg=cfg,
-        actor=actor_group,
-        rollout=rollout_group,
-        env=env_group,
-    )
+    runner = BCOnlyRunner(cfg=cfg, actor=actor_group)
 
     runner.init_workers()
     runner.run()

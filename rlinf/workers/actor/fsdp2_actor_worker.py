@@ -37,9 +37,6 @@ from rlinf.custom.loss import (
     behavior_cloning_ce_loss,
     behavior_cloning_loss_with_reference_logits,
 )
-from rlinf.hybrid_engines.fsdp.fsdp_model_manager import (
-    FSDPModelManager,
-)
 from rlinf.hybrid_engines.fsdp.fsdp2_model_manager import (
     FSDP2ModelManager,
 )
@@ -61,7 +58,7 @@ from rlinf.utils.metric_utils import (
 from rlinf.utils.placement import HybridComponentPlacement
 
 
-class EmbodiedFSDPActor(FSDPModelManager, Worker):
+class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
     def __init__(self, cfg: DictConfig):
         Worker.__init__(self)
         super().__init__(cfg.actor)
@@ -188,8 +185,8 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 self.ref_policy_state_dict = ref_state_dict
 
         if self.cfg.actor.get("enable_offload", False):
-            self.offload_fsdp_param_and_grad()
             self.offload_fsdp_optimizer()
+            self.offload_fsdp_param_and_grad()
             torch.cuda.synchronize()
             gc.collect()
             torch.cuda.empty_cache()
@@ -244,22 +241,25 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         return super().model_provider_func()
 
     def sync_model_to_rollout(self):
-        if next(self.model.parameters()).is_cpu:
-            self.load_fsdp_param_and_grad(self.device)
-            self.load_fsdp_optimizer(self.device)
+        # 1. Offload First! (Force clear GPU to prevent OOM race with Rollout)
+        if self.cfg.actor.get("enable_offload", False):
+            self.offload_fsdp_optimizer()
+            self.offload_fsdp_param_and_grad()
+            torch.cuda.synchronize()
+            gc.collect()
+            torch.cuda.empty_cache()
 
+        # 2. Get State Dict (Now guaranteed to hit the CPU path because model is on CPU)
         state_dict = self.get_model_state_dict()
+
+        # 3. Send state dict to rollout worker (Rollout can only grab AFTER we offloaded)
         if self._weight_dst_rank_in_rollout is not None:
             self.send(
                 state_dict, self._rollout_group_name, self._weight_dst_rank_in_rollout
             )
-        if self.cfg.actor.get("enable_offload", False):
-            self.offload_fsdp_param_and_grad()
-            self.offload_fsdp_optimizer()
-            torch.cuda.synchronize()
-            del state_dict
-            gc.collect()
-            torch.cuda.empty_cache()
+
+        del state_dict
+        gc.collect()
 
     async def recv_rollout_batch(self):
         send_num = self._component_placement.get_world_size("rollout") * self.stage_num

@@ -23,8 +23,8 @@ if [ ! -f "$RUN_EMBODIMENT_SCRIPT" ]; then
 fi
 
 # Default values
-DEFAULT_CONFIG="libero_spatial_grpo_openvlaoft_bcrl"
-DEFAULT_BC_COEFF=0.03
+DEFAULT_CONFIG="libero_spatial_grpo_openvlaoft"
+DEFAULT_BC_COEFF=0.00
 DEFAULT_NUM_TASKS=5
 
 # Get arguments
@@ -52,7 +52,7 @@ else
 fi
 
 # Base log directory
-BASE_LOG_DIR="${REPO_PATH}/logs/bcrl/${BC_COEFF_FORMATTED}"
+BASE_LOG_DIR="${REPO_PATH}/logs/naive_LoRA_trajall/"
 mkdir -p "${BASE_LOG_DIR}"
 
 # ============================================================================
@@ -64,7 +64,7 @@ echo "Sequential Task Training"
 echo "========================================================================"
 echo "Config:         $CONFIG_NAME"
 echo "BC Coefficient: $BC_COEFF"
-echo "Num Tasks:      $NUM_TASKS (0 to $((NUM_TASKS-1)))"
+echo "Num Tasks:      $NUM_TASKS (3 to $((NUM_TASKS-1+3)))"
 echo "Base Log Dir:   $BASE_LOG_DIR"
 echo "========================================================================"
 echo ""
@@ -73,9 +73,9 @@ echo ""
 # Training Loop
 # ============================================================================
 
-PREV_CHECKPOINT_PATH="./logs/bcrl/03/task_3/checkpoints/global_step_5/actor"
+PREV_CHECKPOINT_PATH=""
 
-for TASK_ID in $(seq 4 $((NUM_TASKS-1+3))); do
+for TASK_ID in $(seq 3 $((NUM_TASKS-1+3))); do
     echo ""
     echo "========================================================================"
     echo "Training on Task ${TASK_ID}"
@@ -86,7 +86,7 @@ for TASK_ID in $(seq 4 $((NUM_TASKS-1+3))); do
     mkdir -p "${TASK_LOG_DIR}"
     
     # Build hydra overrides
-    OVERRIDES="env.fixed_task_ids=[${TASK_ID}] algorithm.use_experience_replay=True algorithm.bc_coeff=${BC_COEFF} actor.preallocate=10 actor.micro_batch_size=16 actor.seed=42"
+    OVERRIDES="env.fixed_task_ids=[${TASK_ID}] actor.seed=${BC_COEFF}"
     
     # For tasks after 0, add the checkpoint path from previous task
     if [ $TASK_ID -gt 3 ]; then

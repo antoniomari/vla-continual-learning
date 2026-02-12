@@ -197,7 +197,7 @@ def main():
     parser.add_argument(
         "--rlds_dir",
         type=str,
-        required=True,
+        default="./LIBERO/libero/datasets/modified_libero_rlds/libero_spatial_no_noops/1.0.0",
         help="Path to RLDS dataset version directory (contains .tfrecord files)",
     )
 

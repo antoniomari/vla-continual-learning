@@ -17,6 +17,8 @@ num_images_in_input: 1
 
 num_envs: ${env.eval.num_envs}  # Can be overridden in main config (default: 200)
 eval_per_task: ${env.eval.eval_per_task}  # Override in main config (documentation: expected evaluations per task)
+fixed_task_ids: ${env.fixed_task_ids}  # Override in main config eval.fixed_task_ids
+log_trajectories: ${env.log_trajectories}
 
 video_cfg:
   save_video: True

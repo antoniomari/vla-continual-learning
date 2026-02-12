@@ -53,7 +53,7 @@ class LiberoSFTDataset(Dataset):
             filename = os.path.basename(path)
             task_desc = self._extract_task_description(filename)
             with h5py.File(path, "r") as f:
-                demo_names = sorted(list(f["data"].keys()))[1 : 1 + demos_per_task]
+                demo_names = sorted(list(f["data"].keys()))[:demos_per_task]
                 for name in demo_names:
                     traj_len = len(f["data"][name]["actions"])
                     self.trajectories.append((path, name, traj_len, task_desc))
@@ -72,7 +72,9 @@ class LiberoSFTDataset(Dataset):
 
     def _extract_task_description(self, filename):
         name = filename.replace(".hdf5", "")
-        parts = name.split("_")[:-1]  # remove the word demo
+        parts = name.split("_")
+        if parts[-1] == "demo":
+            parts = parts[:-1]  # remove the word demo
         return " ".join(parts)
 
     def __len__(self):

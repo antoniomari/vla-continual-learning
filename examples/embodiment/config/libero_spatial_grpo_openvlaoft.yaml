@@ -14,7 +14,7 @@ cluster:
   num_nodes: 1
   component_placement:
     actor,env,rollout: all
-  # sray_object_store_memory: 461708984320  # Ray object store memory in bytes (default: ~430GB)
+  sray_object_store_memory: 461708984320  # Ray object store memory in bytes (default: ~430GB)
 
 runner:
   task_type: embodied
@@ -69,7 +69,7 @@ algorithm:
 
   sampling_params:
     use_greedy: False
-    temperature_train: 2.0
+    temperature_train: 1.6
     temperature_eval: 1.6
     top_k: -1
     top_p: 1.0
@@ -124,7 +124,7 @@ actor:
   global_batch_size: 8192
   seed: 1234
   enable_offload: False
-  preallocate: 18   # preallocates for actor worker (GB)
+  preallocate: 0   # preallocates for actor worker (GB)
 
   model:
     model_name: "openvla_oft"

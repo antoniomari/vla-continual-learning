@@ -43,7 +43,7 @@ algorithm:
   group_size: 8
   n_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
-  num_group_envs: 8
+  num_group_envs: 4
   rollout_epoch: 16
   eval_rollout_epoch: 20
   reward_type: step_level  # step_level or chunk_level
@@ -110,6 +110,7 @@ rollout:
   model_dir: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
   enable_offload: True
   pipeline_stage_num: 1
+  enable_action_logging: True
 
 actor:
   group_name: "ActorGroup"
@@ -123,8 +124,8 @@ actor:
   micro_batch_size: 16
   global_batch_size: 8192
   seed: 1234
-  enable_offload: False
-  preallocate: 22   # preallocates for actor worker (GB)
+  enable_offload: True
+  preallocate: 0   # preallocates for actor worker (GB)
 
   model:
     model_name: "openvla_oft"

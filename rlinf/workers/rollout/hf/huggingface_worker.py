@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import gc
+import os
 from collections import defaultdict
 
+import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
@@ -38,6 +40,45 @@ def create_rollout_batch(data):
         else:
             ret_data[key] = torch.cat(value, dim=0).contiguous().cpu()
     return ret_data
+
+
+def _check_actor_memory(device_index, threshold_gb=4.0):
+    """
+    Check if 'EmbodiedFSDPActor' process on the given device is using less than threshold_gb.
+    Returns True if safe (memory low or process not found), False if memory high.
+    """
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(device_index)
+        procs = pynvml.nvmlDeviceGetComputeRunningProcesses(handle)
+        
+        actor_mem_bytes = 0
+        found_actor = False
+        for p in procs:
+                # p.pid is available, but name might require looking up via psutil or nvmlSystemGetProcessName
+                # nvmlSystemGetProcessName is available in newer pynvml/drivers
+                name = pynvml.nvmlSystemGetProcessName(p.pid)
+                if isinstance(name, bytes):
+                    name = name.decode('utf-8')
+                    
+                # We look for the Ray process name pattern
+                if "EmbodiedFSDPActor" in name:
+                    actor_mem_bytes += p.usedGpuMemory
+                    found_actor = True
+                
+        pynvml.nvmlShutdown()
+        
+        if not found_actor:
+            return True # Actor not on this GPU or not found, assume safe
+            
+        actor_mem_gb = actor_mem_bytes / (1024**3)
+        print(f"Actor memory usage: {actor_mem_gb}, threshold: {threshold_gb}", flush=True)
+        return actor_mem_gb < threshold_gb
+
+    except Exception as e:
+        print(f"Warning: Failed to check actor memory: {e}")
+        return True # Fail open to avoid deadlock if NVML issues
 
 
 class MultiStepRolloutWorker(Worker):
@@ -68,6 +109,20 @@ class MultiStepRolloutWorker(Worker):
             )
 
         self.use_proprio = self.cfg.actor.model.get("use_proprio", False)
+
+        # Debug logging setup
+        self.enable_action_logging = cfg.rollout.get("enable_action_logging", False)
+        if self.enable_action_logging:
+            self.action_log_dir = cfg.rollout.get(
+                "action_log_dir",
+                os.path.join(cfg.runner.logger.log_path, "action_logs"),
+            )
+            os.makedirs(self.action_log_dir, exist_ok=True)
+            self.action_log_data = defaultdict(list)
+            if self._rank == 0:
+                print(
+                    f"[DEBUG] Action logging enabled. Saving to: {self.action_log_dir}"
+                )
 
     def init_worker(self):
         self.hf_model = get_model(self.cfg.rollout.model_dir, self.cfg.actor.model)
@@ -105,7 +160,6 @@ class MultiStepRolloutWorker(Worker):
         }
 
     def predict(self, processed_obs, mode="train"):
-        # BUG: don't use do_sample variable
         action_token_len = self.hf_model.action_dim * self.hf_model.num_action_chunks
 
         sample_kwargs = (
@@ -154,6 +208,74 @@ class MultiStepRolloutWorker(Worker):
 
         return chunk_actions, chunk_action_tokens, chunk_logprobs, chunk_values
 
+    def log_actions_and_tokens(
+        self, chunk_actions, chunk_action_tokens, step, stage_id, rollout_epoch
+    ):
+        """
+        Log actions and action tokens to disk for debugging.
+
+        Args:
+            chunk_actions: Tensor of shape [batch, num_chunks, action_dim] with continuous actions
+            chunk_action_tokens: Tensor of shape [batch, num_chunks, action_dim] with token IDs
+            step: Current step in rollout
+            stage_id: Stage ID in pipeline
+            rollout_epoch: Current rollout epoch
+        """
+        if not self.enable_action_logging:
+            return
+
+        # Convert to numpy and store
+        actions_np = chunk_actions  # [batch, num_chunks, action_dim]
+        tokens_np = chunk_action_tokens.cpu().numpy()  # [batch, num_chunks, action_dim]
+
+        # Store in memory (will save to disk at end of generate)
+        self.action_log_data["actions"].append(actions_np)
+        self.action_log_data["action_tokens"].append(tokens_np)
+        self.action_log_data["step"].append(step)
+        self.action_log_data["stage_id"].append(stage_id)
+        self.action_log_data["rollout_epoch"].append(rollout_epoch)
+
+    def save_action_logs(self, global_step):
+        """Save accumulated action logs to disk."""
+        if not self.enable_action_logging or not self.action_log_data["actions"]:
+            return
+
+        # Concatenate all logged data
+        all_actions = np.concatenate(self.action_log_data["actions"], axis=0)
+        all_tokens = np.concatenate(self.action_log_data["action_tokens"], axis=0)
+        all_steps = np.array(self.action_log_data["step"])
+        all_stage_ids = np.array(self.action_log_data["stage_id"])
+        all_epochs = np.array(self.action_log_data["rollout_epoch"])
+
+        # Save to npz file
+        save_path = os.path.join(
+            self.action_log_dir, f"rank_{self._rank}_step_{global_step}.npz"
+        )
+
+        np.savez_compressed(
+            save_path,
+            actions=all_actions,
+            action_tokens=all_tokens,
+            steps=all_steps,
+            stage_ids=all_stage_ids,
+            rollout_epochs=all_epochs,
+            vocab_size=self.hf_model.vocab_size,
+            n_action_bins=self.hf_model.config.n_action_bins,
+            action_dim=self.hf_model.action_dim,
+            num_action_chunks=self.hf_model.num_action_chunks,
+        )
+
+        if self._rank == 0:
+            print(f"[DEBUG] Saved action logs to: {save_path}")
+            print(f"  Total samples: {all_actions.shape[0]}")
+            print(f"  Actions shape: {all_actions.shape}")
+            print(f"  Tokens shape: {all_tokens.shape}")
+            print(f"  Action range: [{all_actions.min():.4f}, {all_actions.max():.4f}]")
+            print(f"  Token range: [{all_tokens.min()}, {all_tokens.max()}]")
+
+        # Clear logged data
+        self.action_log_data.clear()
+
     def update_env_batch(self, i, env_batch):
         # first step for env_batch
         if env_batch["rews"] is None:
@@ -196,7 +318,7 @@ class MultiStepRolloutWorker(Worker):
                     self.cfg.algorithm.gamma * final_values.cpu()
                 )
 
-    async def generate(self):
+    async def generate(self, global_step=0):
         if self.cfg.rollout.get("enable_offload", False):
             self.reload_model()
         self.buffer_list = []
@@ -225,6 +347,11 @@ class MultiStepRolloutWorker(Worker):
                         self.predict(processed_obs)
                     )
                     await self.send_chunk_actions(chunk_actions)
+
+                    # Log actions and tokens for debugging
+                    self.log_actions_and_tokens(
+                        chunk_actions, chunk_action_token, step, i, rollout_epoch
+                    )
 
                     self.buffer_list[i]["input_ids"].append(
                         processed_obs["input_ids"].cpu().contiguous()
@@ -271,8 +398,14 @@ class MultiStepRolloutWorker(Worker):
                         for key, value in infos["episode"].items():
                             self.buffer_list[i][f"env_info/{key}"].append(value.cpu())
 
+        # Save action logs to disk
+        self.save_action_logs(global_step)
+
         for i in range(self.stage_num):
             await self.send_rollout_batch(i)
+            self.buffer_list[i].clear()
+
+        gc.collect()
 
         if self.cfg.rollout.get("enable_offload", False):
             self.offload_model()
@@ -325,7 +458,23 @@ class MultiStepRolloutWorker(Worker):
     def reload_model(self):
         self.hf_model = self.hf_model.to(self.device)
 
+    def _wait_for_actor_offload(self, threshold_gb=2.0):
+        """Wait until Actor process on this GPU uses less than threshold_gb memory."""
+        if self._rank == 0:
+            print(f"[Rollout] Waiting for Actor to offload GPU memory (Threshold: {threshold_gb}GB)...")
+            
+        while True:
+            is_safe = _check_actor_memory(self.device, threshold_gb)
+            if is_safe:
+                break
+                
+            time.sleep(1.0)
+
     def sync_model_from_actor(self):
+        if self.cfg.actor.model.get('use_fsdp2', False):
+            print("Waiting for actor to offload memory...", self._rank)
+            self._wait_for_actor_offload(threshold_gb=5.0)
+        
         param_state_dict = self.recv(self._actor_group_name, src_rank=self._rank)
         self.hf_model.load_state_dict(param_state_dict)
         del param_state_dict

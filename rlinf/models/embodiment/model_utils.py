@@ -179,11 +179,9 @@ def actor_forward(
         actions: Actions from BC forward (numpy array) or None
         bc_logits: Optional logits from BC forward (if return_bc_logits=True)
     """
-    if bc_batch is not None:
-        assert rl_batch["input_ids"].shape[0] == bc_batch["input_ids"].shape[0]
-
     has_bc_batch = bc_batch is not None
     if has_bc_batch:
+        assert rl_batch["input_ids"].shape[0] == bc_batch["input_ids"].shape[0]
         batch = {}
         for k in ["input_ids", "attention_mask", "pixel_values"]:
             batch[k] = torch.cat([rl_batch[k], bc_batch[k]], dim=0)
@@ -270,7 +268,7 @@ def custom_forward(
         processed_logits_tensor[:bs], **logits_processor_args
     )
     output_dict["raw_logits"] = raw_logits
-    output_dict["intermediate_logits"] = processed_logits_tensor
+    output_dict["intermediate_logits"] = raw_logits
     valid_start = model.vocab_size - model.config.n_action_bins
     valid_end = model.vocab_size
     processed_bc_logits = raw_logits[
@@ -411,16 +409,16 @@ def bc_custom_forward(
         if logits_type == "processed":
             valid_start = model.vocab_size - model.config.n_action_bins
             valid_end = model.vocab_size
-            processed_logits_tensor = processed_logits_tensor[
+            processed_logits_tensor = raw_logits[
                 ..., valid_start:valid_end
             ]  # [B, act, n_action_bins]
-            return actions, processed_logits_tensor
+            return actions, normalized_actions, processed_logits_tensor
         elif logits_type == "raw":
-            return actions, raw_logits  # raw_logits_valid
+            return actions, normalized_actions, raw_logits  # raw_logits_valid
         elif logits_type == "all":
-            return actions, raw_logits, processed_logits_tensor
+            return actions, normalized_actions, raw_logits, processed_logits_tensor
     else:
-        return actions
+        return actions, normalized_actions
 
 
 def prepare_observations_for_vla(

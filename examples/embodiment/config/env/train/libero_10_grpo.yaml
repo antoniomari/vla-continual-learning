@@ -27,3 +27,4 @@ init_params:
   camera_widths: 256
 
 use_ordered_reset_state_ids: True
+fixed_task_ids: ${env.fixed_task_ids}

@@ -1,0 +1,65 @@
+Found 10 tasks
+
+================================================================================
+
+pick_up_the_black_bowl_between_the_plate_and_the_ramekin_and_place_it_on_the_plate.hdf5
+--------------------------------------------------------------------------------
+
+Trajectory Probabilities & Accuracy:
+  demo_0: log_prob=-162.15 (10^-70.4), geom_mean=0.7486, accuracy=0.9375  ← HIGHEST (likely training demo)
+
+pick_up_the_black_bowl_from_table_center_and_place_it_on_the_plate.hdf5
+--------------------------------------------------------------------------------
+
+Trajectory Probabilities & Accuracy:
+  demo_0: log_prob=-98.81 (10^-42.9), geom_mean=0.8633, accuracy=0.9554  ← HIGHEST (likely training demo)
+
+pick_up_the_black_bowl_in_the_top_drawer_of_the_wooden_cabinet_and_place_it_on_the_plate.hdf5
+--------------------------------------------------------------------------------
+
+Trajectory Probabilities & Accuracy:
+  demo_0: log_prob=-497.16 (10^-215.9), geom_mean=0.5533, accuracy=0.8714  ← HIGHEST (likely training demo)
+
+pick_up_the_black_bowl_next_to_the_cookie_box_and_place_it_on_the_plate.hdf5
+--------------------------------------------------------------------------------
+
+Trajectory Probabilities & Accuracy:
+  demo_0: log_prob=-56.58 (10^-24.6), geom_mean=0.9304, accuracy=0.9758  ← HIGHEST (likely training demo)
+
+pick_up_the_black_bowl_next_to_the_plate_and_place_it_on_the_plate.hdf5
+--------------------------------------------------------------------------------
+
+Trajectory Probabilities & Accuracy:
+  demo_0: log_prob=-315.93 (10^-137.2), geom_mean=0.6865, accuracy=0.9333  ← HIGHEST (likely training demo)
+
+pick_up_the_black_bowl_next_to_the_ramekin_and_place_it_on_the_plate.hdf5
+--------------------------------------------------------------------------------
+
+Trajectory Probabilities & Accuracy:
+  demo_0: log_prob=-833.82 (10^-362.1), geom_mean=0.3943, accuracy=0.8058  ← HIGHEST (likely training demo)
+
+pick_up_the_black_bowl_on_the_cookie_box_and_place_it_on_the_plate.hdf5
+--------------------------------------------------------------------------------
+
+Trajectory Probabilities & Accuracy:
+  demo_0: log_prob=-171.39 (10^-74.4), geom_mean=0.7749, accuracy=0.9196  ← HIGHEST (likely training demo)
+
+pick_up_the_black_bowl_on_the_ramekin_and_place_it_on_the_plate.hdf5
+--------------------------------------------------------------------------------
+
+Trajectory Probabilities & Accuracy:
+  demo_0: log_prob=-182.63 (10^-79.3), geom_mean=0.7922, accuracy=0.9719  ← HIGHEST (likely training demo)
+
+pick_up_the_black_bowl_on_the_stove_and_place_it_on_the_plate.hdf5
+--------------------------------------------------------------------------------
+
+Trajectory Probabilities & Accuracy:
+  demo_0: log_prob=-171.63 (10^-74.5), geom_mean=0.8350, accuracy=0.9223  ← HIGHEST (likely training demo)
+
+pick_up_the_black_bowl_on_the_wooden_cabinet_and_place_it_on_the_plate.hdf5
+--------------------------------------------------------------------------------
+
+Trajectory Probabilities & Accuracy:
+  demo_0: log_prob=-164.00 (10^-71.2), geom_mean=0.8327, accuracy=0.9297  ← HIGHEST (likely training demo)
+
+================================================================================

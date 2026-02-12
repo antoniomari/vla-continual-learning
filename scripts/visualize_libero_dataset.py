@@ -28,7 +28,7 @@ for task_file in task_files:
 
     with h5py.File(file_path, "r") as f:
         print(f"Inspecting {task_file} with {len(f['data'])} demos")
-        demo = f["data"]["demo_1"]
+        demo = f["data"]["demo_0"]
 
         for key in demo.keys():
             data = demo[key]
@@ -38,19 +38,20 @@ for task_file in task_files:
             print(f"    {key}: shape={data.shape}, dtype={data.dtype}")
 
             if key == "actions":
-                print(f"        Actions: {data[:][:5, :]}")
+                actions = data[:]
+                print(f"Raw action range: [{actions.min():.4f}, {actions.max():.4f}]")
 
         # --------- VIDEO EXPORT ----------
-        frames = demo["obs"]["agentview_rgb"][:]  # (T, H, W, 3)
-        frames = frames.astype(np.uint8)
+        # frames = demo["obs"]["agentview_rgb"][:]  # (T, H, W, 3)
+        # frames = frames.astype(np.uint8)
 
-        writer = imageio.get_writer(video_path, fps=20, codec="libx264", quality=8)
+        # writer = imageio.get_writer(video_path, fps=20, codec="libx264", quality=8)
 
-        for frame in frames:
-            writer.append_data(frame)
+        # for frame in frames:
+        #     writer.append_data(frame)
 
-        writer.close()
+        # writer.close()
 
-        print(f"    🎥 Saved video to {video_path}")
+        # print(f"    🎥 Saved video to {video_path}")
 
     print("\n--------------------------------------\n")

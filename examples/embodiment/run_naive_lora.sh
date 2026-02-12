@@ -73,9 +73,9 @@ echo ""
 # Training Loop
 # ============================================================================
 
-PREV_CHECKPOINT_PATH="./logs/naive_LoRA/task_1/checkpoints/global_step_10/actor/"
+PREV_CHECKPOINT_PATH=""
 
-for TASK_ID in $(seq 2 $((NUM_TASKS-1))); do
+for TASK_ID in $(seq 0 $((NUM_TASKS-1))); do
     echo ""
     echo "========================================================================"
     echo "Training on Task ${TASK_ID}"

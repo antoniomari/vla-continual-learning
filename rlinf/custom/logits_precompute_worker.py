@@ -40,7 +40,10 @@ class LogitsPrecomputeWorker(Worker):
 
         task_suite_name = cfg.env.train.task_suite_name
         self.dataset_path = os.path.join(
-            self.root_dir, "libero", "datasets", f"{task_suite_name}_simplevla"
+            self.root_dir,
+            "libero",
+            "datasets_with_logits",
+            f"{task_suite_name}_simplevla",
         )
 
         if self.output_dir is None:
@@ -48,7 +51,7 @@ class LogitsPrecomputeWorker(Worker):
                 self.root_dir,
                 "libero",
                 "datasets_with_logits",
-                f"{task_suite_name}_simplevla",
+                f"{task_suite_name}_task0_finetune",
             )
 
         # Get task files and shard them across workers
@@ -89,14 +92,17 @@ class LogitsPrecomputeWorker(Worker):
         """Extract task description from filename."""
         name = os.path.basename(filename).replace(".hdf5", "")
         parts = name.split("_")[:-1]
-        print(parts)
+
+        if parts[-1] == "demo":
+            parts = parts[:-1]
+
         return " ".join(parts)
 
     def compute_logits(self, processed_obs):
         """Run forward pass and return logits."""
 
         with torch.no_grad():
-            actions, raw_logits = bc_custom_forward(
+            actions, normalized_actions, raw_logits = bc_custom_forward(
                 model=self.hf_model,
                 input_ids=processed_obs["input_ids"],
                 attention_mask=processed_obs["attention_mask"],
@@ -116,6 +122,7 @@ class LogitsPrecomputeWorker(Worker):
             "raw_action_logits": raw_logits.cpu().numpy(),
             "processed_action_logits": processed_logits_tensor.cpu().numpy(),
             "actions": actions,
+            "normalized_actions": normalized_actions,
         }
 
     def process_file(self, input_path: str, demos_per_task: int = None):
@@ -162,6 +169,7 @@ class LogitsPrecomputeWorker(Worker):
                     # all_raw_action_logits = []
                     all_processed_action_logits = []
                     all_predicted_actions = []
+                    all_predicted_normalized_actions = []
 
                     for t in range(traj_len):
                         obs = demo_in["obs"]["agentview_rgb"][t]
@@ -188,16 +196,18 @@ class LogitsPrecomputeWorker(Worker):
 
                         logits_dict = self.compute_logits(processed_obs)
 
-                        # all_raw_action_logits.append(logits_dict["raw_action_logits"])
+                        all_predicted_normalized_actions.append(
+                            logits_dict["normalized_actions"]
+                        )
                         all_processed_action_logits.append(
                             logits_dict["processed_action_logits"]
                         )
                         all_predicted_actions.append(logits_dict["actions"])
 
-                    # demo_out.create_dataset(
-                    #     "raw_action_logits",
-                    #     data=np.concatenate(all_raw_action_logits, axis=0),
-                    # )
+                    demo_out.create_dataset(
+                        "normalized_predicted_actions",
+                        data=np.concatenate(all_predicted_normalized_actions, axis=0),
+                    )
                     demo_out.create_dataset(
                         "processed_action_logits",
                         data=np.concatenate(all_processed_action_logits, axis=0),
