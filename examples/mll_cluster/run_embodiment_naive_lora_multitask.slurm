@@ -134,13 +134,15 @@ if [ $TRAINING_EXIT_CODE -eq 0 ]; then
         # Discover and evaluate all checkpoints
         CHECKPOINTS_DIR="${LOG_DIR}/checkpoints"
         if [ ! -d "$CHECKPOINTS_DIR" ]; then
-            echo "Warning: Checkpoints directory not found at $CHECKPOINTS_DIR"
+            echo "ERROR: Checkpoints directory not found at $CHECKPOINTS_DIR"
+            exit 1
         else
             echo "Discovering checkpoints for evaluation..."
             CHECKPOINT_STEPS=($(find "$CHECKPOINTS_DIR" -maxdepth 1 -type d -name "global_step_*" | sed 's|.*/global_step_||' | sort -n))
             
             if [ ${#CHECKPOINT_STEPS[@]} -eq 0 ]; then
-                echo "Warning: No checkpoints found in $CHECKPOINTS_DIR"
+                echo "ERROR: No checkpoints found in $CHECKPOINTS_DIR"
+                exit 1
             else
                 echo "Found ${#CHECKPOINT_STEPS[@]} checkpoint(s) at steps: ${CHECKPOINT_STEPS[*]}"
                 echo ""
@@ -159,8 +161,9 @@ if [ $TRAINING_EXIT_CODE -eq 0 ]; then
                     
                     STEP_EXIT_CODE=$?
                     if [ $STEP_EXIT_CODE -ne 0 ]; then
-                        echo "  Warning: Evaluation for step ${STEP} failed (exit code: $STEP_EXIT_CODE)"
+                        echo "  ERROR: Evaluation for step ${STEP} failed (exit code: $STEP_EXIT_CODE)"
                         EVAL_EXIT_CODE=$STEP_EXIT_CODE
+                        exit $STEP_EXIT_CODE
                     else
                         echo "  ✓ Evaluation for step ${STEP} completed successfully"
                     fi

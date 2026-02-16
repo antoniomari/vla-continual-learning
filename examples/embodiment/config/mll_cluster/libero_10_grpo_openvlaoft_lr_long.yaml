@@ -1,6 +1,6 @@
 defaults:
-  - env/train: libero_spatial
-  - env/eval: libero_spatial
+  - env/train: libero_10_grpo
+  - env/eval: libero_10
   - override hydra/job_logging: stdout
 
 hydra:
@@ -24,12 +24,12 @@ runner:
     experiment_name: "test_openvla"
     logger_backends: ["wandb"] # wandb, swanlab
 
-  max_epochs: 10
+  max_epochs: 5
   max_steps: -1
 
   only_eval: False
   val_check_interval: -1
-  save_interval: 10
+  save_interval: 5
   seq_length: 4096
   max_prompt_length: 128
 
@@ -46,7 +46,7 @@ algorithm:
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   num_group_envs: 8
   rollout_epoch: 16
-  eval_rollout_epoch: 20
+  eval_rollout_epoch: 8
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
   entropy_type: token_level
@@ -106,7 +106,7 @@ rollout:
     queue_size: 0
   mode: "colocate"
   generation_backend: "huggingface"
-  model_dir: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
+  model_dir: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero10-trajall/"
   enable_offload: True
   pipeline_stage_num: 1
 
@@ -117,7 +117,7 @@ actor:
     queue_name: "replay_buffer"
     queue_size: 0
   training_backend: "fsdp"
-  checkpoint_load_path: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
+  checkpoint_load_path: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero10-trajall/"
   micro_batch_size: 32
   global_batch_size: 8192
   seed: 1234
@@ -129,7 +129,7 @@ actor:
     action_dim: 7
     num_action_chunks: 8
     use_proprio: False
-    unnorm_key: libero_spatial_no_noops
+    unnorm_key: libero_10_no_noops
     center_crop: True
 
     precision: "bf16"
@@ -166,7 +166,7 @@ actor:
 
   tokenizer:
     tokenizer_type: "HuggingFaceTokenizer"
-    tokenizer_model: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
+    tokenizer_model: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero10-trajall/"
     use_fast: False
     trust_remote_code: True
     padding_side: "right"

@@ -38,6 +38,19 @@ source "examples/mll_cluster/common_functions.sh"
 CONFIG_TAG=$(extract_config_tag "$CONFIG_NAME")
 EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
 GLOBAL_STEP=$(get_default_global_step "$CONFIG_NAME")
+FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
+
+# For _lr configs, use the existing eval config (without _lr)
+# e.g., libero_spatial_grpo_openvlaoft_lr -> libero_spatial_grpo_openvlaoft_eval
+# e.g., libero_10_grpo_openvlaoft_lr_long -> libero_10_grpo_openvlaoft_eval_long
+if [[ "$CONFIG_NAME" =~ _lr(_long)?$ ]]; then
+    # Remove _lr suffix and add _eval (or replace _lr_long with _eval_long)
+    if [[ "$CONFIG_NAME" =~ _lr_long$ ]]; then
+        EVAL_CONFIG_NAME=$(echo "$CONFIG_NAME" | sed 's|_lr_long$|_eval_long|')
+    else
+        EVAL_CONFIG_NAME=$(echo "$CONFIG_NAME" | sed 's|_lr$|_eval|')
+    fi
+fi
 
 # Parse TASK_INPUT to determine if it's a single task or a range
 if [[ "$TASK_INPUT" == *,* ]]; then
@@ -194,7 +207,14 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     
     # Determine checkpoint path from previous task (similar to run_embodiment_naive_lora.slurm)
-    if [ $TASK_ID -gt $TASK_START ]; then
+    # Only load from base model if this is the first task in the benchmark (FIRST_TASK_ID)
+    # For all other tasks, automatically load from previous task's checkpoint
+    if [ "$TASK_ID" -eq "$FIRST_TASK_ID" ]; then
+        # First task in benchmark, load from base model (SFT checkpoint)
+        CHECKPOINT_PATH=""
+        echo "  Training from base model (SFT checkpoint) - no LoRA path"
+    else
+        # Use checkpoint from previous task
         PREV_TASK_ID=$((TASK_ID - 1))
         if [ -n "$LR_STRING" ]; then
             PREV_TASK_LOG_DIR="./logs/lr_experiment/task_${PREV_TASK_ID}_lr_v${V_LR_STR}_l${L_LR_STR}_h${H_LR_STR}_seed${SEED}"
@@ -239,9 +259,6 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             break
         fi
         echo "  Loading checkpoint from previous task: $CHECKPOINT_PATH"
-    else
-        CHECKPOINT_PATH=""
-        echo "  Training from base model (SFT checkpoint) - no LoRA path"
     fi
     echo "========================================="
     echo ""
@@ -281,7 +298,8 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         CHECKPOINT_LOCATION=$(echo "$TASK_LOG_DIR" | sed 's|^\./||')
         echo ""
         echo "Running evaluation for: ${CHECKPOINT_LOCATION}"
-        bash examples/mll_cluster/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "" "${EVAL_CONFIG_NAME}"
+        echo "Using global_step: ${GLOBAL_STEP}"
+        bash examples/mll_cluster/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "${GLOBAL_STEP}" "${EVAL_CONFIG_NAME}"
     else
         echo "✗ Task $TASK_ID failed with exit code $EXIT_CODE"
         echo "  Check logs at: logs/slurm/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"

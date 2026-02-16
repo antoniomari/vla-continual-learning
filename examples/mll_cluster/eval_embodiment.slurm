@@ -23,34 +23,60 @@
 # module load gcc/9.3.0                 # Compiler (if needed)
 # module list                           # Verify loaded modules
 
-### Usage: sbatch examples/mll_cluster/eval_embodiment.slurm CHECKPOINT_LOCATION [STEP_NUMBER ...]
+### Usage: sbatch examples/mll_cluster/eval_embodiment.slurm CHECKPOINT_LOCATION [STEP_NUMBER ...] [CONFIG_NAME]
 ### Example: sbatch examples/mll_cluster/eval_embodiment.slurm logs/bcrl_logit/0.3/task_0
 ### Example: sbatch examples/mll_cluster/eval_embodiment.slurm logs/bcrl_logit/0.3/task_0 20
 ### Example: sbatch examples/mll_cluster/eval_embodiment.slurm logs/bcrl_logit/0.3/task_0 10 20 30
+### Example (with config): sbatch examples/mll_cluster/eval_embodiment.slurm logs/bcrl_logit/0.3/task_0 20 mll_cluster/libero_spatial_grpo_openvlaoft_eval_cam
 ### Note: CHECKPOINT_LOCATION should be relative to workspace root (e.g., logs/bcrl_logit/0.3/task_0)
 ###       The script will construct the full path: ${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/
 ###       STEP_NUMBER: global step number(s) - if multiple provided, all will be evaluated sequentially (default: 10)
+###       CONFIG_NAME: optional config name (default: mll_cluster/libero_spatial_grpo_openvlaoft_eval)
 
 CHECKPOINT_LOCATION=$1
-shift  # Remove CHECKPOINT_LOCATION from $@, leaving STEP_NUMBER arguments (if any)
+shift  # Remove CHECKPOINT_LOCATION from $@, leaving remaining arguments
 
 if [ -z "$CHECKPOINT_LOCATION" ]; then
     echo "ERROR: Missing required argument"
-    echo "Usage: sbatch examples/mll_cluster/eval_embodiment.slurm CHECKPOINT_LOCATION [STEP_NUMBER ...]"
+    echo "Usage: sbatch examples/mll_cluster/eval_embodiment.slurm CHECKPOINT_LOCATION [STEP_NUMBER ...] [CONFIG_NAME]"
     echo "Example: sbatch examples/mll_cluster/eval_embodiment.slurm logs/bcrl_logit/0.3/task_0"
     echo "Example: sbatch examples/mll_cluster/eval_embodiment.slurm logs/bcrl_logit/0.3/task_0 20"
     echo "Example: sbatch examples/mll_cluster/eval_embodiment.slurm logs/bcrl_logit/0.3/task_0 10 20 30"
+    echo "Example (with config): sbatch examples/mll_cluster/eval_embodiment.slurm logs/bcrl_logit/0.3/task_0 20 mll_cluster/libero_spatial_grpo_openvlaoft_eval_cam"
     exit 1
 fi
 
-# If no STEP_NUMBER arguments provided, default to 10
-if [ $# -eq 0 ]; then
-    STEP_NUMBERS=(10)
-else
-    STEP_NUMBERS=("$@")
+# Parse remaining arguments: STEP_NUMBERS and optional CONFIG_NAME
+# CONFIG_NAME should be the last non-numeric argument (if any)
+STEP_NUMBERS=()
+CONFIG_NAME=""
+NON_NUMERIC_ARGS=()
+
+for arg in "$@"; do
+    if [[ "$arg" =~ ^[0-9]+$ ]]; then
+        # It's a numeric step number
+        STEP_NUMBERS+=("$arg")
+    else
+        # It's a non-numeric argument (could be CONFIG_NAME)
+        NON_NUMERIC_ARGS+=("$arg")
+    fi
+done
+
+# Validate: should have at most one non-numeric argument (the CONFIG_NAME)
+if [ ${#NON_NUMERIC_ARGS[@]} -gt 1 ]; then
+    echo "ERROR: Multiple non-numeric arguments found: ${NON_NUMERIC_ARGS[*]}"
+    echo "       Only one CONFIG_NAME argument is allowed (should be the last argument)"
+    exit 1
+elif [ ${#NON_NUMERIC_ARGS[@]} -eq 1 ]; then
+    CONFIG_NAME="${NON_NUMERIC_ARGS[0]}"
 fi
 
-# Validate all STEP_NUMBER arguments
+# If no STEP_NUMBER arguments provided, default to 10
+if [ ${#STEP_NUMBERS[@]} -eq 0 ]; then
+    STEP_NUMBERS=(10)
+fi
+
+# Validate all STEP_NUMBER arguments (should already be validated above, but double-check)
 for STEP_NUM in "${STEP_NUMBERS[@]}"; do
     if ! [[ "$STEP_NUM" =~ ^[0-9]+$ ]]; then
         echo "ERROR: All STEP_NUMBER arguments must be positive integers, got: $STEP_NUM"
@@ -77,6 +103,13 @@ echo "Start Time: $(date)"
 echo "Working Directory: $(pwd)"
 echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
 echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
+echo "Checkpoint Location: $CHECKPOINT_LOCATION"
+if [ -n "$CONFIG_NAME" ]; then
+    echo "Config Name: $CONFIG_NAME"
+else
+    echo "Config Name: (default: mll_cluster/libero_spatial_grpo_openvlaoft_eval)"
+fi
+echo "Step Numbers: ${STEP_NUMBERS[*]}"
 echo ""
 
 # Call the bash script that contains the core evaluation logic for each STEP_NUMBER
@@ -90,8 +123,12 @@ for STEP_NUMBER in "${STEP_NUMBERS[@]}"; do
     echo "================================================================================"
     echo ""
     
-    # Call the bash script with the current STEP_NUMBER
-    bash examples/mll_cluster/eval_embodiment.sh "$CHECKPOINT_LOCATION" "$STEP_NUMBER"
+    # Call the bash script with the current STEP_NUMBER and CONFIG_NAME (if provided)
+    if [ -n "$CONFIG_NAME" ]; then
+        bash examples/mll_cluster/eval_embodiment.sh "$CHECKPOINT_LOCATION" "$STEP_NUMBER" "$CONFIG_NAME"
+    else
+        bash examples/mll_cluster/eval_embodiment.sh "$CHECKPOINT_LOCATION" "$STEP_NUMBER"
+    fi
     
     EXIT_CODE=$?
     

@@ -14,15 +14,24 @@ get_first_task_id() {
 }
 
 # Extract config tag from CONFIG_NAME
-# If config ends with _openvlaoft or _eval, don't set CONFIG_TAG
+# If config ends with _openvlaoft, _eval, or _lr, don't set CONFIG_TAG
 # Otherwise, extract the part after the last _
+# Special handling: if config ends with _lr_{tag}, extract {tag} instead
 extract_config_tag() {
     local config_name="$1"
     local config_tag=""
     
     if [[ ! "$config_name" =~ _openvlaoft$ ]] && [[ ! "$config_name" =~ _eval$ ]]; then
-        if [[ "$config_name" =~ _([^_/]+)$ ]]; then
+        # Check if config ends with _lr_{tag} (e.g., _lr_long)
+        if [[ "$config_name" =~ _lr_([^_/]+)$ ]]; then
+            # Extract the tag part after _lr_ (e.g., "long" from "_lr_long")
             config_tag="${BASH_REMATCH[1]}"
+        # Check if config ends with just _lr (no tag)
+        elif [[ ! "$config_name" =~ _lr$ ]]; then
+            # Extract the last part after _ (but not if it's _lr)
+            if [[ "$config_name" =~ _([^_/]+)$ ]]; then
+                config_tag="${BASH_REMATCH[1]}"
+            fi
         fi
     fi
     echo "$config_tag"
@@ -45,16 +54,27 @@ inject_config_tag_into_log_path() {
 # Pattern: insert _eval before any tag suffix (e.g., _cam2 becomes _eval_cam2)
 # Base: libero_spatial_grpo_openvlaoft -> libero_spatial_grpo_openvlaoft_eval
 # With tag: libero_spatial_grpo_openvlaoft_cam2 -> libero_spatial_grpo_openvlaoft_eval_cam2
+# With lr: libero_spatial_grpo_openvlaoft_lr -> libero_spatial_grpo_openvlaoft_eval_lr
+# With lr and tag: libero_10_grpo_openvlaoft_lr_long -> libero_10_grpo_openvlaoft_eval_lr_long
 derive_eval_config_name() {
     local train_config="$1"
     local eval_config="$train_config"
     
     # If config doesn't already end with _eval, insert _eval before any tag
     if [[ ! "$train_config" =~ _eval$ ]] && [[ ! "$train_config" =~ _eval_ ]]; then
+        # Check if config ends with _openvlaoft_lr_{tag} (lr with tag case, e.g., _lr_long)
+        if [[ "$train_config" =~ _openvlaoft_lr_([^/]+)$ ]]; then
+            # Extract the tag part (e.g., "long" from "libero_10_grpo_openvlaoft_lr_long")
+            local tag="${BASH_REMATCH[1]}"
+            # Replace _openvlaoft_lr_{tag} with _openvlaoft_eval_lr_{tag}
+            eval_config=$(echo "$train_config" | sed "s|_openvlaoft_lr_${tag}$|_openvlaoft_eval_lr_${tag}|")
+        # Check if config ends with _openvlaoft_lr (lr without tag case)
+        elif [[ "$train_config" =~ _openvlaoft_lr$ ]]; then
+            eval_config=$(echo "$train_config" | sed "s|_openvlaoft_lr$|_openvlaoft_eval_lr|")
         # Check if config ends with _openvlaoft (base case)
-        if [[ "$train_config" =~ _openvlaoft$ ]]; then
+        elif [[ "$train_config" =~ _openvlaoft$ ]]; then
             eval_config="${train_config}_eval"
-        # Check if config ends with _openvlaoft_{tag} (tagged case)
+        # Check if config ends with _openvlaoft_{tag} (tagged case without lr)
         elif [[ "$train_config" =~ _openvlaoft_([^/]+)$ ]]; then
             # Extract the tag part (e.g., "cam2" from "libero_spatial_grpo_openvlaoft_cam2")
             local tag="${BASH_REMATCH[1]}"

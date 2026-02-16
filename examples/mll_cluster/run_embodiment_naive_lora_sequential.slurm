@@ -14,7 +14,7 @@
 #SBATCH --error=logs/slurm/%x-%j.err               # Error file name
 
 ### NOTE: this script is meant for sequential launching of tasks in hand-crafted order. 
-###       The first task will always load from base model.
+###       The first task will by default load from base model. If INIT_CHECKPOINT is provided, it will load from the checkpoint.
 ### Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm TASK_IDS [RUN_ID] [MAX_EPOCH] [CONFIG_NAME] [SEED] [INIT_CHECKPOINT]
 ### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm "0,1,2"
 ### Example: sbatch examples/mll_cluster/run_embodiment_naive_lora_sequential.slurm "0 1 2"
@@ -259,7 +259,9 @@ for i in "${!TASK_IDS_ARRAY[@]}"; do
     
     EVAL_EXIT_CODE=$?
     if [ $EVAL_EXIT_CODE -ne 0 ]; then
-        echo "  Warning: Evaluation for task $TASK_ID failed, but continuing sequence..."
+        echo "  ERROR: Evaluation for task $TASK_ID failed, but continuing sequence..."
+        OVERALL_EXIT_CODE=$EVAL_EXIT_CODE
+        break
     else
         echo "  ✓ Evaluation for task $TASK_ID completed"
     fi

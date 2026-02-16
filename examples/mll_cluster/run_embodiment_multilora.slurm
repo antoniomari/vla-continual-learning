@@ -25,8 +25,9 @@
 ###       Train first LoRA adapter on top of base model (same as naive LoRA).
 ###   - Subsequent tasks: Load and merge ALL previous task adapters (FIRST_TASK_ID..TASK_ID-1)
 ###       into base, then create a NEW LoRA adapter for this task (only this one is trainable).
-###       Note: The first task adapter is loaded from naive_lora folder (reuses existing training),
-###             while later tasks are loaded from naive_lora_multilora folder.
+###       Note: The first task adapter is loaded from naive_lora folder only when CONFIG_TAG is empty
+###             (libero spatial case). Otherwise, it's loaded from naive_lora_multilora folder.
+###             Later tasks are always loaded from naive_lora_multilora folder.
 ###
 ### MERGE_COEFFICIENT (optional, default=1.0):
 ###   - Coefficient applied when merging previous LoRA adapters (0.0 to 1.0)
@@ -201,9 +202,16 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "  Looking for previous adapters with coefficient ${MERGE_COEFFICIENT}..."
         LORA_PATHS=()
         for prev_task in $(seq $FIRST_TASK_ID $((TASK_ID - 1))); do
-            # First task adapter comes from naive_lora folder (no coefficient in path, but includes seed)
+            # First task adapter: only look in naive_lora folder when CONFIG_TAG is empty (libero spatial case)
+            # Otherwise, look in naive_lora_multilora folder (with config_tag injected)
             if [ "$prev_task" -eq $FIRST_TASK_ID ]; then
-                prev_log_dir="./logs/naive_lora/task_${prev_task}_seed${SEED}"
+                if [ -z "$CONFIG_TAG" ]; then
+                    # No config tag (libero spatial): look in naive_lora folder
+                    prev_log_dir="./logs/naive_lora/task_${prev_task}_seed${SEED}"
+                else
+                    # Has config tag: look in naive_lora_multilora folder (will inject config_tag below)
+                    prev_log_dir="./logs/naive_lora_multilora/task_${prev_task}_seed${SEED}"
+                fi
             else
                 # Tasks after FIRST_TASK_ID use coefficient and seed in path to find matching adapters
                 prev_log_dir="./logs/naive_lora_multilora/task_${prev_task}_coeff_${COEFFICIENT_PATH}_seed${SEED}"
@@ -240,7 +248,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
                 LORA_PATHS+=("$prev_adapter_path")
                 echo "    Found adapter for task $prev_task: $prev_adapter_path"
             else
-                echo "    Warning: Adapter not found for task $prev_task: $prev_adapter_path"
+                echo "    ERROR: Adapter not found for task $prev_task: $prev_adapter_path"
+                OVERALL_EXIT_CODE=1
+                break
             fi
         done
 
@@ -250,7 +260,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             LORA_PATHS_ARG="+actor.model.lora_paths=[${LORA_PATHS_STR}]"
             echo "  Will merge ${#LORA_PATHS[@]} previous adapter(s) into base model, then train new adapter."
         else
-            echo "  Warning: No previous adapters found; training from base model."
+            echo "  ERROR: No previous adapters found; training from base model."
+            OVERALL_EXIT_CODE=1
+            break
         fi
     else
         echo "  Mode: FIRST TASK - Training first LoRA adapter on base model."
