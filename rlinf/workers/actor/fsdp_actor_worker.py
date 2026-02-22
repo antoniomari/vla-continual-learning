@@ -67,9 +67,17 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
         self.device = torch.cuda.current_device()
         world_size = self._world_size
-        self.device_mesh = init_device_mesh(
-            "cuda", mesh_shape=(world_size,), mesh_dim_names=["fsdp"]
-        )
+
+        # Skip init_device_mesh for simple_cnn - it triggers init_process_group()
+        # during Ray actor creation, before all workers are ready, causing TCPStore failures.
+        # device_mesh is not used anywhere else in the codebase so this is safe.
+        is_simple_cnn = cfg.actor.model.get("model_name") == "simple_cnn"
+        if is_simple_cnn:
+            self.device_mesh = None
+        else:
+            self.device_mesh = init_device_mesh(
+                "cuda", mesh_shape=(world_size,), mesh_dim_names=["fsdp"]
+            )
 
         self._env_group_name = cfg.env.group_name
         self._rollout_group_name = cfg.rollout.group_name
@@ -310,6 +318,11 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         # different env_info keys.
         all_keys = set()
         for recv_batch in recv_list:
+            if recv_batch is None:
+                raise RuntimeError(
+                    f"Actor rank {self._rank}: received None rollout batch. "
+                    "A rollout worker likely crashed (OOM?); check raylet logs."
+                )
             all_keys.update(recv_batch.keys())
 
         # Concatenate along the correct dimension for each key.
@@ -568,6 +581,17 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             self.load_fsdp_optimizer(self.device)
 
         self.model.train()
+
+        # Freeze BatchNorm layers for CNN to avoid train/eval mismatch.
+        # During rollout the model is in eval() mode (BN uses running stats),
+        # so training must also use running stats to keep logprobs consistent.
+        is_cnn_model = self.cfg.actor.model.get("model_name") == "simple_cnn"
+        if is_cnn_model:
+            _model = self.model.module if hasattr(self.model, "module") else self.model
+            for m in _model.modules():
+                if isinstance(m, (torch.nn.BatchNorm1d, torch.nn.BatchNorm2d, torch.nn.BatchNorm3d)):
+                    m.eval()
+
         self.optimizer.zero_grad()
         
         # Initialize Fisher accumulation if this is the last step and EWC is enabled
@@ -645,6 +669,8 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             self.optimizer.zero_grad()
             use_ref_logits_bc = self.cfg.algorithm.get("use_reference_logits_bc", False)
 
+            is_cnn = self.cfg.actor.model.get("model_name") == "simple_cnn"
+
             for data_idx, data in enumerate(train_micro_batch):
                 for k, v in data.items():
                     data[k] = v.to(f"cuda:{int(os.environ['LOCAL_RANK'])}")
@@ -652,58 +678,73 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 data = self.model.preprocess_for_train(data)
                 action_token_len = self.model.action_dim * self.model.num_action_chunks
 
-                logits_processor_args = {
-                    "action_tokens": data["action_tokens"],
-                    "vocab_size": self.model.vocab_size,
-                    "n_action_bins": self.model.config.n_action_bins,
-                }
-
-                sampling_params = OmegaConf.to_container(
-                    self.cfg.algorithm.sampling_params, resolve=True
-                )
-
-                bc_batch = None
-                if self.use_experience_replay:
-                    bc_batch = next(self.sft_iterator)
-                    for k, v in bc_batch.items():
-                        bc_batch[k] = v.to(f"cuda:{int(os.environ['LOCAL_RANK'])}")
-
-                return_bc_logits = use_ref_logits_bc and bc_batch is not None
-                
-                if self.use_garbage_outputs:
-                    # Generate garbage outputs for fast debugging (bypasses model inference)
-                    batch_size = data["input_ids"].shape[0]
-                    value_model = self.cfg.algorithm.adv_type == "embodied_gae"
-                    bc_batch_size = bc_batch["input_ids"].shape[0] if bc_batch is not None else None
-                    forward_result = self._generate_garbage_outputs(
-                        batch_size=batch_size,
-                        action_token_len=action_token_len,
-                        value_model=value_model,
-                        return_bc_logits=return_bc_logits,
-                        bc_batch_size=bc_batch_size,
+                if is_cnn:
+                    # ── CNN-specific forward ──────────────────────────
+                    # Call self.model(...) (not .train_forward) so FSDP's forward()
+                    # hooks are triggered and gradient all-reduce works correctly.
+                    task_ids = data["input_ids"].squeeze(-1).long()
+                    output_dict = self.model(
+                        pixel_values=data["pixel_values"],
+                        task_ids=task_ids,
+                        action_tokens=data["action_tokens"],
                     )
+                    # No BC batch for CNN
+                    bc_batch = None
+                    return_bc_logits = False
                 else:
-                    forward_result = actor_forward(
-                        self.model,
-                        rl_batch=data,
-                        bc_batch=bc_batch,
-                        action_token_len=action_token_len,
-                        value_model=True
-                        if self.cfg.algorithm.adv_type == "embodied_gae"
-                        else False,
-                        value_head_mode=self.cfg.actor.model.get("vh_mode", None),
-                        temperature=self.cfg.algorithm.sampling_params.temperature_train,
-                        top_k=self.cfg.algorithm.sampling_params.top_k,
-                        logits_processor_args=logits_processor_args,
-                        do_sample=not sampling_params["use_greedy"],
-                        return_bc_logits=return_bc_logits,
-                        logits_type=self.logits_type,
+                    # ── VLA forward ───────────────────────────────────
+                    logits_processor_args = {
+                        "action_tokens": data["action_tokens"],
+                        "vocab_size": self.model.vocab_size,
+                        "n_action_bins": self.model.config.n_action_bins,
+                    }
+
+                    sampling_params = OmegaConf.to_container(
+                        self.cfg.algorithm.sampling_params, resolve=True
                     )
 
-                if return_bc_logits:
-                    output_dict, current_bc_logits = forward_result
-                else:
-                    output_dict = forward_result
+                    bc_batch = None
+                    if self.use_experience_replay:
+                        bc_batch = next(self.sft_iterator)
+                        for k, v in bc_batch.items():
+                            bc_batch[k] = v.to(f"cuda:{int(os.environ['LOCAL_RANK'])}")
+
+                    return_bc_logits = use_ref_logits_bc and bc_batch is not None
+                    
+                    if self.use_garbage_outputs:
+                        # Generate garbage outputs for fast debugging (bypasses model inference)
+                        batch_size = data["input_ids"].shape[0]
+                        value_model = self.cfg.algorithm.adv_type == "embodied_gae"
+                        bc_batch_size = bc_batch["input_ids"].shape[0] if bc_batch is not None else None
+                        forward_result = self._generate_garbage_outputs(
+                            batch_size=batch_size,
+                            action_token_len=action_token_len,
+                            value_model=value_model,
+                            return_bc_logits=return_bc_logits,
+                            bc_batch_size=bc_batch_size,
+                        )
+                    else:
+                        forward_result = actor_forward(
+                            self.model,
+                            rl_batch=data,
+                            bc_batch=bc_batch,
+                            action_token_len=action_token_len,
+                            value_model=True
+                            if self.cfg.algorithm.adv_type == "embodied_gae"
+                            else False,
+                            value_head_mode=self.cfg.actor.model.get("vh_mode", None),
+                            temperature=self.cfg.algorithm.sampling_params.temperature_train,
+                            top_k=self.cfg.algorithm.sampling_params.top_k,
+                            logits_processor_args=logits_processor_args,
+                            do_sample=not sampling_params["use_greedy"],
+                            return_bc_logits=return_bc_logits,
+                            logits_type=self.logits_type,
+                        )
+
+                    if return_bc_logits:
+                        output_dict, current_bc_logits = forward_result
+                    else:
+                        output_dict = forward_result
 
                 kwargs = {
                     "loss_type": self.cfg.algorithm.loss_type,

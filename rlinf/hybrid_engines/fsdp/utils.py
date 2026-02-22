@@ -27,10 +27,21 @@
 # limitations under the License.
 
 import functools
+import os
 
 import torch
 from accelerate import init_empty_weights
-from prismatic.extern.hf.modeling_prismatic import PrismaticProjector
+# Conditionally import PrismaticProjector based on environment variable
+# For CNN: USE_CNN_UTILS=1 → don't import (avoids base_llm.py module-level init)
+# For OpenVLA: not set → import at module level (required for proper initialization)
+_USE_CNN_UTILS = os.environ.get("USE_CNN_UTILS", "0") == "1"
+
+if not _USE_CNN_UTILS:
+    from prismatic.extern.hf.modeling_prismatic import PrismaticProjector
+else:
+    PrismaticProjector = None  # Placeholder to avoid NameError
+
+
 from torch.distributed.fsdp.wrap import (
     transformer_auto_wrap_policy,
 )
@@ -101,6 +112,12 @@ def get_fsdp_wrap_policy(module, config=None, is_lora=False):
 
     # Add vision transformer policies for VLA models
     if is_vla_model:
+        if _USE_CNN_UTILS:
+            raise ValueError(
+                "Cannot use VLA models with USE_CNN_UTILS=1. "
+                "Unset USE_CNN_UTILS environment variable for VLA models."
+            )
+        
         from timm.models.vision_transformer import VisionTransformer
         from torch.distributed.fsdp.wrap import _module_wrap_policy, _or_policy
 

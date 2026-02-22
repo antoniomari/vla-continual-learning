@@ -4,12 +4,14 @@
 # This script can be run directly on the terminal
 #
 # Usage: ./examples/mll_cluster/eval_embodiment.sh CHECKPOINT_LOCATION [STEP_NUMBER] [CONFIG_NAME]
-# Example: ./examples/mll_cluster/eval_embodiment.sh logs/bcrl_logit/0.3/task_0
-# Example: ./examples/mll_cluster/eval_embodiment.sh logs/bcrl_logit/0.3/task_0 20
+# Example (LoRA): ./examples/mll_cluster/eval_embodiment.sh logs/bcrl_logit/0.3/task_0
+# Example (LoRA): ./examples/mll_cluster/eval_embodiment.sh logs/bcrl_logit/0.3/task_0 20
+# Example (simple_cnn): ./examples/mll_cluster/eval_embodiment.sh logs/simple_cnn/task_0_seed1234 10 mll_cluster/libero_spatial_grpo_simple_cnn_eval
 # Example (cam suite config): ./examples/mll_cluster/eval_embodiment.sh logs/bcrl_logit/0.3/task_0 20 mll_cluster/libero_spatial_grpo_openvlaoft_eval_cam
 #
 # Note: CHECKPOINT_LOCATION should be relative to workspace root (e.g., logs/bcrl_logit/0.3/task_0)
-#       The script will construct the full path: ${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/
+#       For LoRA: The script will construct: ${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/
+#       For simple_cnn: The script will construct: ${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/model.pt
 #       STEP_NUMBER: global step number (default: 10)
 
 CHECKPOINT_LOCATION=$1
@@ -51,15 +53,35 @@ if [ "$CHECKPOINT_LOCATION" = "base" ]; then
 fi
 
 CHECKPOINT_PATH=""
+IS_SIMPLE_CNN=false
+if [[ "$CONFIG_NAME" == *"simple_cnn"* ]]; then
+    IS_SIMPLE_CNN=true
+    # Set environment variable for CNN models
+    export USE_CNN_UTILS=1
+fi
+
 if [ "$IS_BASE_EVAL" = false ]; then
     # Construct full checkpoint path (remove any trailing slashes from CHECKPOINT_LOCATION first)
     CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION%/}"
-    CHECKPOINT_PATH="${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/"
-
-    # Verify checkpoint exists
-    if [ ! -d "$CHECKPOINT_PATH" ]; then
-        echo "ERROR: Checkpoint not found at $CHECKPOINT_PATH"
-        exit 1
+    
+    if [ "$IS_SIMPLE_CNN" = true ]; then
+        # For simple_cnn, checkpoint is a file (model.pt), not a directory
+        CHECKPOINT_PATH="${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/model.pt"
+        
+        # Verify checkpoint file exists
+        if [ ! -f "$CHECKPOINT_PATH" ]; then
+            echo "ERROR: Checkpoint file not found at $CHECKPOINT_PATH"
+            exit 1
+        fi
+    else
+        # For LoRA models, checkpoint is a directory
+        CHECKPOINT_PATH="${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/"
+        
+        # Verify checkpoint directory exists
+        if [ ! -d "$CHECKPOINT_PATH" ]; then
+            echo "ERROR: Checkpoint directory not found at $CHECKPOINT_PATH"
+            exit 1
+        fi
     fi
 fi
 
@@ -83,7 +105,11 @@ export EVAL_STEP_NUMBER="${STEP_NUMBER}"
 
 if [ "$IS_BASE_EVAL" = true ]; then
     bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} actor.model.is_lora=False
+elif [ "$IS_SIMPLE_CNN" = true ]; then
+    # For simple_cnn, use rollout.checkpoint_path (points to model.pt file)
+    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} rollout.checkpoint_path="${CHECKPOINT_PATH}"
 else
+    # For LoRA models, use actor.model.lora_path (points to directory)
     bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} +actor.model.lora_path="${CHECKPOINT_PATH}"
 fi
 
@@ -98,5 +124,10 @@ else
 fi
 echo "End Time: $(date)"
 echo "Checkpoint evaluated: global_step_${STEP_NUMBER}"
+
+# Unset environment variable to avoid affecting subsequent runs
+if [ "$IS_SIMPLE_CNN" = true ]; then
+    unset USE_CNN_UTILS
+fi
 
 exit $EXIT_CODE

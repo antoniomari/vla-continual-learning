@@ -176,97 +176,103 @@ class SimpleCNNPolicy(nn.Module):
         pixel_values: torch.Tensor,
         task_ids: Optional[torch.Tensor] = None,
         task_embeddings: Optional[torch.Tensor] = None,
+        action_tokens: Optional[torch.Tensor] = None,
         return_logprobs: bool = True,
         return_values: bool = False,
     ) -> Dict[str, torch.Tensor]:
         """
-        Forward pass.
+        Forward pass.  Handles both inference and training.
+        
+        When action_tokens is None  → **inference** mode:
+            returns actions, bin_indices, action_logits, (logprobs), (values)
+        When action_tokens is given  → **training** mode:
+            returns logprobs and entropy for the given action_tokens,
+            shaped for actor_loss compatibility.
+        
+        IMPORTANT: This is the single entry point that FSDP's forward() calls,
+        which ensures backward hooks for gradient synchronization are set up.
         
         Args:
             pixel_values: Image tensor [B, C, H, W] or [B, num_images, C, H, W]
             task_ids: Task IDs [B] (if using task ID embedding)
-            task_embeddings: Task embeddings [B, task_embed_dim] (if using task description)
-            return_logprobs: Whether to return logprobs (for GRPO)
-            return_values: Whether to return values (for GRPO)
-        
-        Returns:
-            Dictionary with:
-                - actions: [B, num_action_chunks, action_dim]
-                - logprobs: [B, num_action_chunks, action_dim] (if return_logprobs)
-                - values: [B, 1] (if return_values)
+            task_embeddings: Task embeddings [B, task_embed_dim]
+            action_tokens: [B, n_chunks * action_dim] bin indices for training
+            return_logprobs: Whether to return logprobs (inference mode)
+            return_values: Whether to return values (inference mode)
         """
         batch_size = pixel_values.shape[0]
         
+        # ── Shared feature extraction ─────────────────────────────────
         # Handle multi-image input (flatten if needed)
         if pixel_values.dim() == 5:
-            # [B, num_images, C, H, W] -> [B * num_images, C, H, W]
             pixel_values = pixel_values.view(-1, *pixel_values.shape[2:])
             image_features = self.image_encoder(pixel_values)
-            # Average pool across images if multiple
             num_images = pixel_values.shape[0] // batch_size
             image_features = image_features.view(batch_size, num_images, -1).mean(dim=1)
         else:
-            # [B, C, H, W]
             image_features = self.image_encoder(pixel_values)  # [B, 512]
         
         # Task embedding
         if self.use_task_embedding:
             if task_ids is not None:
-                task_emb = self.task_embedding(task_ids)  # [B, task_embed_dim]
+                task_emb = self.task_embedding(task_ids)
             elif task_embeddings is not None:
                 if isinstance(self.task_embedding, nn.Linear):
-                    task_emb = self.task_embedding(task_embeddings)  # [B, task_embed_dim]
+                    task_emb = self.task_embedding(task_embeddings)
                 else:
-                    # If it's an Embedding layer but we got embeddings, just use them
                     task_emb = task_embeddings
             else:
-                # No task info provided, use zero embedding
                 device = image_features.device
                 task_emb = torch.zeros(batch_size, 128, device=device)
-            
-            # Concatenate image and task features
-            features = torch.cat([image_features, task_emb], dim=1)  # [B, 512 + task_embed_dim]
+            features = torch.cat([image_features, task_emb], dim=1)
         else:
             features = image_features
         
-        # Predict action bin logits (over n_action_bins: 0-255)
-        action_logits_flat = self.action_head(features)  # [B, action_dim * num_action_chunks * n_action_bins]
+        # ── Training mode (action_tokens provided) ────────────────────
+        if action_tokens is not None:
+            action_token_len = self.num_action_chunks * self.action_dim
+            action_logits_flat = self.action_head(features)
+            action_logits = action_logits_flat.view(
+                batch_size, action_token_len, self.n_action_bins
+            )
+            log_probs = F.log_softmax(action_logits, dim=-1)
+            action_tokens_clamped = action_tokens.long().clamp(0, self.n_action_bins - 1)
+            logprobs = log_probs.gather(
+                2, action_tokens_clamped.unsqueeze(-1)
+            ).squeeze(-1)   # [B, action_token_len]
+            probs = F.softmax(action_logits, dim=-1)
+            entropy = -(probs * log_probs).sum(dim=-1)  # [B, action_token_len]
+            return {"logprobs": logprobs, "entropy": entropy}
+        
+        # ── Inference mode (no action_tokens) ─────────────────────────
+        action_logits_flat = self.action_head(features)
         action_logits = action_logits_flat.view(
             batch_size, self.num_action_chunks, self.action_dim, self.n_action_bins
-        )  # [B, num_action_chunks, action_dim, n_action_bins]
+        )
+        bin_indices = action_logits.argmax(dim=-1)
+        actions = self._decode_bin_indices(bin_indices)
         
-        # Get predicted bin indices (within [0, n_action_bins-1])
-        bin_indices = action_logits.argmax(dim=-1)  # [B, num_action_chunks, action_dim]
-        
-        # Decode bin indices to continuous actions
-        actions = self._decode_bin_indices(bin_indices)  # [B, num_action_chunks, action_dim]
-        
-        # Compute logprobs from logits
         logprobs = None
         if return_logprobs:
-            # Reshape for log-softmax: [B, num_action_chunks, action_dim, n_action_bins] -> [B*num_action_chunks*action_dim, n_action_bins]
             logits_flat = action_logits.view(-1, self.n_action_bins)
             log_probs_flat = F.log_softmax(logits_flat, dim=-1)
-            # Gather logprobs for predicted bin indices
-            indices_flat = bin_indices.view(-1)  # [B*num_action_chunks*action_dim]
+            indices_flat = bin_indices.view(-1)
             logprobs_flat = log_probs_flat.gather(1, indices_flat.unsqueeze(1)).squeeze(1)
             logprobs = logprobs_flat.view(batch_size, self.num_action_chunks, self.action_dim)
         
-        # Compute values (for GRPO)
         values = None
         if return_values:
-            values = self.value_head(features)  # [B, 1]
+            values = self.value_head(features)
         
         output = {
             "actions": actions,
-            "bin_indices": bin_indices,  # Bin indices [0, n_action_bins-1]
-            "action_logits": action_logits,  # Logits over n_action_bins [B, num_action_chunks, action_dim, n_action_bins]
+            "bin_indices": bin_indices,
+            "action_logits": action_logits,
         }
         if logprobs is not None:
             output["logprobs"] = logprobs
         if values is not None:
             output["values"] = values
-        
         return output
     
     def compute_bin_indices_from_actions(self, actions: torch.Tensor) -> torch.Tensor:
@@ -415,6 +421,35 @@ class SimpleCNNPolicy(nn.Module):
         
         return actions_flat.reshape(normalized_actions.shape)
     
+    def preprocess_for_train(self, data):
+        """Preprocess rollout batch data for training.
+        
+        Reshapes action_tokens from [B, n_chunks, action_dim] to [B, n_chunks * action_dim]
+        to match the VLA convention used by actor_loss.
+        """
+        for key in ["action_tokens"]:
+            value = data[key]
+            data[key] = value.reshape(
+                value.shape[0],
+                self.action_dim * self.num_action_chunks,
+                *value.shape[3:],
+            )
+        return data
+
+    def train_forward(
+        self,
+        pixel_values: torch.Tensor,
+        task_ids: torch.Tensor,
+        action_tokens: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
+        """Backward-compatible thin wrapper.  Prefer calling forward() directly
+        (via self.model(...)) so FSDP hooks are triggered correctly."""
+        return self.forward(
+            pixel_values=pixel_values,
+            task_ids=task_ids,
+            action_tokens=action_tokens,
+        )
+
     def predict_action_batch(
         self,
         pixel_values: torch.Tensor,
@@ -427,9 +462,9 @@ class SimpleCNNPolicy(nn.Module):
         
         Returns:
             actions: [B, num_action_chunks, action_dim] continuous actions
-            action_tokens: [B, num_action_chunks, action_dim] discrete token IDs (actual vocab IDs)
-            action_logits: [B, num_action_chunks, action_dim, n_action_bins] logits (over action bins only)
-            last_hidden_state: Optional [B, hidden_dim]
+            action_tokens: [B, num_action_chunks, action_dim] bin indices (0-255)
+            action_logits: [B, num_action_chunks, action_dim, n_action_bins] logits
+            last_hidden_state: None
         """
         with torch.no_grad():
             output = self.forward(
@@ -441,7 +476,7 @@ class SimpleCNNPolicy(nn.Module):
             )
         
         actions = output["actions"]
-        action_tokens = output["action_tokens"]
+        action_tokens = output["bin_indices"]  # bin indices [0, n_action_bins-1]
         action_logits = output["action_logits"]
         
         return actions, action_tokens, action_logits, None

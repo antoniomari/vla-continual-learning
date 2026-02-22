@@ -31,7 +31,8 @@ from rlinf.utils.utils import clear_memory
 
 class FSDPModelManager:
     """
-    FSDP Model Manager for RL training
+    FSDP Model Manager for RL training.
+    Uses FSDP for all models (including simple_cnn with NO_SHARD strategy).
     """
 
     def __init__(self, cfg: DictConfig):
@@ -79,8 +80,17 @@ class FSDPModelManager:
         """Setup model and optimizer."""
         module = self.model_provider_func()
 
-        module.gradient_checkpointing_enable()
+        # Enable gradient checkpointing if the model supports it (transformer models)
+        # Simple models like SimpleCNNPolicy don't have this method
+        if hasattr(module, "gradient_checkpointing_enable"):
+            module.gradient_checkpointing_enable()
 
+        # Use FSDP for all models (including simple_cnn with NO_SHARD).
+        # FSDP is preferred over DDP because it forwards attribute access via __getattr__,
+        # which is needed by the training loop (e.g., self.model.action_dim).
+        # Note: For CNN models, BatchNorm is frozen (eval mode) during training,
+        # so buffers don't accumulate during backward pass. Keeping buffer_dtype
+        # matching param_dtype avoids FSDP dtype mismatch errors.
         mixed_precision = MixedPrecision(
             param_dtype=self.torch_dtype,
             reduce_dtype=self.torch_dtype,
@@ -93,9 +103,18 @@ class FSDPModelManager:
             sharding_strategy = ShardingStrategy.SHARD_GRAD_OP
         else:
             sharding_strategy = ShardingStrategy.NO_SHARD
-        auto_wrap_policy = get_fsdp_wrap_policy(
-            module=module, config=None, is_lora=self._cfg.model.is_lora
-        )
+        # For CNN models, skip importing utils.py entirely (avoids PrismaticProjector
+        # import chain that triggers init_process_group at module-load time).
+        # For VLA models, import get_fsdp_wrap_policy lazily — by this point
+        # init_process_group has already been called, so the prismatic import
+        # chain's PartialState() is a harmless no-op.
+        is_cnn = self._cfg.model.get("model_name") == "simple_cnn"
+        if is_cnn:
+            auto_wrap_policy = None
+        else:
+            auto_wrap_policy = get_fsdp_wrap_policy(
+                module=module, config=None, is_lora=self._cfg.model.is_lora
+            )
 
         betas = (self._cfg.optim.adam_beta1, self._cfg.optim.adam_beta2)
 
@@ -228,15 +247,27 @@ class FSDPModelManager:
             },
         ]
 
-        if self._cfg.model.vh_mode in ["a", "a0", "a6"]:
+        # Always include value_head params in the optimizer when they exist.
+        # FSDP requires all managed parameters to be in the optimizer for
+        # state dict operations (e.g. FSDP.optim_state_dict).
+        # When vh_mode is active, use value_lr; otherwise use the regular lr.
+        # (When vh_mode is "none", no gradients flow to value_head so
+        #  the weights won't actually be updated.)
+        value_head_params = [
+            p
+            for n, p in self.model.named_parameters()
+            if "value_head" in n and p.requires_grad
+        ]
+        if value_head_params:
+            vh_lr = (
+                self._cfg.optim.value_lr
+                if self._cfg.model.vh_mode in ["a", "a0", "a6"]
+                else self._cfg.optim.lr
+            )
             param_groups.append(
                 {
-                    "params": [
-                        p
-                        for n, p in self.model.named_parameters()
-                        if "value_head" in n and p.requires_grad
-                    ],
-                    "lr": self._cfg.optim.value_lr,
+                    "params": value_head_params,
+                    "lr": vh_lr,
                     "betas": betas,
                 }
             )

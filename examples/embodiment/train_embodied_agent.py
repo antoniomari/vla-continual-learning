@@ -22,6 +22,7 @@ from rlinf.utils.placement import HybridComponentPlacement
 from rlinf.workers.actor.fsdp_actor_worker import EmbodiedFSDPActor
 from rlinf.workers.env.env_worker import EnvWorker
 from rlinf.workers.rollout.hf.huggingface_worker import MultiStepRolloutWorker
+from rlinf.workers.rollout.cnn.cnn_rollout_worker import CNNRolloutWorker
 
 mp.set_start_method("spawn", force=True)
 
@@ -48,9 +49,15 @@ def main(cfg) -> None:
     )
     # Create rollout worker group
     rollout_placement = component_placement.get_strategy("rollout")
-    rollout_group = MultiStepRolloutWorker.create_group(cfg).launch(
-        cluster, name=cfg.rollout.group_name, placement_strategy=rollout_placement
-    )
+    if cfg.rollout.get("use_cnn_policy", False):
+        # Use CNN rollout worker for simple CNN policy
+        rollout_group = CNNRolloutWorker.create_group(cfg).launch(
+            cluster, name=cfg.rollout.group_name, placement_strategy=rollout_placement
+        )
+    else:
+        rollout_group = MultiStepRolloutWorker.create_group(cfg).launch(
+            cluster, name=cfg.rollout.group_name, placement_strategy=rollout_placement
+        )
     # Create env worker group
     env_placement = component_placement.get_strategy("env")
     env_group = EnvWorker.create_group(cfg).launch(

@@ -65,9 +65,9 @@ fi
 # Otherwise, create default path with config tag if present
 if [ -z "${LOG_DIR}" ]; then
     if [ -n "${CONFIG_TAG}" ]; then
-        LOG_DIR="${REPO_PATH}/logs_${CONFIG_TAG}/bcrl/run_$(date +'%Y%m%d-%H:%M:%S')"
+        LOG_DIR="${REPO_PATH}/logs_${CONFIG_TAG}/temp/run_$(date +'%Y%m%d-%H:%M:%S')"
     else
-        LOG_DIR="${REPO_PATH}/logs/bcrl/run_$(date +'%Y%m%d-%H:%M:%S')"
+        LOG_DIR="${REPO_PATH}/logs/temp/run_$(date +'%Y%m%d-%H:%M:%S')"
     fi
 fi
 MEGA_LOG_FILE="${LOG_DIR}/run_embodiment.log"

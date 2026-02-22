@@ -1,38 +1,31 @@
 #!/bin/bash
-#SBATCH --job-name=train_embodiment      # Job name
-#SBATCH --nodes=1                       # Number of nodes
-#SBATCH --ntasks-per-node=1             # Number of tasks per node
-#SBATCH --cpus-per-task=90              # Number of CPUs per task
-#SBATCH --gres=gpu:8                    # Number of GPUs (RECOMMENDED: 4+ GPUs)
-#SBATCH --time=70:00:00                  # Maximum execution time (HH:MM:SS)
-#SBATCH --mem=900G                      # Memory per node (adjust as needed)
-#SBATCH --partition=mll                 # Partition name (adjust to your cluster's partition)
-#SBATCH --mail-type=FAIL,END
-#SBATCH --mail-user=jiahengh@utexas.edu
-# #SBATCH --exclude=slurm-node-008,slurm-node-011,slurm-node-010,slurm-node-004
-#SBATCH --output=logs/slurm/%x-%j.out              # Output file name (%x = job name, %j = job ID)
-#SBATCH --error=logs/slurm/%x-%j.err               # Error file name
-
-
-### Usage: sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm [TASK_ID_OR_RANGE] [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
-### Example (single task): sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm 0
-### Example (task range): sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm "0,3"
-### Example (with max_epoch): sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm 0 "" 15
-### Example (continue from checkpoint): sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm 0 ./logs/naive_lora/task_0_seed1234/checkpoints/global_step_10/actor 20
-### Example (with seed): sbatch examples/mll_cluster/run_embodiment_naive_lora.slurm 0 "" "" "" 42
-### Note: TASK_ID_OR_RANGE can be:
-###       - A single task ID (e.g., "0") - trains that task only
-###       - A tuple "a,b" where a < b (e.g., "0,3") - trains tasks from a to b sequentially
-###       CHECKPOINT_PATH is optional and will be auto-generated from previous task if not provided
-###       If CHECKPOINT_PATH is provided for a range, it will only be used for the first task
-###       MAX_EPOCH is optional and can always be specified to override the default max_epochs
-###       SEED is optional and defaults to 1234 if not provided
+#
+# Sequential RL training script for simple_cnn policy
+# This script trains tasks sequentially, loading checkpoints from previous tasks
+#
+# Usage: ./examples/mll_cluster/run_embodiment_simple_cnn.sh [TASK_ID_OR_RANGE] [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
+# Example (single task): ./examples/mll_cluster/run_embodiment_simple_cnn.sh 0
+# Example (task range): ./examples/mll_cluster/run_embodiment_simple_cnn.sh "0,3"
+# Example (with max_epoch): ./examples/mll_cluster/run_embodiment_simple_cnn.sh 0 "" 15
+# Example (continue from checkpoint): ./examples/mll_cluster/run_embodiment_simple_cnn.sh 0 ./logs/simple_cnn/task_0_seed1234/checkpoints/global_step_10/actor/model.pt 20
+# Example (with seed): ./examples/mll_cluster/run_embodiment_simple_cnn.sh 0 "" "" "" 42
+# Note: TASK_ID_OR_RANGE can be:
+#       - A single task ID (e.g., "0") - trains that task only
+#       - A tuple "a,b" where a < b (e.g., "0,3") - trains tasks from a to b sequentially
+#       CHECKPOINT_PATH is optional and will be auto-generated from previous task if not provided
+#       For simple_cnn, CHECKPOINT_PATH should point to the model.pt file (not a directory)
+#       If CHECKPOINT_PATH is provided for a range, it will only be used for the first task
+#       MAX_EPOCH is optional and can always be specified to override the default max_epochs
+#       SEED is optional and defaults to 1234 if not provided
 
 TASK_INPUT=${1:-0}
 MANUAL_CHECKPOINT_PATH=$2
 MAX_EPOCH=$3
-CONFIG_NAME=${4:-mll_cluster/libero_spatial_grpo_openvlaoft}
+CONFIG_NAME=${4:-mll_cluster/libero_spatial_grpo_simple_cnn}
 SEED=${5:-1234}
+
+# Set environment variable to use CNN utils (no PrismaticProjector import)
+export USE_CNN_UTILS=1
 
 # Source common functions
 source "examples/mll_cluster/common_functions.sh"
@@ -40,6 +33,10 @@ source "examples/mll_cluster/common_functions.sh"
 # Extract config tag and derive eval config name
 CONFIG_TAG=$(extract_config_tag "$CONFIG_NAME")
 EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
+# derive_eval_config_name doesn't handle simple_cnn - fix it here
+if [[ "$CONFIG_NAME" == *"simple_cnn" ]]; then
+    EVAL_CONFIG_NAME="${CONFIG_NAME}_eval"
+fi
 GLOBAL_STEP=$(get_default_global_step "$CONFIG_NAME")
 FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 
@@ -85,16 +82,11 @@ if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
 fi
 
 mkdir -p logs/slurm
-mkdir -p logs/naive_lora
+mkdir -p logs/simple_cnn
 
 # Print job information
-echo "Job ID: $SLURM_JOB_ID"
-echo "Job Name: $SLURM_JOB_NAME"
-echo "Node: $SLURM_NODELIST"
-echo "Start Time: $(date)"
 echo "Working Directory: $(pwd)"
-echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
-echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
+echo "Start Time: $(date)"
 echo ""
 
 # Main training loop
@@ -106,7 +98,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ "$IS_RANGE" = true ]; then
         echo "Sequential Training - Task ${TASK_ID} (${TASK_START} to ${TASK_END})"
     else
-        echo "Lifelong Learning - Single Task Training (Naive LoRA)"
+        echo "Lifelong Learning - Single Task Training (Simple CNN)"
     fi
     echo "========================================="
     
@@ -115,12 +107,13 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         # Use manual checkpoint path for first task if provided
         CHECKPOINT_PATH="$MANUAL_CHECKPOINT_PATH"
     elif [ "$TASK_ID" -eq $FIRST_TASK_ID ]; then
-        # First task in sequence, no checkpoint
+        # First task in sequence, use initial checkpoint from config
+        # The config should have checkpoint_load_path set to the initial simple_cnn checkpoint
         CHECKPOINT_PATH=""
     else
         # Use checkpoint from previous task
         PREV_TASK_ID=$((TASK_ID - 1))
-        PREV_LOG_DIR="./logs/naive_lora/task_${PREV_TASK_ID}_seed${SEED}"
+        PREV_LOG_DIR="./logs/simple_cnn/task_${PREV_TASK_ID}_seed${SEED}"
         # Inject config tag into PREV_LOG_DIR to match where previous task saved checkpoint
         if [ -n "$CONFIG_TAG" ]; then
             # CONFIG_TAG is set, transform the path
@@ -138,8 +131,8 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             PREV_LOG_DIR_TRANSFORMED="$PREV_LOG_DIR"
         fi
         
-        # Use the transformed path
-        CHECKPOINT_PATH="${PREV_LOG_DIR_TRANSFORMED}/checkpoints/global_step_${GLOBAL_STEP}/actor"
+        # For simple_cnn, checkpoint is saved as model.pt in the actor directory
+        CHECKPOINT_PATH="${PREV_LOG_DIR_TRANSFORMED}/checkpoints/global_step_${GLOBAL_STEP}/actor/model.pt"
         
         # Additional validation: ensure CHECKPOINT_PATH is a valid relative or absolute path
         if [[ "$CHECKPOINT_PATH" =~ ^/checkpoints/ ]]; then
@@ -155,27 +148,27 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     # Determine LOG_DIR based on checkpoint path
     if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
         # Extract task ID and global_step from checkpoint path
-        # e.g., .../task_0/checkpoints/global_step_10/actor -> task_0, step_10
+        # e.g., .../task_0/checkpoints/global_step_10/actor/model.pt -> task_0, step_10
         if [[ "$CHECKPOINT_PATH" =~ task_([0-9]+) ]]; then
             SOURCE_TASK="${BASH_REMATCH[1]}"
             if [[ "$CHECKPOINT_PATH" =~ global_step_([0-9]+) ]]; then
                 SOURCE_STEP="${BASH_REMATCH[1]}"
-                LOG_DIR="./logs/naive_lora/task_${TASK_ID}_from_task_${SOURCE_TASK}_step_${SOURCE_STEP}_seed${SEED}"
+                LOG_DIR="./logs/simple_cnn/task_${TASK_ID}_from_task_${SOURCE_TASK}_step_${SOURCE_STEP}_seed${SEED}"
             else
                 echo "ERROR: Could not extract global_step from checkpoint path: $CHECKPOINT_PATH"
-                echo "       Expected format: .../checkpoints/global_step_<M>/actor"
+                echo "       Expected format: .../checkpoints/global_step_<M>/actor/model.pt"
                 OVERALL_EXIT_CODE=1
                 break
             fi
         else
             echo "ERROR: Could not extract task ID from checkpoint path: $CHECKPOINT_PATH"
-            echo "       Expected format: .../task_<N>/checkpoints/global_step_<M>/actor"
+            echo "       Expected format: .../task_<N>/checkpoints/global_step_<M>/actor/model.pt"
             OVERALL_EXIT_CODE=1
             break
         fi
     else
         # Standard case: use TASK_ID
-        LOG_DIR="./logs/naive_lora/task_${TASK_ID}_seed${SEED}"
+        LOG_DIR="./logs/simple_cnn/task_${TASK_ID}_seed${SEED}"
     fi
     
     # Inject config tag into LOG_DIR before exporting
@@ -214,19 +207,6 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         EXPERIMENT_NAME="${EXPERIMENT_NAME}_${CONFIG_TAG}"
     fi
     
-    # Update SLURM job name to match experiment name (only for first task)
-    if [ "$TASK_ID" -eq "$TASK_START" ] && command -v scontrol &> /dev/null && [ -n "$SLURM_JOB_ID" ]; then
-        if [ "$IS_RANGE" = true ]; then
-            if [ -n "$CONFIG_TAG" ]; then
-                scontrol update job=$SLURM_JOB_ID name="naive_lora_tasks_${TASK_START}_to_${TASK_END}_${CONFIG_TAG}" 2>/dev/null || true
-            else
-                scontrol update job=$SLURM_JOB_ID name="naive_lora_tasks_${TASK_START}_to_${TASK_END}" 2>/dev/null || true
-            fi
-        else
-            scontrol update job=$SLURM_JOB_ID name="${EXPERIMENT_NAME}" 2>/dev/null || true
-        fi
-    fi
-    
     echo "Configuration:"
     echo "  Task ID: $TASK_ID"
     if [ "$IS_RANGE" = true ]; then
@@ -238,7 +218,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo "  Random Seed: $SEED"
     
     if [ -n "$CHECKPOINT_PATH" ]; then
-        if [ ! -d "$CHECKPOINT_PATH" ]; then
+        if [ ! -f "$CHECKPOINT_PATH" ]; then
             echo "  ERROR: Checkpoint not found at $CHECKPOINT_PATH"
             if [ "$TASK_ID" -gt $FIRST_TASK_ID ]; then
                 PREV_TASK_ID=$((TASK_ID - 1))
@@ -250,7 +230,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         fi
         echo "  Loading from checkpoint: $CHECKPOINT_PATH"
     else
-        echo "  Training from base model (SFT checkpoint) - First task (task $FIRST_TASK_ID)"
+        echo "  Training from initial checkpoint (from config) - First task (task $FIRST_TASK_ID)"
     fi
     
     if [ -n "$MAX_EPOCH" ]; then
@@ -266,15 +246,20 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo ""
     
     # Build Hydra overrides
+    # For simple_cnn, we use checkpoint_load_path (not lora_path) and it should point to the .pt file
     OVERRIDES="env.fixed_task_ids=[${TASK_ID}] \
     	runner.logger.experiment_name=${EXPERIMENT_NAME} \
     	actor.seed=${SEED}"
     
     if [ -n "$CHECKPOINT_PATH" ]; then
-        OVERRIDES="$OVERRIDES +actor.model.lora_path=${CHECKPOINT_PATH}"
+        # For simple_cnn, set checkpoint_load_path to the model.pt file
+        # Only override if CHECKPOINT_PATH is provided (not empty)
+        OVERRIDES="$OVERRIDES actor.checkpoint_load_path=${CHECKPOINT_PATH}"
     fi
+    # If CHECKPOINT_PATH is empty, use the value from config (don't override)
     
     if [ -n "$MAX_EPOCH" ]; then
+        # Override max_epochs if MAX_EPOCH is provided
         OVERRIDES="$OVERRIDES runner.max_epochs=${MAX_EPOCH}"
     fi
     
@@ -300,7 +285,6 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         bash examples/mll_cluster/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "" "${EVAL_CONFIG_NAME}"
     else
         echo "✗ Task $TASK_ID failed with exit code $EXIT_CODE"
-        echo "  Check logs at: logs/slurm/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"
         OVERALL_EXIT_CODE=$EXIT_CODE
         if [ "$IS_RANGE" = true ]; then
             echo "  Stopping sequential training due to failure"
@@ -327,5 +311,8 @@ else
 fi
 echo "Finished at: $(date)"
 echo "========================================="
+
+# Unset environment variable to avoid affecting subsequent runs
+unset USE_CNN_UTILS
 
 exit $OVERALL_EXIT_CODE

@@ -224,8 +224,111 @@ def get_model(model_path, cfg: DictConfig, override_config_kwargs=None):
 
         # oft add
         model.vision_backbone.set_num_images_in_input(cfg.num_images_in_input)
+    elif cfg.model_name == "simple_cnn":
+        from .simple_cnn_policy import SimpleCNNPolicy
+        from rlinf.custom.simple_cnn_utils import compute_action_statistics
+        
+        # Load checkpoint if provided
+        checkpoint_path = model_path
+        if not os.path.exists(checkpoint_path):
+            # If model_path doesn't exist, try to load from checkpoint_load_path
+            checkpoint_path = cfg.get("checkpoint_load_path", None)
+            if checkpoint_path is None or not os.path.exists(checkpoint_path):
+                raise ValueError(
+                    f"simple_cnn model requires a checkpoint path. "
+                    f"Provided model_path: {model_path}, "
+                    f"checkpoint_load_path: {cfg.get('checkpoint_load_path', None)}"
+                )
+        
+        # Load checkpoint
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        
+        # Extract model parameters from checkpoint or config
+        task_id_map = checkpoint.get("task_id_map", {})
+        num_tasks = checkpoint.get("num_tasks", len(task_id_map) if task_id_map else cfg.get("num_tasks", 10))
+        norm_stats = checkpoint.get("norm_stats", None)
+        unnorm_key = checkpoint.get("unnorm_key", cfg.get("unnorm_key", "libero_spatial_no_noops"))
+        vocab_size = checkpoint.get("vocab_size", cfg.get("vocab_size", 32000))
+        n_action_bins = checkpoint.get("n_action_bins", cfg.get("n_action_bins", 256))
+        action_dim = checkpoint.get("action_dim", cfg.get("action_dim", 7))
+        num_action_chunks = checkpoint.get("num_action_chunks", cfg.get("num_action_chunks", 8))
+        image_size = cfg.get("image_size", 224)
+        if isinstance(image_size, (list, tuple)):
+            image_size = int(image_size[0])
+        
+        # If norm_stats not in checkpoint, try to compute from dataset
+        if norm_stats is None or len(norm_stats) == 0:
+            # Try to compute from dataset
+            dataset_path = os.environ.get("LIBERO_REPO_PATH", "")
+            if dataset_path:
+                dataset_path = os.path.join(
+                    dataset_path, "libero", "datasets_with_logits", "libero_spatial_simplevla_trajall"
+                )
+                if os.path.exists(dataset_path):
+                    print(f"Computing action statistics from {dataset_path}...")
+                    norm_stats = compute_action_statistics(dataset_path, unnorm_key=unnorm_key)
+                else:
+                    raise ValueError(
+                        f"norm_stats not found in checkpoint and cannot compute from dataset. "
+                        f"Dataset path {dataset_path} does not exist."
+                    )
+            else:
+                raise ValueError(
+                    "norm_stats not found in checkpoint and LIBERO_REPO_PATH not set. "
+                    "Cannot compute action statistics."
+                )
+        
+        # Create model
+        model = SimpleCNNPolicy(
+            action_dim=action_dim,
+            num_action_chunks=num_action_chunks,
+            image_size=image_size,
+            num_tasks=num_tasks,
+            use_task_embedding=True,
+            vocab_size=vocab_size,
+            n_action_bins=n_action_bins,
+            norm_stats=norm_stats,
+            unnorm_key=unnorm_key,
+        )
+        
+        # Load weights if available
+        # Handle two checkpoint formats:
+        # 1. From supervised training: checkpoint has "model_state_dict" key
+        # 2. From RL training (FSDP): checkpoint IS the state dict directly
+        if "model_state_dict" in checkpoint:
+            # Supervised training format
+            try:
+                model.load_state_dict(checkpoint["model_state_dict"])
+                print(f"Loaded simple_cnn model weights from {checkpoint_path} (supervised training format)")
+            except Exception as e:
+                print(f"Warning: Failed to load model_state_dict from checkpoint: {e}")
+                print(f"  Attempting to load checkpoint directly as state dict...")
+                # Fallback: try loading checkpoint directly
+                try:
+                    model.load_state_dict(checkpoint)
+                    print(f"Loaded simple_cnn model weights from {checkpoint_path} (direct state dict)")
+                except Exception as e2:
+                    print(f"Warning: Failed to load checkpoint as state dict: {e2}")
+                    print(f"  Using random initialization")
+        elif isinstance(checkpoint, dict):
+            # Try loading checkpoint directly as state dict (RL training format)
+            try:
+                model.load_state_dict(checkpoint)
+                print(f"Loaded simple_cnn model weights from {checkpoint_path} (RL training format)")
+            except Exception as e:
+                print(f"Warning: Failed to load checkpoint as state dict: {e}")
+                print(f"  Checkpoint keys: {list(checkpoint.keys())[:10]}...")  # Show first 10 keys
+                print(f"  Using random initialization")
+        else:
+            print(f"Warning: Checkpoint is not a dict, cannot load weights. Using random initialization.")
+        
+        # Simple CNN doesn't use LoRA, so skip LoRA loading and return early
+        if torch.cuda.is_available():
+            model = model.cuda()
+        return model
     else:
         return None
+    
     if torch.cuda.is_available():
         model = model.cuda()
 
