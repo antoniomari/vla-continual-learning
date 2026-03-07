@@ -1,11 +1,18 @@
 import os
+import sys
+from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
+# Allow importing preview_libero_utils when run as script
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from libero.libero import get_libero_path
 from libero.libero.benchmark import get_benchmark
 from libero.libero.envs import OffScreenRenderEnv
+
+from preview_libero_utils import settle_physics, hide_gripper_orientation_site
 
 
 # Per-task robot base position overrides used for the `libero_spatial_pos2` suite.
@@ -67,6 +74,11 @@ def main(output_dir: str = "libero_spatial_pos2_previews", num_init_states_per_t
             state_idx_clamped = min(state_idx, len(init_states) - 1)
             mujoco_state = init_states[state_idx_clamped]
             obs = env.set_init_state(mujoco_state)
+
+            # Let objects settle (physics run for ~5 seconds)
+            settle_physics(env)
+            hide_gripper_orientation_site(env)
+            obs = env.env._get_observations()
 
             # Match RLinf preprocessing: rotate 180 degrees
             img = obs["agentview_image"]

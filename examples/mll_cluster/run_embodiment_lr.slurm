@@ -43,11 +43,16 @@ FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 # For _lr configs, use the existing eval config (without _lr)
 # e.g., libero_spatial_grpo_openvlaoft_lr -> libero_spatial_grpo_openvlaoft_eval
 # e.g., libero_10_grpo_openvlaoft_lr_long -> libero_10_grpo_openvlaoft_eval_long
-if [[ "$CONFIG_NAME" =~ _lr(_long)?$ ]]; then
-    # Remove _lr suffix and add _eval (or replace _lr_long with _eval_long)
-    if [[ "$CONFIG_NAME" =~ _lr_long$ ]]; then
-        EVAL_CONFIG_NAME=$(echo "$CONFIG_NAME" | sed 's|_lr_long$|_eval_long|')
-    else
+# e.g., libero_object_grpo_openvlaoft_lr_object -> libero_object_grpo_openvlaoft_eval_object
+if [[ "$CONFIG_NAME" =~ _lr ]]; then
+    # Check if config ends with _lr_{tag} (e.g., _lr_long, _lr_object)
+    if [[ "$CONFIG_NAME" =~ _lr_([^/]+)$ ]]; then
+        # Extract the tag part (e.g., "long" or "object" from "_lr_long" or "_lr_object")
+        LR_TAG="${BASH_REMATCH[1]}"
+        # Replace _lr_{tag} with _eval_{tag}
+        EVAL_CONFIG_NAME=$(echo "$CONFIG_NAME" | sed "s|_lr_${LR_TAG}$|_eval_${LR_TAG}|")
+    # Check if config ends with just _lr (no tag)
+    elif [[ "$CONFIG_NAME" =~ _lr$ ]]; then
         EVAL_CONFIG_NAME=$(echo "$CONFIG_NAME" | sed 's|_lr$|_eval|')
     fi
 fi
