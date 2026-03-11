@@ -137,7 +137,6 @@ elif [ -n "${LORA_SCALE}" ]; then
     LOG_SUBDIR="${LOG_SUBDIR}_lora_scale/lora_scale_${LORA_SCALE_PATH}"
 fi
 
-<<<<<<< Updated upstream
 # Append temperature_eval to LOG_SUBDIR if provided
 if [ -n "${TEMPERATURE_EVAL}" ]; then
     # Format temperature_eval for use in path (replace dot with underscore, e.g., 2.0 -> 2_0)
@@ -179,11 +178,6 @@ else
     LOG_DIR="${LOGS_BASE}/${LOG_SUBDIR}_${TIMESTAMP}"
 fi
 
-=======
-if [ -z "${LOG_DIR}" ]; then
-    LOG_DIR="${REPO_PATH}/logs/evals/run_$(date +'%Y%m%d-%H:%M:%S')" #/$(date +'%Y%m%d-%H:%M:%S')"
-fi
->>>>>>> Stashed changes
 MEGA_LOG_FILE="${LOG_DIR}/eval_embodiment.log"
 mkdir -p "${LOG_DIR}"
 CMD="python ${SRC_FILE} --config-path ${CONFIG_PATH} --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR} ${HYDRA_OVERRIDES}"

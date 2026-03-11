@@ -124,6 +124,8 @@ All scripts source `common_functions.sh` and use configs from `examples/embodime
 | `run_embodiment_weight_merge.sh` | Weight merge: merge previous adapters, add new LoRA for each task |
 | `run_embodiment_slca.sh` | SLCA: learning-rate experiments (vision/llm/head LoRA LRs) |
 | `run_embodiment_simple_cnn.sh` | Simple CNN policy (non-VLA baseline) |
+| `run_embodiment_er.sh` | Sequential + ER (Experience Replay) |
+| `run_embodiment_der.sh` | Sequential + DER (Dark Experience Replay) |
 
 ### Evaluation Scripts
 
@@ -149,6 +151,16 @@ bash examples/crl_experiment/run_embodiment_sequential.sh "0,3"
 bash examples/crl_experiment/run_embodiment_sequential.sh 0 "" 15 "" 42
 ```
 
+**Sequential with ER (ER coefficient 0.03):**
+```bash
+bash examples/crl_experiment/run_embodiment_er.sh 0 0.03
+```
+
+**Sequential with DER (DER coefficient 0.03):**
+```bash
+bash examples/crl_experiment/run_embodiment_der.sh 0 0.03
+```
+
 **Weight merge (merge coefficient 0.8):**
 ```bash
 bash examples/crl_experiment/run_embodiment_weight_merge.sh "0,3" 0.8
@@ -168,6 +180,11 @@ bash examples/crl_experiment/run_embodiment_multitask.sh "0,2,4"
 ```bash
 bash examples/crl_experiment/run_embodiment_simple_cnn.sh 0
 bash examples/crl_experiment/run_embodiment_simple_cnn.sh "0,3"
+```
+
+**Precomputing Logits to Disk:**
+```bash
+bash examples/embodiment/compute_base_logits_embodiment.sh
 ```
 
 **Evaluation:**
@@ -190,7 +207,6 @@ bash examples/crl_experiment/eval_embodiment_lora_scale.sh logs/bcrl_logit/0.3/t
 Default configs vary by script. Override with the 4th (or 3rd) positional argument, for example:
 
 - `crl_experiment/libero_spatial_grpo_openvlaoft_spatial` (sequential, weight_merge, EWC, etc.)
-- `crl_experiment/libero_spatial_grpo_openvlaoft_lr` (SLCA experiments)
 - `crl_experiment/libero_spatial_grpo_simple_cnn` (simple CNN)
 - `crl_experiment/libero_10_grpo_openvlaoft_long` (10-task suite)
 - `crl_experiment/libero_object_grpo_openvlaoft_object` (object suite)
@@ -214,6 +230,7 @@ TODO: LLM generated need to change
 - OpenVLA-OFT + GRPO: `libero_10_grpo_openvlaoft.yaml`
 
 ### Key YAML fields
+- `actor.model.lora_path`: path to LoRA weights for finetuning
 - `runner.task_type`: `"embodied"`
 - `cluster.component_placement`: GPU allocation for actor, rollout, env
 - `rollout.model_dir`: path to HF model
@@ -223,12 +240,7 @@ TODO: LLM generated need to change
 - `runner.logger.log_path`: log directory
 - `runner.max_epochs`, `runner.max_steps`: training duration
 - `actor.global_batch_size`, `actor.micro_batch_size`: batch sizes
-
-### Placement examples
-- Shared (single node): `env,rollout,actor: all`
-- Pipeline overlap: `env: 0-7`, `rollout: 8-15`, `actor: 0-15`
-- Full separation: `env: 0-3`, `rollout: 4-7`, `actor: 8-15`
-- Set `rollout.pipeline_stage_num: 2` for rollout-actor overlap
+- `Other YAML fields`: https://rlinf.readthedocs.io/en/latest/rst_source/tutorials/user/yaml.html
 
 ---
 
@@ -244,8 +256,8 @@ algorithm:
   adv_type: embodied_gae
   loss_type: embodied_ppo
   loss_agg_func: "token-mean"
-  rollout_micro_batch_size: 256
-  logprob_forward_micro_batch_size: 16
+  micro_batch_size: 20
+  global_batch_size: 80
   clip_ratio_high: 0.2
   clip_ratio_low: 0.2
   value_clip: 0.2
@@ -260,8 +272,7 @@ algorithm:
   adv_type: embodied_grpo
   loss_type: embodied_grpo
   loss_agg_func: "token-mean"
-  group_size: 16
-  ratio_clip_eps: 0.2
+  group_size: 8
   normalize_advantages: True
 ```
 
@@ -273,17 +284,16 @@ algorithm:
 - **Task:** robotic arm grasping, Put-on-Plate
 - **Observation:** RGB 224×224
 - **Action:** 7D (x, y, z, roll, pitch, yaw, gripper)
-- **Task prompt:** "What action should the robot take to [task_description]?"
 
 ### LIBERO
 - **Task:** household manipulation (pick-place, stacking, drawers, spatial)
-- **Observation:** RGB 128×128 or 224×224
-- **Action:** 7D continuous
+- **Observation:** RGB 224×224
+- **Action:** 7D continuous (x, y, z, roll, pitch, yaw, gripper)
 - **Suites:** Spatial, Goal, Object, Long
 
 ### Data structure
 - Images: `[batch_size, 3, 224, 224]`
-- Actions: normalized continuous → discrete tokens
+- Actions: discrete tokens → normalized continuous
 - Rewards: step-level from task completion
 
 ---
@@ -308,6 +318,7 @@ Scripts live in `examples/embodiment/`. Entry point: `eval_embodied_agent.py`
 - `eval/env_info/return`
 - `eval/env_info/episode_len`
 - `eval/env_info/success_at_end`
+- `eval/env_info/task_*_success` - success rate for each task
 
 ---
 
@@ -318,11 +329,6 @@ Scripts live in `examples/embodiment/`. Entry point: `eval_embodied_agent.py`
 ```bash
 tensorboard --logdir ./logs --port 6006
 ```
-
-**Key metrics:**
-- `actor/loss`, `actor/value_loss`, `actor/entropy`, `actor/grad_norm`, `actor/lr`
-- `rollout/reward_mean`, `rollout/reward_std`, `rollout/episode_length`
-- `rollout/success_rate`, `env/success_rate`
 
 ### Video logging
 
@@ -336,12 +342,13 @@ video_cfg:
 ### WandB
 
 ```yaml
-trainer:
+runner:
+  task_type: embodied
   logger:
-    wandb:
-      enable: True
-      project_name: "RLinf"
-      experiment_name: "openvla-maniskill"
+    log_path: "../results"
+    project_name: rlinf
+    experiment_name: "test_openvla"
+    logger_backends: ["wandb"] # tensorboard, wandb, swanlab
 ```
 
 ---
@@ -388,6 +395,8 @@ examples/embodiment/
   eval_embodied_agent.py
 
 examples/crl_experiment/
+  run_embodiment_er.sh
+  run_embodiment_der.sh
   run_embodiment_sequential.sh
   run_embodiment_ewc.sh
   run_embodiment_multitask.sh
@@ -398,10 +407,12 @@ examples/crl_experiment/
   eval_embodiment.sh
   eval_embodiment_lora_scale.sh
   common_functions.sh
-  *.slurm                 - SLURM job scripts
 
-rlinf/
-  runners/embodied_runner.py
-  models/embodiment/
-  workers/actor/fsdp_actor_worker.py (EmbodiedFSDPActor)
+rlinf/custom/
+  libero_trajectory_dataset.py
+  logits_precompute_worker.py
+  loss.py
+  random_action_rollout_worker.py
+  rlds_logits_precompute_worker.py
+  simple_cnn_utils.py
 ```

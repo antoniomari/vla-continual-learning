@@ -39,12 +39,11 @@ def main(cfg) -> None:
         OmegaConf.set_struct(cfg, False)
         cfg.logits_precompute = {
             "root_dir": os.getenv("LIBERO_REPO_PATH"),
-            "output_dir": None,
-            "demos_per_task": 1,
+            "output_dir": None, # defaults to LIBERO/libero/datasets_with_logits
+            "demos_per_task": None, # defaults to all demos
         }
 
     cfg.runner.only_eval = True
-    print(cfg)
 
     # Export Ray object store memory from config to environment variable
     # This allows start_ray.sh to use the configured value
@@ -64,6 +63,7 @@ def main(cfg) -> None:
     rollout_group.init_worker().wait()
     rollout_group.process_all_tasks().wait()
 
+    # alternative logit precompute worker for hdf5 dataset format
     # rollout_group = LogitsPrecomputeWorker.create_group(cfg).launch(
     #     cluster, name=cfg.rollout.group_name, placement_strategy=rollout_placement
     # )

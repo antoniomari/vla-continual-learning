@@ -20,13 +20,15 @@ CONFIG_NAME=${4:-crl_experiment/libero_spatial_grpo_openvlaoft_spatial}
 SEED=${5:-1234}
 INIT_CHECKPOINT=$6
 
+# Log subdirectory for this experiment type
+EXPERIMENT_TYPE="sequential_reorder"
+
 if [ -z "$TASK_IDS_STR" ]; then
     echo "ERROR: Missing required argument"
     echo "Usage: bash examples/crl_experiment/run_embodiment_sequential_reorder.sh TASK_IDS [RUN_ID] [MAX_EPOCH] [CONFIG_NAME] [SEED] [INIT_CHECKPOINT]"
     exit 1
 fi
 
-# Validate seed is a number
 if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
     echo "ERROR: SEED must be a non-negative integer, got: $SEED"
     exit 1
@@ -64,29 +66,16 @@ if [ -n "$INIT_CHECKPOINT" ]; then
     fi
 fi
 
-mkdir -p logs/slurm
-mkdir -p logs/sequential_reorder
+mkdir -p "logs/${EXPERIMENT_TYPE}"
 
-# Print job information (only if running under SLURM)
-if [ -n "$SLURM_JOB_ID" ]; then
-    echo "Job ID: $SLURM_JOB_ID"
-    echo "Job Name: $SLURM_JOB_NAME"
-    echo "Node: $SLURM_NODELIST"
-    echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
-    echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
-fi
 echo "Start Time: $(date)"
 echo "Working Directory: $(pwd)"
 echo ""
 
 # Change to repo root
-if [ -n "$SLURM_SUBMIT_DIR" ]; then
-    cd "$SLURM_SUBMIT_DIR"
-else
-    SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    REPO_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
-    cd "$REPO_ROOT"
-fi
+SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
+cd "$REPO_ROOT"
 
 source "examples/crl_experiment/common_functions.sh"
 
@@ -100,7 +89,9 @@ echo "========================================="
 echo "Configuration:"
 echo "  Task Sequence (order preserved): ${TASK_IDS_ARRAY[*]}"
 echo "  Run ID: $RUN_ID"
+echo "  Experiment Type: $EXPERIMENT_TYPE"
 echo "  Config Name: $CONFIG_NAME"
+echo "  Random Seed: $SEED"
 
 if [ -n "$MAX_EPOCH" ]; then
     if ! [[ "$MAX_EPOCH" =~ ^[0-9]+$ ]] || [ "$MAX_EPOCH" -le 0 ]; then
@@ -110,8 +101,6 @@ if [ -n "$MAX_EPOCH" ]; then
     echo "  Max epochs per task: $MAX_EPOCH"
 fi
 
-echo "  Training mode: Sequential (each task loads from previous)"
-echo "  Evaluation: After each task completes training"
 echo "========================================="
 echo ""
 
@@ -129,8 +118,10 @@ for i in "${!TASK_IDS_ARRAY[@]}"; do
     echo "Run ID: $RUN_ID"
     echo "========================================="
 
-    TASK_LOG_DIR="./logs/sequential_reorder/${RUN_ID}_seed${SEED}/task_${TASK_ID}"
-    TASK_LOG_DIR=$(inject_config_tag_into_log_path "$TASK_LOG_DIR" "$CONFIG_TAG")
+    TASK_LOG_DIR="./logs/${EXPERIMENT_TYPE}/${RUN_ID}_seed${SEED}/task_${TASK_ID}"
+    if [ -n "$CONFIG_TAG" ]; then
+        TASK_LOG_DIR=$(inject_config_tag_into_log_path "$TASK_LOG_DIR" "$CONFIG_TAG")
+    fi
     mkdir -p "${TASK_LOG_DIR}"
     export LOG_DIR="${TASK_LOG_DIR}"
 
@@ -139,16 +130,11 @@ for i in "${!TASK_IDS_ARRAY[@]}"; do
         EXPERIMENT_NAME="${EXPERIMENT_NAME}_${CONFIG_TAG}"
     fi
 
-    if [ $TASK_NUM -eq 1 ] && [ -n "$SLURM_JOB_ID" ] && command -v scontrol &> /dev/null; then
-        JOB_NAME="seq_${RUN_ID}_tasks_${TASK_SEQ_STR}"
-        [ -n "$CONFIG_TAG" ] && JOB_NAME="${JOB_NAME}_${CONFIG_TAG}"
-        scontrol update job=$SLURM_JOB_ID name="${JOB_NAME}" 2>/dev/null || true
-    fi
-
     echo "Configuration:"
     echo "  Task ID: $TASK_ID"
     echo "  Task Position: ${TASK_NUM}/${NUM_TASKS}"
     echo "  Experiment Name: $EXPERIMENT_NAME"
+    echo "  Experiment Type: $EXPERIMENT_TYPE"
     echo "  Checkpoint Save Path: $TASK_LOG_DIR"
     echo "  Config Name: $CONFIG_NAME"
     echo "  Random Seed: $SEED"
@@ -196,7 +182,7 @@ for i in "${!TASK_IDS_ARRAY[@]}"; do
     if [ $EXIT_CODE -ne 0 ]; then
         echo ""
         echo "========================================="
-        echo "✗ Task $TASK_ID failed with exit code $EXIT_CODE"
+        echo "Task $TASK_ID failed with exit code $EXIT_CODE"
         OVERALL_EXIT_CODE=$EXIT_CODE
         break
     fi
@@ -205,7 +191,7 @@ for i in "${!TASK_IDS_ARRAY[@]}"; do
 
     echo ""
     echo "========================================="
-    echo "✓ Task $TASK_ID completed successfully"
+    echo "Task $TASK_ID completed successfully"
     echo "  Checkpoint saved to: ${TASK_LOG_DIR}"
     echo "========================================="
 
@@ -220,7 +206,7 @@ for i in "${!TASK_IDS_ARRAY[@]}"; do
         OVERALL_EXIT_CODE=$EVAL_EXIT_CODE
         break
     else
-        echo "  ✓ Evaluation for task $TASK_ID completed"
+        echo "  Evaluation for task $TASK_ID completed"
     fi
     echo ""
 done
@@ -232,10 +218,9 @@ if [ $OVERALL_EXIT_CODE -eq 0 ]; then
     echo ""
     echo "Tasks trained (in order): ${TASK_IDS_ARRAY[*]}"
     echo "Run ID: $RUN_ID"
-    echo "Results directory: ./logs/sequential_reorder/${RUN_ID}_seed${SEED}/"
+    echo "Results directory: ./logs/${EXPERIMENT_TYPE}/${RUN_ID}_seed${SEED}/"
 else
-    echo "✗ Sequential training failed"
-    [ -n "$SLURM_JOB_ID" ] && echo "  Check logs at: logs/slurm/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"
+    echo "Sequential training failed"
 fi
 echo "Finished at: $(date)"
 echo "========================================="

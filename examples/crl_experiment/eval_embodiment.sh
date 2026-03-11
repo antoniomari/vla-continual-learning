@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Direct evaluation script for embodied agent (without SLURM)
+# Direct evaluation script for embodied agent
 # This script can be run directly on the terminal
 #
 # Usage: ./examples/crl_experiment/eval_embodiment.sh CHECKPOINT_LOCATION [STEP_NUMBER] [CONFIG_NAME]

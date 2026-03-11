@@ -46,7 +46,7 @@ class RLDSLogitsPrecomputeWorker(Worker):
                 self.root_dir,
                 "libero",
                 "datasets",
-                "modified_libero_rlds/libero_10_no_noops/1.0.0",
+                f"modified_libero_rlds/{task_suite_name}_no_noops/1.0.0",
             ),
         )
         self.output_dir = cfg.logits_precompute.get("output_dir", None)
@@ -56,10 +56,6 @@ class RLDSLogitsPrecomputeWorker(Worker):
                 "libero",
                 "datasets_with_logits",
                 f"{task_suite_name}_simplevla",
-                # f"{task_suite_name}_simplevla_task0_finetune",
-                # f"{task_suite_name}_simplevla_bcrl001",
-                # f"{task_suite_name}_simplevla_base",
-                # f"{task_suite_name}_simplevla_task0_LoRA",
             )
 
         self.demos_per_task = cfg.logits_precompute.get("demos_per_task", None)

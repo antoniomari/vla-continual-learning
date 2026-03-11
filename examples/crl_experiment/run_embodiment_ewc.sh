@@ -19,14 +19,15 @@ MAX_EPOCH=$3
 CONFIG_NAME=${4:-crl_experiment/libero_spatial_grpo_openvlaoft_spatial}
 SEED=${5:-1234}
 
+# Log subdirectory for this experiment type
+EXPERIMENT_TYPE="ewc"
+
 # Parse TASK_INPUT to determine if it's a single task or a range
 if [[ "$TASK_INPUT" == *,* ]]; then
-    # It's a tuple (a,b)
     IFS=',' read -r TASK_START TASK_END <<< "$TASK_INPUT"
     TASK_START=$(echo "$TASK_START" | tr -d '()[] ')
     TASK_END=$(echo "$TASK_END" | tr -d '()[] ')
     
-    # Validate that both values are numeric and start < end
     if ! [[ "$TASK_START" =~ ^[0-9]+$ ]] || ! [[ "$TASK_END" =~ ^[0-9]+$ ]]; then
         echo "ERROR: Task range must contain two numeric values: \"a,b\" where a and b are integers"
         echo "       Example: \"0,3\" or \"1,5\""
@@ -42,7 +43,6 @@ if [[ "$TASK_INPUT" == *,* ]]; then
     IS_RANGE=true
     NUM_TASKS=$((TASK_END - TASK_START + 1))
 else
-    # It's a single task ID
     if ! [[ "$TASK_INPUT" =~ ^[0-9]+$ ]]; then
         echo "ERROR: Task ID must be a numeric value"
         echo "       Example: 0 or \"0,3\" for a range"
@@ -54,36 +54,21 @@ else
     NUM_TASKS=1
 fi
 
-# Validate seed is a number
 if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
     echo "ERROR: SEED must be a non-negative integer, got: $SEED"
     exit 1
 fi
 
-mkdir -p logs/slurm
-mkdir -p logs/ewc
+mkdir -p "logs/${EXPERIMENT_TYPE}"
 
-# Print job information (only if running under SLURM)
-if [ -n "$SLURM_JOB_ID" ]; then
-    echo "Job ID: $SLURM_JOB_ID"
-    echo "Job Name: $SLURM_JOB_NAME"
-    echo "Node: $SLURM_NODELIST"
-    echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
-    echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
-fi
 echo "Start Time: $(date)"
 echo "Working Directory: $(pwd)"
 echo ""
 
-# Change to script directory if running under SLURM, otherwise use current directory
-if [ -n "$SLURM_SUBMIT_DIR" ]; then
-    cd "$SLURM_SUBMIT_DIR"
-else
-    # Get the directory where this script is located
-    SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    REPO_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
-    cd "$REPO_ROOT"
-fi
+# Change to repo root
+SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
+cd "$REPO_ROOT"
 
 # Source common functions
 source "examples/crl_experiment/common_functions.sh"
@@ -101,25 +86,21 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo ""
     echo "========================================="
     if [ "$IS_RANGE" = true ]; then
-        echo "Sequential Training with EWC - Task ${TASK_ID} (${TASK_START} to ${TASK_END})"
+        echo "EWC Training - Task ${TASK_ID} (${TASK_START} to ${TASK_END})"
     else
-        echo "Lifelong Learning with EWC - Single Task Training (LoRA + EWC)"
+        echo "EWC Training - Single Task (LoRA + EWC)"
     fi
     echo "========================================="
     
     # Determine checkpoint path
-    USE_EXISTING_FIRST_TASK=false  # Initialize flag
+    USE_EXISTING_FIRST_TASK=false
     if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
-        # Use manual checkpoint path for first task if provided
         CHECKPOINT_PATH="$MANUAL_CHECKPOINT_PATH"
     elif [ "$TASK_ID" -eq $FIRST_TASK_ID ]; then
         # Check if first task weights already exist (from sequential training)
-        PREV_LOG_DIR="./logs/ewc/task_${FIRST_TASK_ID}_seed${SEED}"
-        # Inject config tag into PREV_LOG_DIR to match where previous task saved checkpoint
+        PREV_LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${FIRST_TASK_ID}_seed${SEED}"
         if [ -n "$CONFIG_TAG" ]; then
-            # CONFIG_TAG is set, transform the path
             PREV_LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$PREV_LOG_DIR" "$CONFIG_TAG")
-            # Validate transformation result
             if [ -z "$PREV_LOG_DIR_TRANSFORMED" ]; then
                 echo "  ERROR: Failed to transform previous task log directory for task $FIRST_TASK_ID"
                 echo "         Original PREV_LOG_DIR: [$PREV_LOG_DIR]"
@@ -128,27 +109,20 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
                 break
             fi
         else
-            # CONFIG_TAG is empty, use path as-is (no transformation needed)
             PREV_LOG_DIR_TRANSFORMED="$PREV_LOG_DIR"
         fi
         EXISTING_FIRST_TASK_CHECKPOINT="${PREV_LOG_DIR_TRANSFORMED}/checkpoints/global_step_${GLOBAL_STEP}/actor"
         if [ -d "$EXISTING_FIRST_TASK_CHECKPOINT" ]; then
-            # First task weights exist - load them and train for 1 epoch to generate rollouts for Fisher
             CHECKPOINT_PATH="$EXISTING_FIRST_TASK_CHECKPOINT"
             USE_EXISTING_FIRST_TASK=true
         else
-            # First task in sequence, no checkpoint - train from scratch
             CHECKPOINT_PATH=""
         fi
     else
-        # Use checkpoint from previous task
         PREV_TASK_ID=$((TASK_ID - 1))
-        PREV_LOG_DIR="./logs/ewc/task_${PREV_TASK_ID}_seed${SEED}"
-        # Inject config tag into PREV_LOG_DIR to match where previous task saved checkpoint
+        PREV_LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${PREV_TASK_ID}_seed${SEED}"
         if [ -n "$CONFIG_TAG" ]; then
-            # CONFIG_TAG is set, transform the path
             PREV_LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$PREV_LOG_DIR" "$CONFIG_TAG")
-            # Validate transformation result
             if [ -z "$PREV_LOG_DIR_TRANSFORMED" ]; then
                 echo "  ERROR: Failed to transform previous task log directory for task $PREV_TASK_ID"
                 echo "         Original PREV_LOG_DIR: [$PREV_LOG_DIR]"
@@ -157,14 +131,10 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
                 break
             fi
         else
-            # CONFIG_TAG is empty, use path as-is (no transformation needed)
             PREV_LOG_DIR_TRANSFORMED="$PREV_LOG_DIR"
         fi
-        
-        # Use the transformed path
         CHECKPOINT_PATH="${PREV_LOG_DIR_TRANSFORMED}/checkpoints/global_step_${GLOBAL_STEP}/actor"
         
-        # Additional validation: ensure CHECKPOINT_PATH is a valid relative or absolute path
         if [[ "$CHECKPOINT_PATH" =~ ^/checkpoints/ ]]; then
             echo "  ERROR: Invalid checkpoint path construction detected"
             echo "         PREV_LOG_DIR was likely empty or malformed"
@@ -178,11 +148,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     # Determine EWC path from previous task
     if [ "$TASK_ID" -gt $FIRST_TASK_ID ]; then
         PREV_TASK_ID=$((TASK_ID - 1))
-        # Check standard path first
-        PREV_LOG_DIR_STANDARD="./logs/ewc/task_${PREV_TASK_ID}_seed${SEED}"
-        PREV_LOG_DIR_EXISTING="./logs/ewc/task_${PREV_TASK_ID}_from_existing_seed${SEED}"
+        PREV_LOG_DIR_STANDARD="./logs/${EXPERIMENT_TYPE}/task_${PREV_TASK_ID}_seed${SEED}"
+        PREV_LOG_DIR_EXISTING="./logs/${EXPERIMENT_TYPE}/task_${PREV_TASK_ID}_from_existing_seed${SEED}"
         
-        # Inject config tag into both paths
         if [ -n "$CONFIG_TAG" ]; then
             PREV_LOG_DIR_STANDARD=$(inject_config_tag_into_log_path "$PREV_LOG_DIR_STANDARD" "$CONFIG_TAG")
             PREV_LOG_DIR_EXISTING=$(inject_config_tag_into_log_path "$PREV_LOG_DIR_EXISTING" "$CONFIG_TAG")
@@ -210,13 +178,11 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     
     # Determine LOG_DIR based on checkpoint path
     if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
-        # Extract task ID and global_step from checkpoint path
-        # e.g., .../task_0/checkpoints/global_step_10/actor -> task_0, step_10
         if [[ "$CHECKPOINT_PATH" =~ task_([0-9]+) ]]; then
             SOURCE_TASK="${BASH_REMATCH[1]}"
             if [[ "$CHECKPOINT_PATH" =~ global_step_([0-9]+) ]]; then
                 SOURCE_STEP="${BASH_REMATCH[1]}"
-                LOG_DIR="./logs/ewc/task_${TASK_ID}_from_task_${SOURCE_TASK}_step_${SOURCE_STEP}_seed${SEED}"
+                LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_from_task_${SOURCE_TASK}_step_${SOURCE_STEP}_seed${SEED}"
             else
                 echo "ERROR: Could not extract global_step from checkpoint path: $CHECKPOINT_PATH"
                 echo "       Expected format: .../checkpoints/global_step_<M>/actor"
@@ -230,18 +196,14 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             break
         fi
     elif [ "$USE_EXISTING_FIRST_TASK" = true ]; then
-        # Using existing first task weights - create a special log dir to indicate this
-        LOG_DIR="./logs/ewc/task_${TASK_ID}_from_existing_seed${SEED}"
+        LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_from_existing_seed${SEED}"
     else
-        # Standard case: use TASK_ID
-        LOG_DIR="./logs/ewc/task_${TASK_ID}_seed${SEED}"
+        LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_seed${SEED}"
     fi
     
-    # Inject config tag into LOG_DIR before exporting
+    # Inject config tag into LOG_DIR
     if [ -n "$CONFIG_TAG" ]; then
-        # CONFIG_TAG is set, transform the path
         LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$LOG_DIR" "$CONFIG_TAG")
-        # Validate transformation result
         if [ -z "$LOG_DIR_TRANSFORMED" ]; then
             echo "  ERROR: Failed to transform LOG_DIR with config tag"
             echo "         Original LOG_DIR: [$LOG_DIR]"
@@ -250,13 +212,8 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             break
         fi
         LOG_DIR="$LOG_DIR_TRANSFORMED"
-    else
-        # CONFIG_TAG is empty, use path as-is (no transformation needed)
-        # This is valid - it means no config tag was specified
-        :
     fi
     
-    # Validate LOG_DIR is not empty
     if [ -z "$LOG_DIR" ]; then
         echo "  ERROR: LOG_DIR is empty after path construction"
         OVERALL_EXIT_CODE=1
@@ -266,24 +223,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     export LOG_DIR
     mkdir -p "${LOG_DIR}"
     
-    # Set experiment name based on LOG_DIR (for wandb)
     EXPERIMENT_NAME=$(basename "$LOG_DIR")
-    # Append CONFIG_TAG to experiment name if set
     if [ -n "$CONFIG_TAG" ]; then
         EXPERIMENT_NAME="${EXPERIMENT_NAME}_${CONFIG_TAG}"
-    fi
-    
-    # Update SLURM job name to match experiment name (only for first task and if running under SLURM)
-    if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$SLURM_JOB_ID" ] && command -v scontrol &> /dev/null; then
-        if [ "$IS_RANGE" = true ]; then
-            if [ -n "$CONFIG_TAG" ]; then
-                scontrol update job=$SLURM_JOB_ID name="ewc_lora_tasks_${TASK_START}_to_${TASK_END}_${CONFIG_TAG}" 2>/dev/null || true
-            else
-                scontrol update job=$SLURM_JOB_ID name="ewc_lora_tasks_${TASK_START}_to_${TASK_END}" 2>/dev/null || true
-            fi
-        else
-            scontrol update job=$SLURM_JOB_ID name="${EXPERIMENT_NAME}" 2>/dev/null || true
-        fi
     fi
     
     echo "Configuration:"
@@ -292,6 +234,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "  Task Range: ${TASK_START} to ${TASK_END}"
     fi
     echo "  Experiment Name: $EXPERIMENT_NAME"
+    echo "  Experiment Type: $EXPERIMENT_TYPE"
     echo "  Checkpoint Save Path: $LOG_DIR"
     echo "  Config Name: $CONFIG_NAME"
     echo "  Random Seed: $SEED"
@@ -316,12 +259,11 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ -n "$EWC_PATH" ]; then
         echo "  Loading EWC data from: $EWC_PATH"
     else
-        echo "  No EWC data (first task or EWC data not found)"
+        echo "  No EWC data (first task)"
     fi
     
     # Handle max_epochs: if using existing first task, train for 1 epoch only (unless overridden)
     if [ "$USE_EXISTING_FIRST_TASK" = true ] && [ -z "$MAX_EPOCH" ]; then
-        # Using existing first task weights - train for 1 epoch to generate rollouts for Fisher
         MAX_EPOCH=1
         echo "  Max epochs: 1 (using existing weights, only need rollouts for Fisher computation)"
     elif [ -n "$MAX_EPOCH" ]; then
@@ -337,6 +279,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo ""
     
     # Build Hydra overrides
+    # EWC is enabled via hydra override (not a separate config)
     OVERRIDES="env.fixed_task_ids=[${TASK_ID}] \
     	runner.logger.experiment_name=${EXPERIMENT_NAME} \
     	actor.seed=${SEED} \
@@ -367,22 +310,17 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "Task $TASK_ID completed successfully"
         echo ""
         echo "Checkpoint saved to: ${LOG_DIR}"
-        echo "EWC data (if enabled) saved to: ${LOG_DIR}/ewc_data.pt"
+        echo "EWC data saved to: ${LOG_DIR}/ewc_data.pt"
         
-        # Run evaluation
-        # LOG_DIR already has the config tag injected, so use it directly
         CHECKPOINT_LOCATION=$(echo "$LOG_DIR" | sed 's|^\./||')
         echo ""
         echo "Running evaluation for: ${CHECKPOINT_LOCATION}"
         bash examples/crl_experiment/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "" "${EVAL_CONFIG_NAME}"
     else
-        echo "✗ Task $TASK_ID failed with exit code $EXIT_CODE"
-        if [ -n "$SLURM_JOB_ID" ]; then
-            echo "  Check logs at: logs/slurm/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"
-        fi
+        echo "Task $TASK_ID failed with exit code $EXIT_CODE"
         OVERALL_EXIT_CODE=$EXIT_CODE
         if [ "$IS_RANGE" = true ]; then
-            echo "  Stopping sequential training due to failure"
+            echo "  Stopping training due to failure"
             break
         fi
     fi
@@ -395,7 +333,7 @@ if [ "$IS_RANGE" = true ]; then
     if [ $OVERALL_EXIT_CODE -eq 0 ]; then
         echo "All tasks (${TASK_START} to ${TASK_END}) completed successfully!"
     else
-        echo "Sequential training failed. Completed up to task $((TASK_ID - 1))"
+        echo "EWC training failed. Completed up to task $((TASK_ID - 1))"
     fi
 else
     if [ $OVERALL_EXIT_CODE -eq 0 ]; then

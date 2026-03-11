@@ -3,19 +3,27 @@
 ### Example (single task): bash examples/crl_experiment/run_embodiment_slca.sh 0
 ### Example (task range): bash examples/crl_experiment/run_embodiment_slca.sh "0,3"
 ### Example (with LR): bash examples/crl_experiment/run_embodiment_slca.sh "1,4" "2e-6,2e-6,1e-5"
-### Example (with config): bash examples/crl_experiment/run_embodiment_slca.sh "0,2" "2e-6,2e-6,1e-5" crl_experiment/libero_spatial_grpo_openvlaoft_lr
+### Example (with config): bash examples/crl_experiment/run_embodiment_slca.sh "0,2" "2e-6,2e-6,1e-5" crl_experiment/libero_spatial_grpo_openvlaoft_spatial
 ### Example (with seed): bash examples/crl_experiment/run_embodiment_slca.sh "0,2" "" "" 42
 ### Note: TASK_ID_OR_RANGE can be:
 ###       - A single task ID (e.g., "0") - trains that task only
 ###       - A tuple "a,b" where a < b (e.g., "0,3") - trains tasks from a to b sequentially
 ###       LR_STRING is comma-separated: "vision_lora_lr,llm_lora_lr,llm_head_lora_lr"
-###       If not provided, uses default values from config
+###       If not provided, uses default values: 4.0e-6,4.0e-6,4.0e-5
 ###       SEED is optional and defaults to 1234 if not provided
 
 TASK_INPUT=${1:-0}
 LR_STRING=$2
-CONFIG_NAME=${3:-crl_experiment/libero_spatial_grpo_openvlaoft_lr}
+CONFIG_NAME=${3:-crl_experiment/libero_spatial_grpo_openvlaoft_spatial}
 SEED=${4:-1234}
+
+# Log subdirectory for this experiment type
+EXPERIMENT_TYPE="slca"
+
+# Default learning rates if not provided
+if [ -z "$LR_STRING" ]; then
+    LR_STRING="4.0e-6,4.0e-6,4.0e-5"
+fi
 
 # Parse TASK_INPUT to determine if it's a single task or a range
 if [[ "$TASK_INPUT" == *,* ]]; then
@@ -46,48 +54,34 @@ else
     NUM_TASKS=1
 fi
 
-# Validate seed is a number
 if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
     echo "ERROR: SEED must be a non-negative integer, got: $SEED"
     exit 1
 fi
 
-# Parse learning rates if provided (parse once, use for all tasks in range)
-if [ -n "$LR_STRING" ]; then
-    IFS=',' read -r VISION_LR LLM_LR HEAD_LR <<< "$LR_STRING"
-    if [ -z "$VISION_LR" ] || [ -z "$LLM_LR" ] || [ -z "$HEAD_LR" ]; then
-        echo "ERROR: LR_STRING must contain exactly 3 comma-separated values: vision_lora_lr,llm_lora_lr,llm_head_lora_lr"
-        echo "       Example: \"2e-6,2e-6,1e-5\""
-        exit 1
-    fi
-    V_LR_STR=$(echo "$VISION_LR" | sed 's/\.0*e/e/g' | sed 's/\.//g' | sed 's/e-/e/g')
-    L_LR_STR=$(echo "$LLM_LR" | sed 's/\.0*e/e/g' | sed 's/\.//g' | sed 's/e-/e/g')
-    H_LR_STR=$(echo "$HEAD_LR" | sed 's/\.0*e/e/g' | sed 's/\.//g' | sed 's/e-/e/g')
+# Parse learning rates
+IFS=',' read -r VISION_LR LLM_LR HEAD_LR <<< "$LR_STRING"
+if [ -z "$VISION_LR" ] || [ -z "$LLM_LR" ] || [ -z "$HEAD_LR" ]; then
+    echo "ERROR: LR_STRING must contain exactly 3 comma-separated values: vision_lora_lr,llm_lora_lr,llm_head_lora_lr"
+    echo "       Example: \"2e-6,2e-6,1e-5\""
+    exit 1
 fi
 
-mkdir -p logs/slurm
-mkdir -p logs/slca_experiment
+# Create short strings for directory naming
+V_LR_STR=$(echo "$VISION_LR" | sed 's/\.0*e/e/g' | sed 's/\.//g' | sed 's/e-/e/g')
+L_LR_STR=$(echo "$LLM_LR" | sed 's/\.0*e/e/g' | sed 's/\.//g' | sed 's/e-/e/g')
+H_LR_STR=$(echo "$HEAD_LR" | sed 's/\.0*e/e/g' | sed 's/\.//g' | sed 's/e-/e/g')
 
-# Print job information (only if running under SLURM)
-if [ -n "$SLURM_JOB_ID" ]; then
-    echo "Job ID: $SLURM_JOB_ID"
-    echo "Job Name: $SLURM_JOB_NAME"
-    echo "Node: $SLURM_NODELIST"
-    echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
-    echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
-fi
+mkdir -p "logs/${EXPERIMENT_TYPE}"
+
 echo "Start Time: $(date)"
 echo "Working Directory: $(pwd)"
 echo ""
 
 # Change to repo root
-if [ -n "$SLURM_SUBMIT_DIR" ]; then
-    cd "$SLURM_SUBMIT_DIR"
-else
-    SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    REPO_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
-    cd "$REPO_ROOT"
-fi
+SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
+cd "$REPO_ROOT"
 
 source "examples/crl_experiment/common_functions.sh"
 
@@ -96,16 +90,6 @@ EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
 GLOBAL_STEP=$(get_default_global_step "$CONFIG_NAME")
 FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 
-# For _lr configs, use the existing eval config (without _lr)
-if [[ "$CONFIG_NAME" =~ _lr ]]; then
-    if [[ "$CONFIG_NAME" =~ _lr_([^/]+)$ ]]; then
-        LR_TAG="${BASH_REMATCH[1]}"
-        EVAL_CONFIG_NAME=$(echo "$CONFIG_NAME" | sed "s|_lr_${LR_TAG}$|_eval_${LR_TAG}|")
-    elif [[ "$CONFIG_NAME" =~ _lr$ ]]; then
-        EVAL_CONFIG_NAME=$(echo "$CONFIG_NAME" | sed 's|_lr$|_eval|')
-    fi
-fi
-
 # Main training loop
 OVERALL_EXIT_CODE=0
 
@@ -113,17 +97,13 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo ""
     echo "========================================="
     if [ "$IS_RANGE" = true ]; then
-        echo "Sequential Training - Task ${TASK_ID} (${TASK_START} to ${TASK_END})"
+        echo "SLCA Training - Task ${TASK_ID} (${TASK_START} to ${TASK_END})"
     else
-        echo "Lifelong Learning - SLCA (learning rate) Experiment"
+        echo "SLCA Training - Single Task (Learning Rate Experiment)"
     fi
     echo "========================================="
 
-    if [ -n "$LR_STRING" ]; then
-        TASK_LOG_DIR="./logs/slca_experiment/task_${TASK_ID}_lr_v${V_LR_STR}_l${L_LR_STR}_h${H_LR_STR}_seed${SEED}"
-    else
-        TASK_LOG_DIR="./logs/slca_experiment/task_${TASK_ID}_lr_default_seed${SEED}"
-    fi
+    TASK_LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_lr_v${V_LR_STR}_l${L_LR_STR}_h${H_LR_STR}_seed${SEED}"
 
     if [ -n "$CONFIG_TAG" ]; then
         TASK_LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$TASK_LOG_DIR" "$CONFIG_TAG")
@@ -149,46 +129,31 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         EXPERIMENT_NAME="${EXPERIMENT_NAME}_${CONFIG_TAG}"
     fi
 
-    if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$SLURM_JOB_ID" ] && command -v scontrol &> /dev/null; then
-        if [ "$IS_RANGE" = true ]; then
-            if [ -n "$CONFIG_TAG" ]; then
-                scontrol update job=$SLURM_JOB_ID name="slca_tasks_${TASK_START}_to_${TASK_END}_${CONFIG_TAG}" 2>/dev/null || true
-            else
-                scontrol update job=$SLURM_JOB_ID name="slca_tasks_${TASK_START}_to_${TASK_END}" 2>/dev/null || true
-            fi
-        else
-            scontrol update job=$SLURM_JOB_ID name="${EXPERIMENT_NAME}" 2>/dev/null || true
-        fi
-    fi
-
     echo "Configuration:"
     echo "  Task ID: $TASK_ID"
     if [ "$IS_RANGE" = true ]; then
         echo "  Task Range: ${TASK_START} to ${TASK_END}"
     fi
     echo "  Experiment Name: $EXPERIMENT_NAME"
+    echo "  Experiment Type: $EXPERIMENT_TYPE"
     echo "  Checkpoint Save Path: $TASK_LOG_DIR"
     echo "  Config Name: $CONFIG_NAME"
     echo "  Random Seed: $SEED"
-    if [ -n "$LR_STRING" ]; then
-        echo "  Vision LoRA LR: $VISION_LR"
-        echo "  LLM LoRA LR: $LLM_LR"
-        echo "  LLM Head LoRA LR: $HEAD_LR"
-    else
-        echo "  Using default learning rates from config"
-    fi
+    echo "  Vision LoRA LR: $VISION_LR"
+    echo "  LLM LoRA LR: $LLM_LR"
+    echo "  LLM Head LoRA LR: $HEAD_LR"
 
     if [ "$TASK_ID" -eq "$FIRST_TASK_ID" ]; then
         CHECKPOINT_PATH=""
         echo "  Training from base model (SFT checkpoint) - no LoRA path"
     else
         PREV_TASK_ID=$((TASK_ID - 1))
-        if [ -n "$LR_STRING" ]; then
-            PREV_TASK_LOG_DIR="./logs/slca_experiment/task_${PREV_TASK_ID}_lr_v${V_LR_STR}_l${L_LR_STR}_h${H_LR_STR}_seed${SEED}"
+        PREV_TASK_LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${PREV_TASK_ID}_lr_v${V_LR_STR}_l${L_LR_STR}_h${H_LR_STR}_seed${SEED}"
+        if [ -n "$CONFIG_TAG" ]; then
+            PREV_TASK_LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$PREV_TASK_LOG_DIR" "$CONFIG_TAG")
         else
-            PREV_TASK_LOG_DIR="./logs/slca_experiment/task_${PREV_TASK_ID}_lr_default_seed${SEED}"
+            PREV_TASK_LOG_DIR_TRANSFORMED="$PREV_TASK_LOG_DIR"
         fi
-        [ -n "$CONFIG_TAG" ] && PREV_TASK_LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$PREV_TASK_LOG_DIR" "$CONFIG_TAG") || PREV_TASK_LOG_DIR_TRANSFORMED="$PREV_TASK_LOG_DIR"
         if [ -z "$PREV_TASK_LOG_DIR_TRANSFORMED" ]; then
             echo "  ERROR: Failed to construct previous task log directory for task $PREV_TASK_ID"
             OVERALL_EXIT_CODE=1
@@ -211,14 +176,15 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo "========================================="
     echo ""
 
+    # Build Hydra overrides
+    # Learning rates are set via hydra overrides (not a separate config)
     OVERRIDES="env.fixed_task_ids=[${TASK_ID}] \
     	runner.logger.experiment_name=${EXPERIMENT_NAME} \
-    	actor.seed=${SEED}"
-    if [ -n "$LR_STRING" ]; then
-        OVERRIDES="$OVERRIDES actor.optim.vision_lora_lr=${VISION_LR} \
+    	actor.seed=${SEED} \
+    	actor.optim.vision_lora_lr=${VISION_LR} \
     	actor.optim.llm_lora_lr=${LLM_LR} \
     	actor.optim.llm_head_lora_lr=${HEAD_LR}"
-    fi
+
     [ -n "$CHECKPOINT_PATH" ] && OVERRIDES="${OVERRIDES} +actor.model.lora_path=${CHECKPOINT_PATH}"
 
     echo "Running with Hydra overrides:"
@@ -239,11 +205,10 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "Running evaluation for: ${CHECKPOINT_LOCATION}"
         bash examples/crl_experiment/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "${GLOBAL_STEP}" "${EVAL_CONFIG_NAME}"
     else
-        echo "✗ Task $TASK_ID failed with exit code $EXIT_CODE"
-        [ -n "$SLURM_JOB_ID" ] && echo "  Check logs at: logs/slurm/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"
+        echo "Task $TASK_ID failed with exit code $EXIT_CODE"
         OVERALL_EXIT_CODE=$EXIT_CODE
         if [ "$IS_RANGE" = true ]; then
-            echo "  Stopping sequential training due to failure"
+            echo "  Stopping training due to failure"
             break
         fi
     fi
@@ -253,9 +218,17 @@ done
 echo ""
 echo "========================================="
 if [ "$IS_RANGE" = true ]; then
-    [ $OVERALL_EXIT_CODE -eq 0 ] && echo "All tasks (${TASK_START} to ${TASK_END}) completed successfully!" || echo "Sequential training failed. Completed up to task $((TASK_ID - 1))"
+    if [ $OVERALL_EXIT_CODE -eq 0 ]; then
+        echo "All tasks (${TASK_START} to ${TASK_END}) completed successfully!"
+    else
+        echo "SLCA training failed. Completed up to task $((TASK_ID - 1))"
+    fi
 else
-    [ $OVERALL_EXIT_CODE -eq 0 ] && echo "Task $TASK_START completed successfully" || echo "Task $TASK_START failed"
+    if [ $OVERALL_EXIT_CODE -eq 0 ]; then
+        echo "Task $TASK_START completed successfully"
+    else
+        echo "Task $TASK_START failed"
+    fi
 fi
 echo "Finished at: $(date)"
 echo "========================================="

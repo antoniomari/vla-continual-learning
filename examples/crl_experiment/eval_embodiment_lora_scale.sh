@@ -1,11 +1,11 @@
 #!/bin/bash
 ### Usage: bash examples/crl_experiment/eval_embodiment_lora_scale.sh CHECKPOINT_LOCATION [CURRENT_LORA_SCALE] [PREVIOUS_LORA_COEFF] [STEP_NUMBER] [CONFIG_NAME]
-### Example (single LoRA): bash examples/crl_experiment/eval_embodiment_lora_scale.sh logs/bcrl_logit/0.3/task_0 0.5
+### Example (single LoRA): bash examples/crl_experiment/eval_embodiment_lora_scale.sh logs/sequential/task_0_seed1234 0.5
 ### Example (weight merge): bash examples/crl_experiment/eval_embodiment_lora_scale.sh logs/weight_merge/task_2_coeff_0_9
 ### Example (weight merge with current scale): bash examples/crl_experiment/eval_embodiment_lora_scale.sh logs/weight_merge/task_2_coeff_0_9 0.7
 ### Example (weight merge with both overrides): bash examples/crl_experiment/eval_embodiment_lora_scale.sh logs/weight_merge/task_2_coeff_0_9 0.7 0.8
-### Example (with custom step): bash examples/crl_experiment/eval_embodiment_lora_scale.sh logs/bcrl_logit/0.3/task_0 0.5 "" 20
-### Example (libero_10): bash examples/crl_experiment/eval_embodiment_lora_scale.sh logs/bcrl_logit/0.3/task_0 0.5 "" "" crl_experiment/libero_10_grpo_openvlaoft_eval_long
+### Example (with custom step): bash examples/crl_experiment/eval_embodiment_lora_scale.sh logs/sequential/task_0_seed1234 0.5 "" 20
+###
 ### Note: CHECKPOINT_LOCATION should be relative to workspace root
 ###       For weight merge checkpoints, PREVIOUS_LORA_COEFF is auto-extracted from path
 ###       CURRENT_LORA_SCALE: required for single LoRA, defaults to 1.0 for weight merge
@@ -13,7 +13,7 @@
 CHECKPOINT_LOCATION=$1
 CURRENT_LORA_SCALE=$2
 PREVIOUS_LORA_COEFF=$3
-STEP_NUMBER=$4
+STEP_NUMBER=${4:-10}
 CONFIG_NAME=${5:-crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial}
 
 if [ -z "$CHECKPOINT_LOCATION" ]; then
@@ -22,24 +22,15 @@ if [ -z "$CHECKPOINT_LOCATION" ]; then
     exit 1
 fi
 
-[ -z "$STEP_NUMBER" ] && STEP_NUMBER=10
-
-# Validate STEP_NUMBER early
 if ! [[ "$STEP_NUMBER" =~ ^[0-9]+$ ]]; then
     echo "ERROR: STEP_NUMBER must be a positive integer, got: $STEP_NUMBER"
     exit 1
 fi
 
-mkdir -p logs/slurm
-
 # Change to repo root
-if [ -n "$SLURM_SUBMIT_DIR" ]; then
-    cd "$SLURM_SUBMIT_DIR"
-else
-    SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    REPO_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
-    cd "$REPO_ROOT"
-fi
+SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
+cd "$REPO_ROOT"
 
 source "examples/crl_experiment/common_functions.sh"
 FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
@@ -107,14 +98,6 @@ if [ ! -d "$CHECKPOINT_PATH" ]; then
     exit 1
 fi
 
-# Print job information (only if running under SLURM)
-if [ -n "$SLURM_JOB_ID" ]; then
-    echo "Job ID: $SLURM_JOB_ID"
-    echo "Job Name: $SLURM_JOB_NAME"
-    echo "Node: $SLURM_NODELIST"
-    echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
-    echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
-fi
 echo "Start Time: $(date)"
 echo "Working Directory: $(pwd)"
 echo ""
@@ -131,14 +114,7 @@ else
 fi
 echo ""
 
-if [ -n "$SLURM_JOB_ID" ] && command -v scontrol &> /dev/null; then
-    JOB_NAME_BASE=$(echo "$CHECKPOINT_LOCATION" | sed 's|^logs/||' | tr '/' '_')
-    SCALE_STR=$(echo "$CURRENT_LORA_SCALE" | tr '.' '_')
-    JOB_NAME="${JOB_NAME_BASE}_scale_${SCALE_STR}"
-    scontrol update job=$SLURM_JOB_ID name="${JOB_NAME}" 2>/dev/null || true
-fi
-
-HYDRA_OVERRIDES="+actor.model.lora_path=${CHECKPOINT_PATH} actor.model.lora_scale=${CURRENT_LORA_SCALE}"
+HYDRA_OVERRIDES="+actor.model.lora_path=${CHECKPOINT_PATH} +actor.model.lora_scale=${CURRENT_LORA_SCALE}"
 
 if [ "$IS_MULTILORA" = true ]; then
     TASK_ID=""

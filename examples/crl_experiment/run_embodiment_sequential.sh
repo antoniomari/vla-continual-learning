@@ -19,14 +19,15 @@ MAX_EPOCH=$3
 CONFIG_NAME=${4:-crl_experiment/libero_spatial_grpo_openvlaoft_spatial}
 SEED=${5:-1234}
 
+# Log subdirectory for this experiment type
+EXPERIMENT_TYPE="sequential"
+
 # Parse TASK_INPUT to determine if it's a single task or a range
 if [[ "$TASK_INPUT" == *,* ]]; then
-    # It's a tuple (a,b)
     IFS=',' read -r TASK_START TASK_END <<< "$TASK_INPUT"
     TASK_START=$(echo "$TASK_START" | tr -d '()[] ')
     TASK_END=$(echo "$TASK_END" | tr -d '()[] ')
     
-    # Validate that both values are numeric and start < end
     if ! [[ "$TASK_START" =~ ^[0-9]+$ ]] || ! [[ "$TASK_END" =~ ^[0-9]+$ ]]; then
         echo "ERROR: Task range must contain two numeric values: \"a,b\" where a and b are integers"
         echo "       Example: \"0,3\" or \"1,5\""
@@ -42,7 +43,6 @@ if [[ "$TASK_INPUT" == *,* ]]; then
     IS_RANGE=true
     NUM_TASKS=$((TASK_END - TASK_START + 1))
 else
-    # It's a single task ID
     if ! [[ "$TASK_INPUT" =~ ^[0-9]+$ ]]; then
         echo "ERROR: Task ID must be a numeric value"
         echo "       Example: 0 or \"0,3\" for a range"
@@ -54,35 +54,21 @@ else
     NUM_TASKS=1
 fi
 
-# Validate seed is a number
 if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
     echo "ERROR: SEED must be a non-negative integer, got: $SEED"
     exit 1
 fi
 
-mkdir -p logs/slurm
-mkdir -p logs/sequential
+mkdir -p "logs/${EXPERIMENT_TYPE}"
 
-# Print job information (only if running under SLURM)
-if [ -n "$SLURM_JOB_ID" ]; then
-    echo "Job ID: $SLURM_JOB_ID"
-    echo "Job Name: $SLURM_JOB_NAME"
-    echo "Node: $SLURM_NODELIST"
-    echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
-    echo "GPUs allocated: $SLURM_GPUS_ON_NODE"
-fi
 echo "Start Time: $(date)"
 echo "Working Directory: $(pwd)"
 echo ""
 
-# Change to script directory if running under SLURM, otherwise use current directory
-if [ -n "$SLURM_SUBMIT_DIR" ]; then
-    cd "$SLURM_SUBMIT_DIR"
-else
-    SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    REPO_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
-    cd "$REPO_ROOT"
-fi
+# Change to repo root
+SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT=$(dirname $(dirname "$SCRIPT_DIR"))
+cd "$REPO_ROOT"
 
 # Source common functions
 source "examples/crl_experiment/common_functions.sh"
@@ -113,7 +99,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         CHECKPOINT_PATH=""
     else
         PREV_TASK_ID=$((TASK_ID - 1))
-        PREV_LOG_DIR="./logs/sequential/task_${PREV_TASK_ID}_seed${SEED}"
+        PREV_LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${PREV_TASK_ID}_seed${SEED}"
         if [ -n "$CONFIG_TAG" ]; then
             PREV_LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$PREV_LOG_DIR" "$CONFIG_TAG")
             if [ -z "$PREV_LOG_DIR_TRANSFORMED" ]; then
@@ -144,7 +130,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             SOURCE_TASK="${BASH_REMATCH[1]}"
             if [[ "$CHECKPOINT_PATH" =~ global_step_([0-9]+) ]]; then
                 SOURCE_STEP="${BASH_REMATCH[1]}"
-                LOG_DIR="./logs/sequential/task_${TASK_ID}_from_task_${SOURCE_TASK}_step_${SOURCE_STEP}_seed${SEED}"
+                LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_from_task_${SOURCE_TASK}_step_${SOURCE_STEP}_seed${SEED}"
             else
                 echo "ERROR: Could not extract global_step from checkpoint path: $CHECKPOINT_PATH"
                 echo "       Expected format: .../checkpoints/global_step_<M>/actor"
@@ -158,10 +144,10 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             break
         fi
     else
-        LOG_DIR="./logs/sequential/task_${TASK_ID}_seed${SEED}"
+        LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_seed${SEED}"
     fi
     
-    # Inject config tag into LOG_DIR before exporting
+    # Inject config tag into LOG_DIR
     if [ -n "$CONFIG_TAG" ]; then
         LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$LOG_DIR" "$CONFIG_TAG")
         if [ -z "$LOG_DIR_TRANSFORMED" ]; then
@@ -183,23 +169,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     export LOG_DIR
     mkdir -p "${LOG_DIR}"
     
-    # Set experiment name based on LOG_DIR (for wandb)
     EXPERIMENT_NAME=$(basename "$LOG_DIR")
     if [ -n "$CONFIG_TAG" ]; then
         EXPERIMENT_NAME="${EXPERIMENT_NAME}_${CONFIG_TAG}"
-    fi
-    
-    # Update SLURM job name (only for first task and if running under SLURM)
-    if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$SLURM_JOB_ID" ] && command -v scontrol &> /dev/null; then
-        if [ "$IS_RANGE" = true ]; then
-            if [ -n "$CONFIG_TAG" ]; then
-                scontrol update job=$SLURM_JOB_ID name="sequential_tasks_${TASK_START}_to_${TASK_END}_${CONFIG_TAG}" 2>/dev/null || true
-            else
-                scontrol update job=$SLURM_JOB_ID name="sequential_tasks_${TASK_START}_to_${TASK_END}" 2>/dev/null || true
-            fi
-        else
-            scontrol update job=$SLURM_JOB_ID name="${EXPERIMENT_NAME}" 2>/dev/null || true
-        fi
     fi
     
     echo "Configuration:"
@@ -208,6 +180,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "  Task Range: ${TASK_START} to ${TASK_END}"
     fi
     echo "  Experiment Name: $EXPERIMENT_NAME"
+    echo "  Experiment Type: $EXPERIMENT_TYPE"
     echo "  Checkpoint Save Path: $LOG_DIR"
     echo "  Config Name: $CONFIG_NAME"
     echo "  Random Seed: $SEED"
@@ -272,10 +245,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "Running evaluation for: ${CHECKPOINT_LOCATION}"
         bash examples/crl_experiment/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "" "${EVAL_CONFIG_NAME}"
     else
-        echo "✗ Task $TASK_ID failed with exit code $EXIT_CODE"
-        if [ -n "$SLURM_JOB_ID" ]; then
-            echo "  Check logs at: logs/slurm/${SLURM_JOB_NAME}-${SLURM_JOB_ID}.out"
-        fi
+        echo "Task $TASK_ID failed with exit code $EXIT_CODE"
         OVERALL_EXIT_CODE=$EXIT_CODE
         if [ "$IS_RANGE" = true ]; then
             echo "  Stopping sequential training due to failure"

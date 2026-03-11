@@ -1,30 +1,27 @@
 #!/bin/bash
-### Usage: bash examples/crl_experiment/run_embodiment_simple_cnn.sh TASK_ID_OR_RANGE [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
-### Example (single task): bash examples/crl_experiment/run_embodiment_simple_cnn.sh 0
-### Example (task range): bash examples/crl_experiment/run_embodiment_simple_cnn.sh "0,3"
-### Example (with max_epoch): bash examples/crl_experiment/run_embodiment_simple_cnn.sh 0 "" 15
-### Example (continue from checkpoint): bash examples/crl_experiment/run_embodiment_simple_cnn.sh 0 ./logs/simple_cnn/task_0_seed1234/checkpoints/global_step_10/actor/model.pt 20
-### Example (with seed): bash examples/crl_experiment/run_embodiment_simple_cnn.sh 0 "" "" "" 42
+### Usage: bash examples/crl_experiment/run_embodiment_er.sh TASK_ID_OR_RANGE [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
+### Example (single task): bash examples/crl_experiment/run_embodiment_er.sh 0
+### Example (task range): bash examples/crl_experiment/run_embodiment_er.sh "0,3"
+### Example (with max_epoch): bash examples/crl_experiment/run_embodiment_er.sh 0 "" 15
+### Example (continue from checkpoint): bash examples/crl_experiment/run_embodiment_er.sh 0 ./logs/er/task_0_seed1234/checkpoints/global_step_10/actor 20
+### Example (with seed): bash examples/crl_experiment/run_embodiment_er.sh 0 "" "" "" 42
 ### Note: TASK_ID_OR_RANGE can be:
 ###       - A single task ID (e.g., "0") - trains that task only
 ###       - A tuple "a,b" where a < b (e.g., "0,3") - trains tasks from a to b sequentially
 ###       CHECKPOINT_PATH is optional and will be auto-generated from previous task if not provided
-###       For simple_cnn, CHECKPOINT_PATH should point to the model.pt file (not a directory)
 ###       If CHECKPOINT_PATH is provided for a range, it will only be used for the first task
 ###       MAX_EPOCH is optional and can always be specified to override the default max_epochs
 ###       SEED is optional and defaults to 1234 if not provided
 
 TASK_INPUT=${1:-0}
-MANUAL_CHECKPOINT_PATH=$2
-MAX_EPOCH=$3
-CONFIG_NAME=${4:-crl_experiment/libero_spatial_grpo_simple_cnn}
-SEED=${5:-1234}
+DER_COEFF=${2:-0.03}
+MANUAL_CHECKPOINT_PATH=$3
+MAX_EPOCH=$4
+CONFIG_NAME=${5:-crl_experiment/libero_spatial_grpo_openvlaoft_spatial}
+SEED=${6:-1234}
 
 # Log subdirectory for this experiment type
-EXPERIMENT_TYPE="simple_cnn"
-
-# Set environment variable to use CNN utils (no PrismaticProjector import)
-export USE_CNN_UTILS=1
+EXPERIMENT_TYPE="der"
 
 # Parse TASK_INPUT to determine if it's a single task or a range
 if [[ "$TASK_INPUT" == *,* ]]; then
@@ -80,9 +77,6 @@ source "examples/crl_experiment/common_functions.sh"
 # Extract config tag and derive eval config name
 CONFIG_TAG=$(extract_config_tag "$CONFIG_NAME")
 EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
-if [[ "$CONFIG_NAME" == *"simple_cnn" ]]; then
-    EVAL_CONFIG_NAME="${CONFIG_NAME}_eval"
-fi
 GLOBAL_STEP=$(get_default_global_step "$CONFIG_NAME")
 FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 
@@ -93,9 +87,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo ""
     echo "========================================="
     if [ "$IS_RANGE" = true ]; then
-        echo "Simple CNN Training - Task ${TASK_ID} (${TASK_START} to ${TASK_END})"
+        echo "Experience Replay Training - Task ${TASK_ID} (${TASK_START} to ${TASK_END})"
     else
-        echo "Simple CNN Training - Single Task"
+        echo "Experience Replay Training - Single Task"
     fi
     echo "========================================="
     
@@ -119,8 +113,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         else
             PREV_LOG_DIR_TRANSFORMED="$PREV_LOG_DIR"
         fi
-        # For simple_cnn, checkpoint is saved as model.pt
-        CHECKPOINT_PATH="${PREV_LOG_DIR_TRANSFORMED}/checkpoints/global_step_${GLOBAL_STEP}/actor/model.pt"
+        CHECKPOINT_PATH="${PREV_LOG_DIR_TRANSFORMED}/checkpoints/global_step_${GLOBAL_STEP}/actor"
         
         if [[ "$CHECKPOINT_PATH" =~ ^/checkpoints/ ]]; then
             echo "  ERROR: Invalid checkpoint path construction detected"
@@ -141,13 +134,13 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
                 LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_from_task_${SOURCE_TASK}_step_${SOURCE_STEP}_seed${SEED}"
             else
                 echo "ERROR: Could not extract global_step from checkpoint path: $CHECKPOINT_PATH"
-                echo "       Expected format: .../checkpoints/global_step_<M>/actor/model.pt"
+                echo "       Expected format: .../checkpoints/global_step_<M>/actor"
                 OVERALL_EXIT_CODE=1
                 break
             fi
         else
             echo "ERROR: Could not extract task ID from checkpoint path: $CHECKPOINT_PATH"
-            echo "       Expected format: .../task_<N>/checkpoints/global_step_<M>/actor/model.pt"
+            echo "       Expected format: .../task_<N>/checkpoints/global_step_<M>/actor"
             OVERALL_EXIT_CODE=1
             break
         fi
@@ -192,9 +185,10 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo "  Checkpoint Save Path: $LOG_DIR"
     echo "  Config Name: $CONFIG_NAME"
     echo "  Random Seed: $SEED"
+    echo "  Experience Replay: Enabled"
     
     if [ -n "$CHECKPOINT_PATH" ]; then
-        if [ ! -f "$CHECKPOINT_PATH" ]; then
+        if [ ! -d "$CHECKPOINT_PATH" ]; then
             echo "  ERROR: Checkpoint not found at $CHECKPOINT_PATH"
             if [ "$TASK_ID" -gt $FIRST_TASK_ID ]; then
                 PREV_TASK_ID=$((TASK_ID - 1))
@@ -206,7 +200,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         fi
         echo "  Loading from checkpoint: $CHECKPOINT_PATH"
     else
-        echo "  Training from initial checkpoint (from config) - First task (task $FIRST_TASK_ID)"
+        echo "  Training from base model (SFT checkpoint) - First task (task $FIRST_TASK_ID)"
     fi
     
     if [ -n "$MAX_EPOCH" ]; then
@@ -222,13 +216,17 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo ""
     
     # Build Hydra overrides
-    # For simple_cnn, use checkpoint_load_path (not lora_path) pointing to model.pt
+    # Experience replay is enabled via hydra override (not a separate config)
     OVERRIDES="env.fixed_task_ids=[${TASK_ID}] \
     	runner.logger.experiment_name=${EXPERIMENT_NAME} \
-    	actor.seed=${SEED}"
+    	actor.seed=${SEED} \
+    	algorithm.use_experience_replay=True \
+        +algorithm.use_reference_logits_bc=True \
+        +algorithm.use_cached_bc_logits=True \
+        algorithm.bc_coeff=${DER_COEFF}"
     
     if [ -n "$CHECKPOINT_PATH" ]; then
-        OVERRIDES="$OVERRIDES actor.checkpoint_load_path=${CHECKPOINT_PATH}"
+        OVERRIDES="$OVERRIDES +actor.model.lora_path=${CHECKPOINT_PATH}"
     fi
     
     if [ -n "$MAX_EPOCH" ]; then
@@ -270,7 +268,7 @@ if [ "$IS_RANGE" = true ]; then
     if [ $OVERALL_EXIT_CODE -eq 0 ]; then
         echo "All tasks (${TASK_START} to ${TASK_END}) completed successfully!"
     else
-        echo "Simple CNN training failed. Completed up to task $((TASK_ID - 1))"
+        echo "Experience Replay training failed. Completed up to task $((TASK_ID - 1))"
     fi
 else
     if [ $OVERALL_EXIT_CODE -eq 0 ]; then
@@ -281,7 +279,5 @@ else
 fi
 echo "Finished at: $(date)"
 echo "========================================="
-
-unset USE_CNN_UTILS
 
 exit $OVERALL_EXIT_CODE
