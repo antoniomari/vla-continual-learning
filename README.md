@@ -1,5 +1,5 @@
 <h1 align="center">
-  Simple Recipe Works: Vision-Language-Action Models are<br>Natural Continual Learners with Reinforcement Learning
+  Simple Recipe Works: Vision-Language-Action Models are Natural Continual Learners with Reinforcement Learning
 </h1>
 
 <p align="center">
@@ -59,7 +59,7 @@ This codebase provides:
 ```bash
 # 1. Clone the repository (includes bundled dependencies)
 git clone git@github.com:UT-Austin-RobIn/continual-vla-rl.git
-cd RLinf
+cd continual-vla-rl
 
 # 2. Create conda environment
 conda create -n rlinf python=3.11.10 -y
