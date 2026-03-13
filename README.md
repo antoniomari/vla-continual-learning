@@ -58,7 +58,7 @@ This codebase provides:
 
 ```bash
 # 1. Clone the repository (includes bundled dependencies)
-git clone <TODO: add repo url>
+git clone git@github.com:UT-Austin-RobIn/continual-vla-rl.git
 cd RLinf
 
 # 2. Create conda environment
@@ -385,7 +385,7 @@ rlinf/custom/                               # Custom modules
 If you use this codebase, please cite our paper:
 
 ```bibtex
-@article{TODO,
+@article{hu2026vlacrl,
   title={Simple Recipe Works: Vision-Language-Action Models are Natural Continual Learners with Reinforcement Learning},
   author={Hu, Jiaheng and Shim, Jay and Tang, Chen and Sung, Yoonchang and Liu, Bo and Stone, Peter and Martin-Martin, Roberto},
   journal={arXiv preprint arXiv:2603.11653},
