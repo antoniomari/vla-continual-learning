@@ -62,8 +62,8 @@ git clone git@github.com:UT-Austin-RobIn/continual-vla-rl.git
 cd continual-vla-rl
 
 # 2. Create conda environment
-conda create -n rlinf python=3.11.10 -y
-conda activate rlinf
+conda create -n vlacrl python=3.11.10 -y
+conda activate vlacrl
 
 # 3. Install core dependencies
 pip install -r requirements.txt
