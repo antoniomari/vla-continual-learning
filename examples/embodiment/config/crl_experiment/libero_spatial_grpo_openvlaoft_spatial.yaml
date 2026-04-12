@@ -27,12 +27,12 @@ runner:
     experiment_name: "test_openvla"
     logger_backends: ["wandb"] # wandb, swanlab
 
-  max_epochs: 50
+  max_epochs: 10
   max_steps: -1
 
   only_eval: False
   val_check_interval: -1
-  save_interval: 50
+  save_interval: 10
   seq_length: 4096
   max_prompt_length: 128
 
