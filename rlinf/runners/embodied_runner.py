@@ -15,11 +15,13 @@
 import os
 
 import torch
+from omegaconf import open_dict
 from omegaconf.dictconfig import DictConfig
 from tqdm import tqdm
 
 from rlinf.utils.distributed import ScopedTimer
 from rlinf.utils.metric_logger import MetricLogger
+from rlinf.utils.model_load_info import log_embodied_driver_inventory
 from rlinf.utils.metric_utils import compute_evaluate_metrics
 from rlinf.utils.runner_utils import check_progress
 from rlinf.workers.actor.fsdp_actor_worker import EmbodiedFSDPActor
@@ -55,6 +57,8 @@ class EmbodiedRunner:
         # compute `max_steps`
         self.set_max_steps()
 
+        print(f"Runner max_steps: {self.max_steps}")
+
         self.timer = ScopedTimer(reduction="max", sync_cuda=False)
 
         self.metric_logger = MetricLogger(cfg)
@@ -64,6 +68,7 @@ class EmbodiedRunner:
         self.actor.init_worker().wait()
         self.rollout.init_worker().wait()
         self.env.init_worker().wait()
+        log_embodied_driver_inventory(self.cfg)
 
     def update_rollout_weights(self):
         rollout_futures = self.rollout.sync_model_from_actor()
@@ -92,6 +97,42 @@ class EmbodiedRunner:
         return eval_metrics
 
     def run(self):
+        opd_bc_steps = self.cfg.algorithm.get("opd_bc_steps", 0)
+        if opd_bc_steps > 0 and self.cfg.algorithm.adv_type != "embodied_opd":
+            print(
+                "[OPD] Warning: opd_bc_steps > 0 but adv_type is not embodied_opd; "
+                "BC still runs and opd_teacher_model_path will be set, but RL will not use OPD rewards.",
+                flush=True,
+            )
+        if opd_bc_steps > 0:
+            with self.timer("opd_bc_warmup"):
+                bc_futures = self.actor.run_opd_bc_warmup(opd_bc_steps)
+                bc_metrics_list = bc_futures.wait()
+                bc_metrics = {f"opd_bc/{k}": v for k, v in bc_metrics_list[0].items()}
+                self.metric_logger.log(bc_metrics, step=0)
+            teacher_root = os.path.join(
+                self.cfg.runner.logger.log_path,
+                "opd_bc_teacher",
+            )
+            os.makedirs(teacher_root, exist_ok=True)
+            teacher_actor_path = os.path.join(teacher_root, "actor")
+            save_futures = self.actor.save_checkpoint(teacher_actor_path, 0)
+            save_futures.wait()
+            self.actor.set_opd_teacher_model_path(teacher_actor_path).wait()
+            with open_dict(self.cfg.algorithm):
+                self.cfg.algorithm.opd_teacher_model_path = teacher_actor_path
+
+            # Same eval protocol as the student: sync post-BC weights to rollout, then env.evaluate + rollout.evaluate.
+            if self.cfg.algorithm.get("opd_eval_teacher_after_bc", True):
+                with self.timer("opd_teacher_eval"):
+                    self.update_rollout_weights()
+                    teacher_eval_metrics = self.evaluate()
+                    teacher_eval_metrics = {
+                        f"eval_teacher/{k}": v
+                        for k, v in teacher_eval_metrics.items()
+                    }
+                    self.metric_logger.log(data=teacher_eval_metrics, step=0)
+
         start_step = self.global_step
         for _step in tqdm(range(start_step, self.max_steps), ncols=120):
             if (
@@ -106,7 +147,9 @@ class EmbodiedRunner:
 
             with self.timer("step"):
                 with self.timer("rollout"):
+                    # Syncs model weights from actor to rollout
                     self.update_rollout_weights()
+                    # Generates rollouts using the updated rollout model
                     self.generate_rollouts()
 
                 # compute advantages and returns.
@@ -148,7 +191,7 @@ class EmbodiedRunner:
             self.metric_logger.log(training_metrics, _step)
 
         self.metric_logger.finish()
-        
+
         # Compute and save EWC data if enabled
         if self.cfg.algorithm.get("use_ewc", False):
             ewc_save_path = os.path.join(
@@ -172,6 +215,7 @@ class EmbodiedRunner:
 
     def set_max_steps(self):
         self.num_steps_per_epoch = 1
+        # Will be 10 for the current configs
         self.max_steps = self.num_steps_per_epoch * self.cfg.runner.max_epochs
 
         if (max_steps := self.cfg.runner.get("max_steps", -1)) >= 0:

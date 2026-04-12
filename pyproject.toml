@@ -24,7 +24,7 @@ dependencies = [
     # Core System
     "accelerate",
     "ray[default]>=2.47.0",
-    "torch==2.6.0",
+    "torch>=2.6.0",
 
     # Data processing
     "pylatexenc",
@@ -82,10 +82,13 @@ conflicts = [
       { extra = "embodied" },
     ],
 ]
+# Relaxed so CUDA wheels (e.g. cu128 / Blackwell sm_120) can resolve; pin in env if needed.
+# numpy<2: tensorflow_graphics / TF stack still breaks on NumPy 2 (np.complex_ removed).
 override-dependencies = [
-    "torch==2.6.0",
-    "torchvision==0.21.0",
-    "torchaudio==2.6.0"
+    "torch>=2.6.0",
+    "torchvision>=0.21.0",
+    "torchaudio>=2.6.0",
+    "numpy>=1.26.4,<2.0",
 ]
 
 [tool.ruff]

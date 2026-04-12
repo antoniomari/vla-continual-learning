@@ -2,6 +2,9 @@
 #
 # Setup script for running embodied agent evaluation
 #
+# Use pipefail + PIPESTATUS so Ctrl+C / SIGQUIT on python is not masked by tee exiting 0.
+set -o pipefail
+#
 # Environment Variables (optional overrides):
 #   - LIBERO_REPO_PATH: Path to LIBERO repository (defaults to ${REPO_PATH}/LIBERO)
 #
@@ -27,7 +30,28 @@ export LIBERO_CONFIG_PATH=${LIBERO_REPO_PATH}
 export PYTHONPATH=${LIBERO_REPO_PATH}:$PYTHONPATH
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
+# Line-buffered python stdout/stderr so logs show progress before ray.init returns (tee-safe).
+export PYTHONUNBUFFERED=1
+# Some deps load TensorFlow for ancillary code; reduce stderr spam (training path often sets this too).
+export TF_CPP_MIN_LOG_LEVEL=3
 
+# Match examples/embodiment/run_embodiment.sh so eval sees the same Ray driver environment as training
+# (sequential scripts run training then eval; missing these can leave eval stuck inside ray.init()).
+export RAY_DISABLE_IMPORT_WARNING=1
+export RAY_DISABLE_DASHBOARD=1
+# Plasma/raylet sockets: Linux AF_UNIX paths must stay <=107 bytes; long paths under $HOME can break or hang ray.init.
+export RAY_TMPDIR="${RAY_TMPDIR:-/tmp/ray_${USER}}"
+mkdir -p "$RAY_TMPDIR"
+export PYTORCH_DISTRIBUTED_BACKEND=nccl
+if [ -z "${RLINF_RAY_NUM_CPUS:-}" ] && [ -n "${SLURM_CPUS_PER_TASK:-}" ]; then
+    export RLINF_RAY_NUM_CPUS="${SLURM_CPUS_PER_TASK}"
+fi
+if [ -z "${RLINF_RAY_NUM_GPUS:-}" ] && [ -n "${SLURM_GPUS_ON_NODE:-}" ]; then
+    export RLINF_RAY_NUM_GPUS="${SLURM_GPUS_ON_NODE}"
+fi
+
+# Optional: if ray.init hangs on HPC, set RLINF_RAY_SKIP_RUNTIME_ENV=1, RLINF_RAY_MINIMAL_INIT=1,
+# RLINF_RAY_INCLUDE_DASHBOARD=0, or RLINF_RAY_LOCAL_ONLY=1 (see rlinf/utils/embodied_ray_env.py).
 
 if [ -z "$1" ]; then
     CONFIG_NAME="maniskill_ppo_openvlaoft"
@@ -180,8 +204,9 @@ fi
 
 MEGA_LOG_FILE="${LOG_DIR}/eval_embodiment.log"
 mkdir -p "${LOG_DIR}"
-CMD="python ${SRC_FILE} --config-path ${CONFIG_PATH} --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR} ${HYDRA_OVERRIDES}"
+CMD="python -u ${SRC_FILE} --config-path ${CONFIG_PATH} --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR} ${HYDRA_OVERRIDES}"
 echo ${CMD}
 ${CMD} 2>&1 | tee ${MEGA_LOG_FILE}
-# Force flush stdout to ensure output appears even if called from parent script
-exec >&1
+# Exit with python's status, not tee's (otherwise SIGQUIT/kill still looks like success).
+PYTHON_EXIT=${PIPESTATUS[0]}
+exit "${PYTHON_EXIT}"

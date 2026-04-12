@@ -65,10 +65,13 @@ def actor_loss(**kwargs) -> Tuple[torch.Tensor, Dict]:
 
 
 def calculate_adv_and_returns(**kwargs) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-    """
-    Unified entry for advantage + return computation.
-    Accepts variable keyword arguments, preprocesses them, then dispatches
-    to specific algorithm via registry.
+    """Dispatch to the registered advantage routine (e.g. `embodied_grpo`, `embodied_gae`).
+
+    Caller (`EmbodiedFSDPActor.compute_advantages_and_returns`) passes tensors on the
+    actor device; `adv_type` selects **GRPO** (group-normalized trajectory scores),
+    **embodied_opd** (teacher minus student logprobs, no normalization), vs
+    **GAE** (value bootstrapping). Preprocessing of rewards is done in
+    `preprocess_advantages_inputs` before this is called.
     """
     adv_type = kwargs["adv_type"]
     fn = get_adv_and_returns(adv_type)

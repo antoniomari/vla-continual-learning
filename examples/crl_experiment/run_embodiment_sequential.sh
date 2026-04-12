@@ -27,19 +27,19 @@ if [[ "$TASK_INPUT" == *,* ]]; then
     IFS=',' read -r TASK_START TASK_END <<< "$TASK_INPUT"
     TASK_START=$(echo "$TASK_START" | tr -d '()[] ')
     TASK_END=$(echo "$TASK_END" | tr -d '()[] ')
-    
+
     if ! [[ "$TASK_START" =~ ^[0-9]+$ ]] || ! [[ "$TASK_END" =~ ^[0-9]+$ ]]; then
         echo "ERROR: Task range must contain two numeric values: \"a,b\" where a and b are integers"
         echo "       Example: \"0,3\" or \"1,5\""
         exit 1
     fi
-    
+
     if [ "$TASK_START" -ge "$TASK_END" ]; then
         echo "ERROR: First task ID ($TASK_START) must be smaller than second task ID ($TASK_END)"
         echo "       Example: \"0,3\" (trains tasks 0, 1, 2, 3)"
         exit 1
     fi
-    
+
     IS_RANGE=true
     NUM_TASKS=$((TASK_END - TASK_START + 1))
 else
@@ -91,7 +91,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "Sequential Training - Single Task (LoRA)"
     fi
     echo "========================================="
-    
+
     # Determine checkpoint path
     if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
         CHECKPOINT_PATH="$MANUAL_CHECKPOINT_PATH"
@@ -113,7 +113,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             PREV_LOG_DIR_TRANSFORMED="$PREV_LOG_DIR"
         fi
         CHECKPOINT_PATH="${PREV_LOG_DIR_TRANSFORMED}/checkpoints/global_step_${GLOBAL_STEP}/actor"
-        
+
         if [[ "$CHECKPOINT_PATH" =~ ^/checkpoints/ ]]; then
             echo "  ERROR: Invalid checkpoint path construction detected"
             echo "         PREV_LOG_DIR was likely empty or malformed"
@@ -123,7 +123,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             break
         fi
     fi
-    
+
     # Determine LOG_DIR based on checkpoint path
     if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
         if [[ "$CHECKPOINT_PATH" =~ task_([0-9]+) ]]; then
@@ -146,7 +146,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     else
         LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_seed${SEED}"
     fi
-    
+
     # Inject config tag into LOG_DIR
     if [ -n "$CONFIG_TAG" ]; then
         LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$LOG_DIR" "$CONFIG_TAG")
@@ -159,21 +159,21 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         fi
         LOG_DIR="$LOG_DIR_TRANSFORMED"
     fi
-    
+
     if [ -z "$LOG_DIR" ]; then
         echo "  ERROR: LOG_DIR is empty after path construction"
         OVERALL_EXIT_CODE=1
         break
     fi
-    
+
     export LOG_DIR
     mkdir -p "${LOG_DIR}"
-    
+
     EXPERIMENT_NAME=$(basename "$LOG_DIR")
     if [ -n "$CONFIG_TAG" ]; then
         EXPERIMENT_NAME="${EXPERIMENT_NAME}_${CONFIG_TAG}"
     fi
-    
+
     echo "Configuration:"
     echo "  Task ID: $TASK_ID"
     if [ "$IS_RANGE" = true ]; then
@@ -184,7 +184,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo "  Checkpoint Save Path: $LOG_DIR"
     echo "  Config Name: $CONFIG_NAME"
     echo "  Random Seed: $SEED"
-    
+
     if [ -n "$CHECKPOINT_PATH" ]; then
         if [ ! -d "$CHECKPOINT_PATH" ]; then
             echo "  ERROR: Checkpoint not found at $CHECKPOINT_PATH"
@@ -200,7 +200,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     else
         echo "  Training from base model (SFT checkpoint) - First task (task $FIRST_TASK_ID)"
     fi
-    
+
     if [ -n "$MAX_EPOCH" ]; then
         if ! [[ "$MAX_EPOCH" =~ ^[0-9]+$ ]] || [ "$MAX_EPOCH" -le 0 ]; then
             echo "  ERROR: MAX_EPOCH must be a positive integer, got: $MAX_EPOCH"
@@ -209,29 +209,29 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         fi
         echo "  Max epochs: $MAX_EPOCH"
     fi
-    
+
     echo "========================================="
     echo ""
-    
+
     # Build Hydra overrides
     OVERRIDES="env.fixed_task_ids=[${TASK_ID}] \
     	runner.logger.experiment_name=${EXPERIMENT_NAME} \
     	actor.seed=${SEED}"
-    
+
     if [ -n "$CHECKPOINT_PATH" ]; then
         OVERRIDES="$OVERRIDES +actor.model.lora_path=${CHECKPOINT_PATH}"
     fi
-    
+
     if [ -n "$MAX_EPOCH" ]; then
         OVERRIDES="$OVERRIDES runner.max_epochs=${MAX_EPOCH}"
     fi
-    
+
     echo "Running with Hydra overrides:"
     echo "$OVERRIDES"
     echo ""
-    
+
     bash examples/embodiment/run_embodiment.sh ${CONFIG_NAME} $OVERRIDES
-    
+
     EXIT_CODE=$?
     echo ""
     echo "========================================="
@@ -239,7 +239,7 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "Task $TASK_ID completed successfully"
         echo ""
         echo "Checkpoint saved to: ${LOG_DIR}"
-        
+
         CHECKPOINT_LOCATION=$(echo "$LOG_DIR" | sed 's|^\./||')
         echo ""
         echo "Running evaluation for: ${CHECKPOINT_LOCATION}"

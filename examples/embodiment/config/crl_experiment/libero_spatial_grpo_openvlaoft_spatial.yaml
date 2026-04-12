@@ -14,7 +14,10 @@ cluster:
   num_nodes: 1
   component_placement:
     actor,env,rollout: all
-  ray_object_store_memory: 461708984320  # Ray object store memory in bytes (default: ~430GB)
+  # Plasma object store in bytes. The previous ~430GiB default often overcommits RAM and can
+  # cause worker OOM / "Failed to register worker to Raylet: IOError: End of file" on one node.
+  # Override per machine: cluster.ray_object_store_memory=<bytes>
+  ray_object_store_memory: 68719476736  # 64 GiB
 
 runner:
   task_type: embodied
@@ -24,12 +27,12 @@ runner:
     experiment_name: "test_openvla"
     logger_backends: ["wandb"] # wandb, swanlab
 
-  max_epochs: 10
+  max_epochs: 50
   max_steps: -1
 
   only_eval: False
   val_check_interval: -1
-  save_interval: 10
+  save_interval: 50
   seq_length: 4096
   max_prompt_length: 128
 
@@ -41,11 +44,11 @@ algorithm:
   shuffle_samples: True
   normalize_advantages: True
   kl_penalty: kl  # how to estimate kl divergence: kl or kl_penalty
-  group_size: 8
+  group_size: 4  # was 8
   n_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
-  num_group_envs: 8
-  rollout_epoch: 16
+  num_group_envs: 2  # was 8
+  rollout_epoch: 4
   eval_rollout_epoch: 20
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
@@ -93,7 +96,7 @@ env:
     queue_name: "obs_buffer"
     queue_size: 0
   eval:
-    num_envs: 80
+    num_envs: 16  # was 80
     eval_per_task: ${int_div:${env.eval.num_envs}, 10}
   enable_offload: False
   fixed_task_ids: null
@@ -106,7 +109,7 @@ rollout:
     queue_size: 0
   mode: "colocate"
   generation_backend: "huggingface"
-  model_dir: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
+  model_dir: "/cluster/home/anmari/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1"      # "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
   enable_offload: True
   pipeline_stage_num: 1
 
@@ -117,9 +120,9 @@ actor:
     queue_name: "replay_buffer"
     queue_size: 0
   training_backend: "fsdp"
-  checkpoint_load_path: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
+  checkpoint_load_path: "/cluster/home/anmari/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1" # "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
   micro_batch_size: 32
-  global_batch_size: 8192
+  global_batch_size: 2048 # 8192
   seed: 1234
   enable_offload: True
   preallocate: 0   # preallocates for actor worker (GB)
@@ -161,7 +164,7 @@ actor:
 
   tokenizer:
     tokenizer_type: "HuggingFaceTokenizer"
-    tokenizer_model: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
+    tokenizer_model: "/cluster/home/anmari/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1"  # "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
     use_fast: False
     trust_remote_code: True
     padding_side: "right"

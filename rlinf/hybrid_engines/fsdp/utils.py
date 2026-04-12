@@ -117,7 +117,7 @@ def get_fsdp_wrap_policy(module, config=None, is_lora=False):
                 "Cannot use VLA models with USE_CNN_UTILS=1. "
                 "Unset USE_CNN_UTILS environment variable for VLA models."
             )
-        
+
         from timm.models.vision_transformer import VisionTransformer
         from torch.distributed.fsdp.wrap import _module_wrap_policy, _or_policy
 
@@ -162,8 +162,12 @@ def get_fsdp_wrap_policy(module, config=None, is_lora=False):
         )
         policies.append(llm_wrap_policy)
 
-    # Add LoRA lambda policy if enabled
-    if is_lora:
+    # Add LoRA lambda policy if enabled (wrap each trainable leaf with its own FSDP).
+    # For VLA models, skip this: VisionTransformer / LLM layer wrapping already applies,
+    # and nesting FSDP at every LoRA leaf under the ViT breaks FULL_STATE_DICT
+    # (state_dict hooks assert missing keys like vision blocks.23...lora_B) on recent PyTorch.
+    # TODO: this was edited to solve LoRA issue in Euler
+    if is_lora and not is_vla_model:
         from torch.distributed.fsdp.wrap import lambda_auto_wrap_policy
 
         def lambda_policy_fn(module):

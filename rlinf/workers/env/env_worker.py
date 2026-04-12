@@ -333,10 +333,22 @@ class EnvWorker(Worker):
             ).async_wait()
 
     async def interact(self):
+        """Drive training envs for one full embodied rollout collection phase.
+
+        Called from EmbodiedRunner.generate_rollouts() alongside rollout.generate()
+        and actor.recv_rollout_batch(). This process sends observations on obs queues
+        and receives chunk actions from rollout on action queues; inner loop length
+        matches cfg.algorithm.n_chunk_steps per cfg.algorithm.rollout_epoch (same as
+        MultiStepRolloutWorker.generate).
+        """
         for simulator in self.simulator_list:
             simulator.start_simulator()
+
         for rollout_epoch in range(self.cfg.algorithm.rollout_epoch):
             env_batch_list = []
+
+            # Episode start for this outer epoch: either reset/step sim once (no auto_reset)
+            # or re-inject last obs/dones (auto_reset path for continuing trajectories).
             if not self.cfg.env.train.auto_reset:
                 for i in range(self.stage_num):
                     self.simulator_list[i].is_start = True
@@ -360,10 +372,14 @@ class EnvWorker(Worker):
                     )
                     env_batch_list.append(env_batch)
 
+            # Initial observation for this epoch: one send per pipeline stage so rollout
+            # can recv_env_batch and run the first predict() for each stage.
             for stage_id in range(self.stage_num):
                 env_batch = env_batch_list[stage_id]
                 await self.send_env_batch(env_batch)
 
+            # Main chunk loop: rollout sends actions -> we step sim -> we send next obs.
+            # n_chunk_steps aligns with algorithm rollout horizon in chunk units.
             for _ in range(self.cfg.algorithm.n_chunk_steps):
                 for stage_id in range(self.stage_num):
                     raw_chunk_actions = await self.recv_chunk_actions()
@@ -371,6 +387,7 @@ class EnvWorker(Worker):
                     await self.send_env_batch(env_batch)
                     env_batch_list[stage_id] = env_batch
 
+            # Carry state for auto_reset; optional logging/video hooks in finish_rollout.
             self.last_obs_list = [env_batch["obs"] for env_batch in env_batch_list]
             self.last_dones_list = [env_batch["dones"] for env_batch in env_batch_list]
             self.finish_rollout()

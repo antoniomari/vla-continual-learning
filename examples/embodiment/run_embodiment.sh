@@ -29,8 +29,21 @@ export RAY_DISABLE_IMPORT_WARNING=1
 # export RAY_LOG_TO_STDERR=1
 # export RAY_BACKEND_LOG_LEVEL=DEBUG 
 export RAY_DISABLE_DASHBOARD=1
+# Ray plasma/raylet sockets: Linux AF_UNIX paths must stay <=107 bytes. Long paths under $HOME/repo fail ray.init.
+export RAY_TMPDIR="${RAY_TMPDIR:-/tmp/ray_${USER}}"
+mkdir -p "$RAY_TMPDIR"
 export PYTORCH_DISTRIBUTED_BACKEND=nccl
- 
+
+# On Slurm shared GPU nodes, Ray otherwise sees all host CPUs (e.g. 192) and spawns a
+# massive default worker pool → memory pressure and "Failed to register worker to Raylet".
+# Default to the current task's allocation when Slurm env vars are set.
+if [ -z "${RLINF_RAY_NUM_CPUS:-}" ] && [ -n "${SLURM_CPUS_PER_TASK:-}" ]; then
+    export RLINF_RAY_NUM_CPUS="${SLURM_CPUS_PER_TASK}"
+fi
+if [ -z "${RLINF_RAY_NUM_GPUS:-}" ] && [ -n "${SLURM_GPUS_ON_NODE:-}" ]; then
+    export RLINF_RAY_NUM_GPUS="${SLURM_GPUS_ON_NODE}"
+fi
+
 if [ -z "$1" ]; then
     CONFIG_NAME="maniskill_ppo_openvlaoft"
     CONFIG_PATH="${EMBODIED_PATH}/config/"
@@ -72,6 +85,9 @@ if [ -z "${LOG_DIR}" ]; then
 fi
 MEGA_LOG_FILE="${LOG_DIR}/run_embodiment.log"
 mkdir -p "${LOG_DIR}"
-CMD="python ${SRC_FILE} --config-path ${CONFIG_PATH} --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR} $@" 
+# -u: unbuffered stdout/stderr so [train_embodied_agent] lines keep order vs Ray logs when piped to tee
+CMD="python -u ${SRC_FILE} --config-path ${CONFIG_PATH} --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR} $@" 
 echo ${CMD} > ${MEGA_LOG_FILE}
+# Without pipefail, tee's exit code (0) hides python failures — sequential script would report false success.
+set -o pipefail
 ${CMD} 2>&1 | tee -a ${MEGA_LOG_FILE}

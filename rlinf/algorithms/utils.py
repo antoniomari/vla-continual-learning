@@ -117,8 +117,12 @@ def preprocess_loss_inputs(**kwargs) -> dict:
 
 
 def preprocess_advantages_inputs(**kwargs) -> dict:
-    """
-    Preprocess inputs before computing advantages & returns.
+    """Align reward/done tensors with the advantage routine before dispatch.
+
+    For `reward_type == "chunk_level"`, each env step carries a vector of per-substep
+    rewards/dones (last dim = num_action_chunks). GRPO/GAE here expect one scalar
+    reward (and terminal flag) per chunk step: collapse the chunk dimension by
+    summing rewards and taking the last substep's done flag.
     """
     reward_type = kwargs.get("reward_type", None)
     if reward_type == "chunk_level":

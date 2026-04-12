@@ -52,7 +52,7 @@ This codebase provides:
 
 - Linux (tested on Ubuntu 22.04/24.04)
 - NVIDIA GPU(s) with CUDA 12.x
-- Conda
+- [uv](https://docs.astral.sh/uv/) (install: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
 
 ### Setup
 
@@ -61,23 +61,23 @@ This codebase provides:
 git clone git@github.com:UT-Austin-RobIn/continual-vla-rl.git
 cd continual-vla-rl
 
-# 2. Create conda environment
-conda create -n vlacrl python=3.11.10 -y
-conda activate vlacrl
+# 2. Create a virtual environment (Python 3.11.10)
+uv venv --python 3.11.10
+source .venv/bin/activate
 
 # 3. Install core dependencies
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 # 4. Install bundled packages (included in this repo)
-cd transformers-openvla-oft && pip install -e . && cd ..
-cd openvla-oft && pip install -e . && cd ..
-cd LIBERO && pip install -e . && cd ..
+cd transformers-openvla-oft && uv pip install -e . && cd ..
+cd openvla-oft && uv pip install -e . && cd ..
+cd LIBERO && uv pip install -e . && cd ..
 ```
 > **Optional:** For Flash Attention support (recommended for speed), install separately:
 > ```bash
-> pip install flash-attn --no-build-isolation
+> uv pip install flash-attn --no-build-isolation
 > ```
-> **Note:** The repository includes `transformers-openvla-oft`, `openvla-oft`, and `LIBERO` as bundled directories. Steps 4–5 install them as editable packages — no separate cloning is needed.
+> **Note:** The repository includes `transformers-openvla-oft`, `openvla-oft`, and `LIBERO` as bundled directories. Step 4 installs them as editable packages — no separate cloning is needed.
 
 ---
 

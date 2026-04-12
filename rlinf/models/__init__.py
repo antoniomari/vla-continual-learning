@@ -14,6 +14,7 @@
 
 import json
 import os
+from typing import Optional
 
 import torch
 from omegaconf import DictConfig
@@ -26,6 +27,7 @@ from transformers import (
 )
 
 from rlinf.config import torch_dtype_from_precision
+from rlinf.utils.model_load_info import log_get_model
 
 
 def _apply_lora_scale_if_present(model, lora_scale: float):
@@ -147,14 +149,23 @@ def get_model_config_and_processor(cfg: DictConfig):
     return model_config, input_processor
 
 
-def get_model(model_path, cfg: DictConfig, override_config_kwargs=None):
-    print(f"=== get_model called ===")
-    print(f"model_path: {model_path}")
-    print(f"cfg.model_name: {cfg.model_name}")
-    print(f"cfg has ckpt_path: {hasattr(cfg, 'ckpt_path')}")
-    if hasattr(cfg, 'ckpt_path'):
-        print(f"cfg.ckpt_path value: {cfg.ckpt_path}")
-    print(f"======================")
+def get_model(
+    model_path,
+    cfg: DictConfig,
+    override_config_kwargs=None,
+    *,
+    load_role: Optional[str] = None,
+    worker_rank: Optional[int] = None,
+    worker_world_size: Optional[int] = None,
+):
+    if load_role is not None:
+        log_get_model(
+            role=load_role,
+            model_path=model_path,
+            model_name=str(cfg.model_name),
+            worker_rank=worker_rank,
+            worker_world_size=worker_world_size,
+        )
 
     torch_dtype = torch_dtype_from_precision(cfg.precision)
     if cfg.model_name == "openvla":

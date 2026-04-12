@@ -52,7 +52,7 @@ def _check_actor_memory(device_index, threshold_gb=4.0):
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(device_index)
         procs = pynvml.nvmlDeviceGetComputeRunningProcesses(handle)
-        
+
         actor_mem_bytes = 0
         found_actor = False
         for p in procs:
@@ -61,17 +61,17 @@ def _check_actor_memory(device_index, threshold_gb=4.0):
                 name = pynvml.nvmlSystemGetProcessName(p.pid)
                 if isinstance(name, bytes):
                     name = name.decode('utf-8')
-                    
+
                 # We look for the Ray process name pattern
                 if "EmbodiedFSDPActor" in name:
                     actor_mem_bytes += p.usedGpuMemory
                     found_actor = True
-                
+
         pynvml.nvmlShutdown()
-        
+
         if not found_actor:
             return True # Actor not on this GPU or not found, assume safe
-            
+
         actor_mem_gb = actor_mem_bytes / (1024**3)
         print(f"Actor memory usage: {actor_mem_gb}, threshold: {threshold_gb}", flush=True)
         return actor_mem_gb < threshold_gb
@@ -125,7 +125,13 @@ class MultiStepRolloutWorker(Worker):
                 )
 
     def init_worker(self):
-        self.hf_model = get_model(self.cfg.rollout.model_dir, self.cfg.actor.model)
+        self.hf_model = get_model(
+            self.cfg.rollout.model_dir,
+            self.cfg.actor.model,
+            load_role="rollout_inference",
+            worker_rank=self._rank,
+            worker_world_size=self._world_size,
+        )
         self.hf_model.setup_params(self.model_config, self.cfg)
         self.hf_model.to(self.precision)
         self.hf_model.eval()
@@ -327,10 +333,15 @@ class MultiStepRolloutWorker(Worker):
 
         for rollout_epoch in range(self.cfg.algorithm.rollout_epoch):
             self._logger.info(f"Now epoch is={rollout_epoch}")
+
+            # n_chunk_steps == how many times (per rollout_epoch pass) we perform a policy forward pass
+            # it is equal to max_episode_steps / num_action_chunks
             for step in tqdm(
                 range(self.cfg.algorithm.n_chunk_steps),
                 desc=f"Rollout ID {self._rank} Epoch {rollout_epoch} in Generate Step",
             ):
+                # Stage_num is number of parallel pipeline stages in one rollout collection
+                # there are stage_num simulators
                 for i in range(self.stage_num):
                     env_batch = await self.recv_env_batch()
                     self.update_env_batch(i, env_batch)
@@ -462,19 +473,19 @@ class MultiStepRolloutWorker(Worker):
         """Wait until Actor process on this GPU uses less than threshold_gb memory."""
         if self._rank == 0:
             print(f"[Rollout] Waiting for Actor to offload GPU memory (Threshold: {threshold_gb}GB)...")
-            
+
         while True:
             is_safe = _check_actor_memory(self.device, threshold_gb)
             if is_safe:
                 break
-                
+
             time.sleep(1.0)
 
     def sync_model_from_actor(self):
         if self.cfg.actor.model.get('use_fsdp2', False):
             print("Waiting for actor to offload memory...", self._rank)
             self._wait_for_actor_offload(threshold_gb=5.0)
-        
+
         param_state_dict = self.recv(self._actor_group_name, src_rank=self._rank)
         self.hf_model.load_state_dict(param_state_dict)
         del param_state_dict

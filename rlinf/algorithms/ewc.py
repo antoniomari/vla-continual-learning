@@ -5,8 +5,10 @@ This module implements EWC regularization on top of LoRA adapters to prevent
 catastrophic forgetting when training on sequential tasks.
 """
 
+import math
 import os
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Tuple
@@ -37,6 +39,74 @@ def get_lora_parameters(model: nn.Module) -> Dict[str, torch.Tensor]:
             lora_params[name] = param.data.detach().cpu().clone()
     
     return lora_params
+
+
+def snapshot_params_for_delta(model: nn.Module, lora_only: bool) -> Dict[str, torch.Tensor]:
+    """
+    FP32 clone of trainable parameters before optimizer.step for measuring update size.
+
+    Uses the same FSDP unwrapping as get_lora_parameters. For FSDP, tensors are local shards;
+    pair with local_param_delta_squared_sum and all_reduce(SUM) before sqrt for global L2.
+    """
+    if hasattr(model, "module"):
+        model_to_check = model.module
+    else:
+        model_to_check = model
+
+    snapshots: Dict[str, torch.Tensor] = {}
+    for name, param in model_to_check.named_parameters():
+        if not param.requires_grad:
+            continue
+        if lora_only and "lora" not in name.lower():
+            continue
+        snapshots[name] = param.detach().float().clone()
+    return snapshots
+
+
+def local_param_delta_squared_sum(
+    model: nn.Module,
+    snapshots: Dict[str, torch.Tensor],
+    lora_only: bool,
+) -> float:
+    """
+    Sum of squared elements of (θ - θ_snapshot) for parameters on this rank.
+    Global Frobenius/L2 norm: sqrt(all_reduce_sum(local sums)).
+    """
+    if not snapshots:
+        return float("nan")
+
+    if hasattr(model, "module"):
+        model_to_check = model.module
+    else:
+        model_to_check = model
+
+    delta_sq = 0.0
+    for name, param in model_to_check.named_parameters():
+        if not param.requires_grad:
+            continue
+        if lora_only and "lora" not in name.lower():
+            continue
+        if name not in snapshots:
+            continue
+        d = param.detach().float() - snapshots[name]
+        delta_sq += d.pow(2).sum().item()
+    return delta_sq
+
+
+def global_param_delta_l2(
+    model: nn.Module,
+    snapshots: Dict[str, torch.Tensor],
+    lora_only: bool,
+    device: torch.device,
+) -> float:
+    """||θ' - θ||_2 over trainable (LoRA-only or all) parameters, FSDP-safe."""
+    loc_sq = local_param_delta_squared_sum(model, snapshots, lora_only)
+    if not math.isfinite(loc_sq):
+        return float("nan")
+    t = torch.tensor([loc_sq], device=device, dtype=torch.float64)
+    if dist.is_initialized() and dist.get_world_size() > 1:
+        dist.all_reduce(t, op=dist.ReduceOp.SUM)
+    return float(torch.sqrt(t).item())
 
 
 def compute_fisher_information_from_rollout(

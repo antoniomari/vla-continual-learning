@@ -55,7 +55,22 @@ class EmbodiedEvalRunner:
         final_metrics = {}
         for k in aggregated_eval_metrics[0].keys():
             vals = [m[k] for m in aggregated_eval_metrics]
-            final_metrics[k] = sum(vals) / len(vals)
+            if k.endswith("_success_total"):
+                # Per-epoch value is an episode count; sum across eval_rollout_epoch (mean was wrong).
+                final_metrics[k] = float(sum(vals))
+            elif k.endswith("_success") and "/task_" in k:
+                # Weighted success rate: sum(rate_i * n_i) / sum(n_i), not mean(rate_i).
+                total_key = f"{k}_total"
+                totals = [m[total_key] for m in aggregated_eval_metrics]
+                den = float(sum(totals))
+                if den > 0:
+                    final_metrics[k] = sum(
+                        r * t for r, t in zip(vals, totals, strict=True)
+                    ) / den
+                else:
+                    final_metrics[k] = -1.0
+            else:
+                final_metrics[k] = sum(vals) / len(vals)
         return final_metrics
 
     def run(self):

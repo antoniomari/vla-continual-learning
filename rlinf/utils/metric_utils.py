@@ -44,6 +44,13 @@ def compute_split_num(num, split_num):
 
 def compute_evaluate_metrics(eval_metrics_list):
     all_eval_metrics = {}
+
+    if not eval_metrics_list:
+        raise RuntimeError(
+            "compute_evaluate_metrics: empty eval_metrics_list (rollout returned no metrics). "
+            "If Ray logged 'Failed to register worker to Raylet: EOF', a worker likely crashed "
+            "during startup—check stderr under $RAY_TMPDIR or /tmp/ray/session_latest/logs/."
+        )
     
     # Identify task-specific success keys
     task_success_keys = [

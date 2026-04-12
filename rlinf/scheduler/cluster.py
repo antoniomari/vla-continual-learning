@@ -36,6 +36,66 @@ assert vs.parse(ray_version) >= vs.parse("2.47.0"), (
     "Ray version 2.47.0 or higher is required. Run pip install ray[default]==2.47.0"
 )
 
+
+def _rlinf_phase_print(msg: str) -> None:
+    """Log to stderr so lines stay visible next to Ray (Hydra/tee can delay stdout)."""
+    print(msg, file=sys.stderr, flush=True)
+
+
+def _ray_init_resource_kwargs() -> Dict[str, int]:
+    """Optional caps for ray.init on shared HPC nodes.
+
+    If unset, Ray auto-detects all host CPUs/GPUs, which can spawn a huge default
+    worker pool and stress memory (worker registration EOF / OOM). Set:
+
+    - RLINF_RAY_NUM_CPUS to your Slurm allocation (e.g. $SLURM_CPUS_PER_TASK)
+    - RLINF_RAY_NUM_GPUS to GPUs you own (often 1)
+    """
+    kwargs: Dict[str, int] = {}
+    if os.environ.get("RLINF_RAY_NUM_CPUS"):
+        kwargs["num_cpus"] = int(os.environ["RLINF_RAY_NUM_CPUS"])
+    if os.environ.get("RLINF_RAY_NUM_GPUS"):
+        kwargs["num_gpus"] = int(os.environ["RLINF_RAY_NUM_GPUS"])
+    return kwargs
+
+
+def _ray_init_extras() -> Dict:
+    """Optional ray.init kwargs (dashboard, minimal init for eval, etc.)."""
+    include_dash = os.environ.get("RLINF_RAY_INCLUDE_DASHBOARD", "1") == "1"
+    extra: Dict = {
+        # RLINF_RAY_INCLUDE_DASHBOARD=0 avoids binding port 8265 (often problematic on HPC).
+        "include_dashboard": include_dash,
+    }
+    # Eval entrypoint sets RLINF_RAY_MINIMAL_INIT=1 to reduce work inside ray.init (logging setup, etc.).
+    if os.environ.get("RLINF_RAY_MINIMAL_INIT", "0") == "1":
+        extra["include_dashboard"] = False
+        extra["configure_logging"] = False
+    return extra
+
+
+def _ray_init_object_store_kw() -> Dict:
+    """Pass object_store_memory explicitly (plasma mmap can block if env is ignored)."""
+    v = os.environ.get("RAY_OBJECT_STORE_MEMORY")
+    if not v:
+        return {}
+    try:
+        return {"object_store_memory": int(v)}
+    except ValueError:
+        return {}
+
+
+def _ray_runtime_env_payload() -> Optional[Dict]:
+    """Worker env injection for ray.init.
+
+    Passing runtime_env={\"env_vars\": dict(os.environ)} can take a very long time or appear
+    hung inside ray.init() on HPC (huge Slurm/Modules environments). Eval sets
+    RLINF_RAY_SKIP_RUNTIME_ENV=1 to omit it; workers still inherit many vars from the parent.
+    Set RLINF_RAY_SKIP_RUNTIME_ENV=0 to restore previous behavior.
+    """
+    if os.environ.get("RLINF_RAY_SKIP_RUNTIME_ENV", "0") == "1":
+        return None
+    return {"env_vars": dict(os.environ)}
+
 if TYPE_CHECKING:
     from .worker import Worker
 
@@ -147,27 +207,102 @@ class Cluster:
         # Ensure Ray uses a user-writable temp directory to avoid /tmp permission issues
         self._ensure_ray_tmpdir()
 
+        _ray_kw = _ray_init_resource_kwargs()
+        _extra = _ray_init_extras()
+        _os_mem = _ray_init_object_store_kw()
+        _rt = _ray_runtime_env_payload()
+        # Single-node eval / local jobs: set RLINF_RAY_LOCAL_ONLY=1 so we never call
+        # ray.init(address="auto"), which can hang on HPC when RAY_ADDRESS points at a
+        # stale or unreachable cluster head (num_envs does not affect this).
+        _local_only = os.environ.get("RLINF_RAY_LOCAL_ONLY", "") == "1"
+        _rlinf_phase_print("[RLinf] ray.init() starting ...")
+        if _rt is None:
+            _rlinf_phase_print(
+                "[RLinf] ray.init: skipping runtime_env (RLINF_RAY_SKIP_RUNTIME_ENV=1)"
+            )
+        if _local_only:
+            os.environ.pop("RAY_ADDRESS", None)
+            _init = {
+                "logging_level": Cluster.LOGGING_LEVEL,
+                "namespace": Cluster.NAMESPACE,
+                **_ray_kw,
+                **_extra,
+                **_os_mem,
+            }
+            if _rt is not None:
+                _init["runtime_env"] = _rt
+            _rlinf_phase_print(
+                f"[RLinf] ray.init local kwargs keys: {list(_init.keys())} "
+                f"include_dashboard={_init.get('include_dashboard', 'n/a')} "
+                f"object_store_memory={_init.get('object_store_memory', 'default')}"
+            )
+            ray.init(**_init)
+        else:
+            try:
+                # First try to connect to an existing Ray cluster
+                _init = {
+                    "address": "auto",
+                    "logging_level": Cluster.LOGGING_LEVEL,
+                    "namespace": Cluster.NAMESPACE,
+                    **_ray_kw,
+                    **_extra,
+                    **_os_mem,
+                }
+                if _rt is not None:
+                    _init["runtime_env"] = _rt
+                ray.init(**_init)
+            except (ConnectionError, PermissionError, OSError, ValueError):
+                _init = {
+                    "logging_level": Cluster.LOGGING_LEVEL,
+                    "namespace": Cluster.NAMESPACE,
+                    **_ray_kw,
+                    **_extra,
+                    **_os_mem,
+                }
+                if _rt is not None:
+                    _init["runtime_env"] = _rt
+                ray.init(**_init)
+        # Ray may log "Started a local Ray instance" before ray.init() returns; our code runs
+        # only after ray.init() completes. The next line is the first RLinf feedback after that.
+        _rlinf_phase_print("[RLinf] ray.init() returned.")
         try:
-            # First try to connect to an existing Ray cluster
-            ray.init(
-                address="auto",
-                logging_level=Cluster.LOGGING_LEVEL,
-                namespace=Cluster.NAMESPACE,
-                runtime_env={"env_vars": dict(os.environ)},
-            )
-        except (ConnectionError, PermissionError, OSError, ValueError):
-            ray.init(
-                logging_level=Cluster.LOGGING_LEVEL,
-                namespace=Cluster.NAMESPACE,
-                runtime_env={"env_vars": dict(os.environ)},
-            )
+            _n_after_init = len(ray.nodes())
+        except Exception as e_exc:
+            _rlinf_phase_print(f"[RLinf] ray.nodes() failed right after init: {e_exc}")
+            raise
+        _rlinf_phase_print(
+            f"[RLinf] ray.nodes() count={_n_after_init}; need {self._num_nodes} "
+            "(waiting if below threshold) ..."
+        )
 
-        # Wait for the cluster to be ready
+        # Wait for the cluster to be ready (can spin forever on misconfigured clusters).
+        _wait_timeout = float(os.environ.get("RLINF_RAY_NODE_WAIT_TIMEOUT", "300"))
+        _poll_sleep = float(os.environ.get("RLINF_RAY_NODE_POLL_SLEEP_SEC", "0.1"))
+        _wait_start = time.time()
+        _last_print = 0.0
         while len(ray.nodes()) < self._num_nodes:
-            self._logger.warning(
-                f"Waiting for {self._num_nodes} nodes to be ready, currently {len(ray.nodes())} nodes available."
-            )
-            time.sleep(1)
+            n = len(ray.nodes())
+            elapsed = time.time() - _wait_start
+            if elapsed > _wait_timeout:
+                raise RuntimeError(
+                    f"[RLinf] Timed out after {int(_wait_timeout)}s waiting for Ray nodes "
+                    f"(have {n}, need {self._num_nodes}). "
+                    "Check $RAY_TMPDIR/session_latest/logs or /tmp/ray/session_latest/logs. "
+                    "Try: RLINF_RAY_INCLUDE_DASHBOARD=0, lower cluster.ray_object_store_memory, "
+                    "or verify the node is not out of RAM/shm (df -h /dev/shm)."
+                )
+            now = time.time()
+            if now - _last_print >= 5.0:
+                remaining = max(0.0, _wait_timeout - elapsed)
+                _rlinf_phase_print(
+                    f"[RLinf] Waiting for Ray nodes: {n}/{self._num_nodes} "
+                    f"({elapsed:.0f}s elapsed, ~{remaining:.0f}s until timeout)"
+                )
+                self._logger.warning(
+                    f"Waiting for {self._num_nodes} nodes to be ready, currently {n} nodes available."
+                )
+                _last_print = now
+            time.sleep(_poll_sleep)
 
         self._nodes: List[NodeInfo] = []
         for node in ray.nodes():
@@ -204,9 +339,13 @@ class Cluster:
             )
             self._nodes = self._nodes[: self._num_nodes]
 
-        self._logger.info(
-            f"{Cluster.SYS_NAME} is running on a cluster with {len(self._nodes)} node{'s' if len(self._nodes) > 1 else ''} and {self.num_accelerators_in_cluster} accelerator{'s' if self.num_accelerators_in_cluster > 1 else ''}. The nodes' details are: {self._nodes}"
+        _cluster_ready_msg = (
+            f"{Cluster.SYS_NAME} is running on a cluster with {len(self._nodes)} node{'s' if len(self._nodes) > 1 else ''} "
+            f"and {self.num_accelerators_in_cluster} accelerator{'s' if self.num_accelerators_in_cluster > 1 else ''}. "
+            f"The nodes' details are: {self._nodes}"
         )
+        self._logger.info(_cluster_ready_msg)
+        sys.stderr.flush()
 
         # Launch managers
         from .manager import (
@@ -275,17 +414,33 @@ class Cluster:
         # Ensure Ray uses a user-writable temp directory to avoid /tmp permission issues
         self._ensure_ray_tmpdir()
         if not ray.is_initialized():
+            _ray_kw = _ray_init_resource_kwargs()
+            _extra = _ray_init_extras()
+            _os_mem = _ray_init_object_store_kw()
+            _rt = _ray_runtime_env_payload()
             try:
-                ray.init(
-                    address="auto",
-                    namespace=Cluster.NAMESPACE,
-                    logging_level=Cluster.LOGGING_LEVEL,
-                )
+                _init = {
+                    "address": "auto",
+                    "namespace": Cluster.NAMESPACE,
+                    "logging_level": Cluster.LOGGING_LEVEL,
+                    **_ray_kw,
+                    **_extra,
+                    **_os_mem,
+                }
+                if _rt is not None:
+                    _init["runtime_env"] = _rt
+                ray.init(**_init)
             except (ConnectionError, PermissionError, OSError, ValueError):
-                ray.init(
-                    namespace=Cluster.NAMESPACE,
-                    logging_level=Cluster.LOGGING_LEVEL,
-                )
+                _init = {
+                    "namespace": Cluster.NAMESPACE,
+                    "logging_level": Cluster.LOGGING_LEVEL,
+                    **_ray_kw,
+                    **_extra,
+                    **_os_mem,
+                }
+                if _rt is not None:
+                    _init["runtime_env"] = _rt
+                ray.init(**_init)
 
         from .manager.node_manager import NodeManager
 
@@ -320,11 +475,10 @@ class Cluster:
             tmp_dir = os.environ["RAY_TMPDIR"]
         else:
             user = os.environ.get("USER") or os.environ.get("LOGNAME") or "unknown"
-            # Resolve repository root from this file: .../rlinf/scheduler/cluster.py -> repo root two levels up
-            repo_root = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), os.pardir, os.pardir)
-            )
-            tmp_dir = os.path.join(repo_root, ".ray_tmp")
+            # Use a short path: AF_UNIX socket paths must be <= 107 bytes. Putting sessions under
+            # a long repo path (e.g. /cluster/home/.../vla-continual-learning/.ray_tmp/...) exceeds
+            # that limit and ray.init fails with validate_socket_filename.
+            tmp_dir = os.path.join(os.sep, "tmp", f"ray_{user}")
             os.environ["RAY_TMPDIR"] = tmp_dir
 
         try:

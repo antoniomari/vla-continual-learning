@@ -1,6 +1,7 @@
 torch>=2.6.0
 torchvision>=0.21.0
-numpy>=1.26.4
+# NumPy 2.0 removed np.complex_ etc.; tensorflow_graphics / parts of the stack still expect 1.x
+numpy>=1.26.4,<2.0
 scipy>=1.16.0
 
 accelerate>=1.10.0

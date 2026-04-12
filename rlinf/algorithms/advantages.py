@@ -63,6 +63,7 @@ def compute_embodied_gae_advantages_and_returns(
 
     flattened_returns = torch.zeros_like(flattened_rewards)
 
+    # GAE(γ, λ) backward pass; `flattened_returns[step]` stores A_t + V_t for bootstrapping path.
     gae = 0
     for step in reversed(range(flattened_rewards.shape[0])):
         vt1 = flattened_values[step + 1]
@@ -74,7 +75,7 @@ def compute_embodied_gae_advantages_and_returns(
         gae = delta + gamma * gae_lambda * (~flattened_dones[step + 1]) * gae
         flattened_returns[step] = gae + vt
 
-    # calc adv
+    # Advantage = return estimate minus value at same timestep.
     flattened_advantages = flattened_returns - flattened_values[:-1]
 
     if normalize_advantages:
@@ -98,8 +99,18 @@ def compute_embodied_gae_advantages_and_returns(
 def compute_embodied_grpo_advantages(
     **kwargs,
 ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-    """
-    Group Relative Policy Optimization (GRPO) advantages.
+    """Group Relative Policy Optimization (GRPO) advantages for embodied RL.
+
+    Layout: `rewards` / `dones` are [n_chunk_step, batch, num_action_chunks].
+    For each parallel env index in `batch`, we first compute a scalar **trajectory
+    return** (discounted sum is not used here; it is undiscounted cumulative reward
+    with zeroing after terminal—see loop). Then we **subtract the group mean** and
+    **divide by group std** over GRPO groups of size `group_size`, so advantages
+    are **relative within groups** (same task / prompt family), not absolute.
+
+    Groups are laid out as `rollout_epoch * num_group_envs` rows × `group_size`
+    columns after reshaping `scores`. Returns second tensor = advantages (used as
+    surrogate "returns" for logging paths that expect both).
     """
 
     rewards = kwargs["rewards"]
@@ -112,6 +123,7 @@ def compute_embodied_grpo_advantages(
     epsilon = kwargs.get("epsilon", 1e-6)
 
     n_chunk_step, actual_bsz, num_action_chunks = rewards.shape
+    # Time-major grid: each row is one fine timestep (chunk step × action substep).
     flattened_rewards = rewards.transpose(1, 2).reshape(
         n_chunk_step * num_action_chunks, -1
     )
@@ -121,19 +133,21 @@ def compute_embodied_grpo_advantages(
     )
     flattened_dones = flattened_dones[-(n_chunk_step * num_action_chunks + 1) :]
 
-    # loss mask
     flattened_loss_mask = None
     if loss_mask is not None:
         flattened_loss_mask = loss_mask.transpose(1, 2).reshape(
             n_chunk_step * num_action_chunks, -1
         )
 
+    # Per-env scalar score = sum of rewards until episode end (backward pass).
+    # `scores * ~dones` clears contribution after terminal; no gamma here.
     n_steps = flattened_rewards.shape[0]
     scores = torch.zeros(actual_bsz)
     for step in reversed(range(n_steps)):
         scores = scores * ~flattened_dones[step + 1]
         scores += flattened_rewards[step]
 
+    # Group-relative standardization: each group has `group_size` trajectories.
     if normalize_advantages:
         scores = scores.reshape(rollout_epoch * num_group_envs, group_size)
         mean, std = scores.mean(dim=-1, keepdim=True), scores.std(dim=-1, keepdim=True)
@@ -142,6 +156,7 @@ def compute_embodied_grpo_advantages(
     else:
         flattened_advantages = scores.reshape(1, -1)
 
+    # Broadcast scalar advantage per trajectory to every fine timestep for token loss.
     if flattened_loss_mask is not None:
         flattened_advantages = (
             flattened_advantages.tile([n_steps, 1]) * flattened_loss_mask
@@ -152,6 +167,23 @@ def compute_embodied_grpo_advantages(
     advantages = flattened_advantages.reshape(
         n_chunk_step, num_action_chunks, actual_bsz
     ).transpose(1, 2)
+    return advantages, advantages
+
+
+@register_advantage("embodied_opd")
+def compute_embodied_opd_advantages(
+    **kwargs,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """OPD reward r_t = log pi_teacher(a|s) - log pi_student(a|s) at rollout student logprobs.
+
+    No normalization. `advantages` uses the same tensor layout as `prev_logprobs`.
+    """
+    teacher_logprobs = kwargs["teacher_logprobs"]
+    student_logprobs = kwargs["student_logprobs"]
+    loss_mask = kwargs.get("loss_mask", None)
+    advantages = teacher_logprobs - student_logprobs
+    if loss_mask is not None:
+        advantages = advantages * loss_mask
     return advantages, advantages
 
 

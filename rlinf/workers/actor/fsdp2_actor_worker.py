@@ -14,6 +14,7 @@
 
 import gc
 import json
+import math
 import os
 import time
 from contextlib import nullcontext
@@ -21,7 +22,7 @@ from itertools import cycle
 
 import numpy as np
 import torch
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 from peft import get_peft_model_state_dict
 from torch.distributed.device_mesh import init_device_mesh
 from torch.distributed.fsdp import FullStateDictConfig, StateDictType
@@ -47,6 +48,10 @@ from rlinf.models.embodiment.model_utils import (
     custom_forward,
 )
 from rlinf.scheduler import Cluster, Worker
+from rlinf.workers.actor.opd_teacher import (
+    compute_teacher_logprobs_for_rollout,
+    load_opd_teacher_model,
+)
 from rlinf.utils.data_iter_utils import get_iterator_k_split
 from rlinf.utils.distributed import all_reduce_dict
 from rlinf.utils.metric_utils import (
@@ -93,6 +98,8 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
 
         # initialize sft buffer
         self.use_experience_replay = cfg.algorithm.use_experience_replay
+        self._opd_bc_steps = cfg.algorithm.get("opd_bc_steps", 0)
+        self._opd_teacher_model = None
         self.use_reference_logits_bc = cfg.algorithm.get(
             "use_reference_logits_bc", False
         )
@@ -103,7 +110,7 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
                 f"returning logits type {self.logits_type} is not implemented"
             )
 
-        if self.use_experience_replay:
+        if self.use_experience_replay or self._opd_bc_steps > 0:
             self._init_sft_replay_buffer(use_cached_logits=self.use_cached_bc_logits)
 
         self._preallocated_memory = None
@@ -124,10 +131,11 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
         if self._rank == 0:
             print(f"Initializing SFT dataset on rank {self._rank}")
 
+        demos_per_task = self.cfg.algorithm.get("opd_sft_demos_per_task", 1)
         self.sft_dataset = LiberoSFTDataset(
             cfg=self.cfg,
             root_dir=dataset_path,
-            demos_per_task=1,
+            demos_per_task=demos_per_task,
             rank=self._rank,
             world_size=self._world_size,
             use_cached_logits=use_cached_logits,
@@ -235,7 +243,13 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
                 print("[WARNING] No memory has been preallocated. Nothing to free.")
 
     def model_provider_func(self):
-        model = get_model(self.cfg.actor.checkpoint_load_path, self.cfg.actor.model)
+        model = get_model(
+            self.cfg.actor.checkpoint_load_path,
+            self.cfg.actor.model,
+            load_role="actor_train_fsdp_init",
+            worker_rank=self._rank,
+            worker_world_size=self._world_size,
+        )
         if model is not None:
             return model
         return super().model_provider_func()
@@ -382,22 +396,50 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
             // actor_world_size
         )
 
-        kwargs = {
-            "adv_type": self.cfg.algorithm.adv_type,
-            "rewards": self.rollout_batch["rewards"],
-            "dones": self.rollout_batch["dones"],
-            "normalize_advantages": self.cfg.algorithm.get(
-                "normalize_advantages", True
-            ),
-            "values": self.rollout_batch.get("prev_values", None),
-            "gamma": self.cfg.algorithm.get("gamma", 1),
-            "gae_lambda": self.cfg.algorithm.get("gae_lambda", 1),
-            "num_group_envs": num_group_envs_for_train,
-            "group_size": self.cfg.algorithm.get("group_size", 8),
-            "reward_type": self.cfg.algorithm.reward_type,
-            "loss_mask": self.rollout_batch.get("loss_mask", None),
-            "rollout_epoch": self.cfg.algorithm.get("rollout_epoch", 1),
-        }
+        rewards = self.rollout_batch["rewards"]
+        dones = self.rollout_batch["dones"]
+        loss_mask = self.rollout_batch.get("loss_mask", None)
+
+        if self.cfg.algorithm.adv_type == "embodied_opd":
+            if self._opd_teacher_model is None:
+                self._opd_teacher_model = load_opd_teacher_model(
+                    self.cfg, self._rank
+                )
+            student_core = (
+                self.model.module if hasattr(self.model, "module") else self.model
+            )
+            teacher_lp = compute_teacher_logprobs_for_rollout(
+                self._opd_teacher_model,
+                self.rollout_batch,
+                self.cfg,
+                student_core,
+            )
+            kwargs = {
+                "adv_type": "embodied_opd",
+                "rewards": rewards,
+                "dones": dones,
+                "teacher_logprobs": teacher_lp,
+                "student_logprobs": self.rollout_batch["prev_logprobs"],
+                "loss_mask": loss_mask,
+                "reward_type": self.cfg.algorithm.reward_type,
+            }
+        else:
+            kwargs = {
+                "adv_type": self.cfg.algorithm.adv_type,
+                "rewards": rewards,
+                "dones": dones,
+                "normalize_advantages": self.cfg.algorithm.get(
+                    "normalize_advantages", True
+                ),
+                "values": self.rollout_batch.get("prev_values", None),
+                "gamma": self.cfg.algorithm.get("gamma", 1),
+                "gae_lambda": self.cfg.algorithm.get("gae_lambda", 1),
+                "num_group_envs": num_group_envs_for_train,
+                "group_size": self.cfg.algorithm.get("group_size", 8),
+                "reward_type": self.cfg.algorithm.reward_type,
+                "loss_mask": loss_mask,
+                "rollout_epoch": self.cfg.algorithm.get("rollout_epoch", 1),
+            }
         kwargs = preprocess_advantages_inputs(**kwargs)
         advantages, returns = calculate_adv_and_returns(**kwargs)
 
@@ -665,6 +707,21 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
 
             torch.cuda.empty_cache()
 
+            log_param_delta = self.cfg.algorithm.get("log_param_delta", True)
+            is_lora = self.cfg.actor.model.get("is_lora", False)
+            log_all_weights = self.cfg.algorithm.get(
+                "log_param_delta_all_trainable", False
+            )
+            param_delta_snap = None
+            param_delta_lora_only = True
+            if log_param_delta and (is_lora or log_all_weights):
+                from rlinf.algorithms.ewc import snapshot_params_for_delta
+
+                param_delta_lora_only = is_lora and not log_all_weights
+                param_delta_snap = snapshot_params_for_delta(
+                    self.model, lora_only=param_delta_lora_only
+                )
+
             grad_norm = self.model.clip_grad_norm_(
                 max_norm=self.cfg.actor.optim.clip_grad
             )
@@ -680,6 +737,17 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
             }
             if self.cfg.algorithm.adv_type == "embodied_gae":
                 data["critic/lr"] = self.optimizer.param_groups[1]["lr"]
+            if param_delta_snap:
+                from rlinf.algorithms.ewc import global_param_delta_l2
+
+                pd = global_param_delta_l2(
+                    self.model,
+                    param_delta_snap,
+                    param_delta_lora_only,
+                    device=torch.device(f"cuda:{int(os.environ['LOCAL_RANK'])}"),
+                )
+                if math.isfinite(pd):
+                    data["actor/param_delta_l2"] = pd
             append_to_dict(metrics, data)
 
         mean_metric_dict = {key: np.mean(value) for key, value in metrics.items()}
@@ -693,6 +761,98 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
         torch.cuda.empty_cache()
 
         return mean_metric_dict
+
+    def run_opd_bc_warmup(self, num_steps: int):
+        """Behavior-cloning warmup on expert data before OPD RL (teacher snapshot saved separately)."""
+        if self.cfg.actor.model.get("model_name") == "simple_cnn":
+            raise NotImplementedError(
+                "opd_bc_steps / run_opd_bc_warmup is only supported for VLA models"
+            )
+        self._deallocate_preallocated_memory()
+        if self.cfg.actor.get("enable_offload", False):
+            self.load_fsdp_param_and_grad(self.device)
+            self.load_fsdp_optimizer(self.device)
+
+        self.model.train()
+        device = f"cuda:{int(os.environ['LOCAL_RANK'])}"
+        bc_coeff = self.cfg.algorithm.get(
+            "opd_bc_coeff", self.cfg.algorithm.get("bc_coeff", 1.0)
+        )
+        grad_acc = (
+            self.cfg.actor.global_batch_size
+            // self.cfg.actor.micro_batch_size
+            // self._world_size
+        )
+        metrics: dict = {}
+        for _ in tqdm(
+            range(num_steps),
+            desc=f"OPD BC warmup (rank={self._rank})",
+            disable=self._rank != 0,
+        ):
+            self.optimizer.zero_grad()
+            for _ in range(grad_acc):
+                bc_batch = next(self.sft_iterator)
+                for k, v in bc_batch.items():
+                    bc_batch[k] = v.to(device)
+                bc_batch = self.model.preprocess_for_train(bc_batch)
+                action_token_len = self.model.action_dim * self.model.num_action_chunks
+                logits_processor_args = {
+                    "action_tokens": bc_batch["action_tokens"],
+                    "vocab_size": self.model.vocab_size,
+                    "n_action_bins": self.model.config.n_action_bins,
+                }
+                output_dict = custom_forward(
+                    self.model,
+                    input_ids=bc_batch["input_ids"],
+                    attention_mask=bc_batch["attention_mask"],
+                    pixel_values=bc_batch["pixel_values"],
+                    action_token_len=action_token_len,
+                    value_model=False,
+                    temperature=self.cfg.algorithm.sampling_params.temperature_train,
+                    top_k=self.cfg.algorithm.sampling_params.top_k,
+                    logits_processor_args=logits_processor_args,
+                    has_bc_batch=False,
+                )
+                expert_tok = torch.tensor(
+                    compute_action_tokens_from_actions(self.model, bc_batch["actions"]),
+                    device=device,
+                )
+                bc_loss, bc_metrics = behavior_cloning_ce_loss(
+                    intermediate_logits=output_dict["intermediate_logits"],
+                    expert_actions_tokens=expert_tok,
+                    bc_coeff=bc_coeff,
+                    vocab_size=self.model.vocab_size,
+                    n_action_bins=self.model.config.n_action_bins,
+                )
+                (bc_loss / grad_acc).backward()
+                append_to_dict(metrics, bc_metrics)
+
+            grad_norm = self.model.clip_grad_norm_(
+                max_norm=self.cfg.actor.optim.clip_grad
+            )
+            self.optimizer.step()
+            append_to_dict(
+                metrics,
+                {"actor/grad_norm": grad_norm.detach().item()},
+            )
+
+        mean_metric_dict = {key: np.mean(value) for key, value in metrics.items()}
+        mean_metric_dict = all_reduce_dict(
+            mean_metric_dict, op=torch.distributed.ReduceOp.AVG
+        )
+        torch.cuda.synchronize()
+        torch.distributed.barrier()
+        torch.cuda.empty_cache()
+        return mean_metric_dict
+
+    def set_opd_teacher_model_path(self, path: str):
+        """Ray actors keep a launch-time cfg copy; call this after BC so OPD can load the teacher."""
+        with open_dict(self.cfg.algorithm):
+            self.cfg.algorithm.opd_teacher_model_path = path
+        self._opd_teacher_model = None
+        if self._rank == 0:
+            print(f"[OPD] Actor cfg opd_teacher_model_path set to {path}", flush=True)
+        return {}
 
     def save_checkpoint(self, save_base_path, step):
         torch.distributed.barrier()

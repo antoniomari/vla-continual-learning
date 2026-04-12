@@ -14,6 +14,7 @@
 
 import gc
 import json
+import math
 import os
 import time
 from contextlib import nullcontext
@@ -21,7 +22,7 @@ from itertools import cycle
 
 import numpy as np
 import torch
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 from peft import get_peft_model_state_dict
 from torch.distributed.device_mesh import init_device_mesh
 from torch.distributed.fsdp import FullOptimStateDictConfig, FullStateDictConfig, StateDictType
@@ -53,6 +54,10 @@ from rlinf.models.embodiment.model_utils import (
     custom_forward,
 )
 from rlinf.scheduler import Cluster, Worker
+from rlinf.workers.actor.opd_teacher import (
+    compute_teacher_logprobs_for_rollout,
+    load_opd_teacher_model,
+)
 from rlinf.utils.data_iter_utils import get_iterator_k_split
 from rlinf.utils.distributed import all_reduce_dict
 from rlinf.utils.metric_utils import (
@@ -107,6 +112,8 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
         # initialize sft buffer
         self.use_experience_replay = cfg.algorithm.use_experience_replay
+        self._opd_bc_steps = cfg.algorithm.get("opd_bc_steps", 0)
+        self._opd_teacher_model = None
         self.use_reference_logits_bc = cfg.algorithm.get(
             "use_reference_logits_bc", False
         )
@@ -117,7 +124,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 f"returning logits type {self.logits_type} is not implemented"
             )
 
-        if self.use_experience_replay:
+        if self.use_experience_replay or self._opd_bc_steps > 0:
             self._init_sft_replay_buffer(use_cached_logits=self.use_cached_bc_logits)
 
         self._preallocated_memory = None
@@ -132,7 +139,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         )
         # if not self.enable_logit_check:
         #     exit()
-        
+
         # Enable garbage outputs for fast debugging (bypasses model inference)
         self.use_garbage_outputs = cfg.actor.get("use_garbage_outputs", False)
         if self.use_garbage_outputs and self._rank == 0:
@@ -140,7 +147,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 "WARNING: use_garbage_outputs is enabled. Actor will generate fake outputs "
                 "instead of running model inference. This is for debugging only!"
             )
-        
+
         # EWC (Elastic Weight Consolidation) setup
         self.use_ewc = cfg.algorithm.get("use_ewc", False)
         self.ewc_fisher_dict = None
@@ -153,10 +160,11 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         if self._rank == 0:
             print(f"Initializing SFT dataset on rank {self._rank}")
 
+        demos_per_task = self.cfg.algorithm.get("opd_sft_demos_per_task", 1)
         self.sft_dataset = LiberoSFTDataset(
             cfg=self.cfg,
             root_dir=dataset_path,
-            demos_per_task=1,
+            demos_per_task=demos_per_task,
             rank=self._rank,
             world_size=self._world_size,
             use_cached_logits=use_cached_logits,
@@ -212,7 +220,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 for name in sample_names:
                     print(f"  {name}: {loaded_params[name].shape}, "
                           f"mean={loaded_params[name].mean().item():.6e}")
-            
+
             # Use loaded weights instead of whatever was in ewc_data.pt
             # This ensures we regularize toward the actual loaded checkpoint weights
             self.ewc_old_params = loaded_params
@@ -291,7 +299,13 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 print("[WARNING] No memory has been preallocated. Nothing to free.")
 
     def model_provider_func(self):
-        model = get_model(self.cfg.actor.checkpoint_load_path, self.cfg.actor.model)
+        model = get_model(
+            self.cfg.actor.checkpoint_load_path,
+            self.cfg.actor.model,
+            load_role="actor_train_fsdp_init",
+            worker_rank=self._rank,
+            worker_world_size=self._world_size,
+        )
         if model is not None:
             return model
         return super().model_provider_func()
@@ -456,22 +470,46 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         prev_values = self.rollout_batch.get("prev_values", None)
         loss_mask = self.rollout_batch.get("loss_mask", None)
 
-        kwargs = {
-            "adv_type": self.cfg.algorithm.adv_type,
-            "rewards": rewards,
-            "dones": dones,
-            "normalize_advantages": self.cfg.algorithm.get(
-                "normalize_advantages", True
-            ),
-            "values": prev_values,
-            "gamma": self.cfg.algorithm.get("gamma", 1),
-            "gae_lambda": self.cfg.algorithm.get("gae_lambda", 1),
-            "num_group_envs": num_group_envs_for_train,
-            "group_size": self.cfg.algorithm.get("group_size", 8),
-            "reward_type": self.cfg.algorithm.reward_type,
-            "loss_mask": loss_mask,
-            "rollout_epoch": self.cfg.algorithm.get("rollout_epoch", 1),
-        }
+        if self.cfg.algorithm.adv_type == "embodied_opd":
+            if self._opd_teacher_model is None:
+                self._opd_teacher_model = load_opd_teacher_model(
+                    self.cfg, self._rank
+                )
+            student_core = (
+                self.model.module if hasattr(self.model, "module") else self.model
+            )
+            teacher_lp = compute_teacher_logprobs_for_rollout(
+                self._opd_teacher_model,
+                self.rollout_batch,
+                self.cfg,
+                student_core,
+            )
+            kwargs = {
+                "adv_type": "embodied_opd",
+                "rewards": rewards,
+                "dones": dones,
+                "teacher_logprobs": teacher_lp,
+                "student_logprobs": self.rollout_batch["prev_logprobs"],
+                "loss_mask": loss_mask,
+                "reward_type": self.cfg.algorithm.reward_type,
+            }
+        else:
+            kwargs = {
+                "adv_type": self.cfg.algorithm.adv_type,
+                "rewards": rewards,
+                "dones": dones,
+                "normalize_advantages": self.cfg.algorithm.get(
+                    "normalize_advantages", True
+                ),
+                "values": prev_values,
+                "gamma": self.cfg.algorithm.get("gamma", 1),
+                "gae_lambda": self.cfg.algorithm.get("gae_lambda", 1),
+                "num_group_envs": num_group_envs_for_train,
+                "group_size": self.cfg.algorithm.get("group_size", 8),
+                "reward_type": self.cfg.algorithm.reward_type,
+                "loss_mask": loss_mask,
+                "rollout_epoch": self.cfg.algorithm.get("rollout_epoch", 1),
+            }
 
         kwargs = preprocess_advantages_inputs(**kwargs)
         advantages, returns = calculate_adv_and_returns(**kwargs)
@@ -527,14 +565,14 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         """
         Generate garbage/fake outputs with correct shapes for debugging training.
         This bypasses model inference to speed up training iteration during debugging.
-        
+
         Args:
             batch_size: Batch size (B)
             action_token_len: Total action token length (action_dim * num_action_chunks)
             value_model: Whether to include values in output
             return_bc_logits: Whether to return BC logits
             bc_batch_size: Batch size for BC logits (if return_bc_logits is True)
-        
+
         Returns:
             output_dict: Dictionary with fake outputs matching actor_forward structure
             bc_logits: Optional fake BC logits (if return_bc_logits is True)
@@ -542,22 +580,22 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         device = f"cuda:{int(os.environ['LOCAL_RANK'])}"
         vocab_size = self.model.vocab_size
         n_action_bins = self.model.config.n_action_bins
-        
+
         # Generate random logprobs: [B, action_token_len]
         logprobs = torch.randn(batch_size, action_token_len, device=device, requires_grad=True)
-        
+
         # Generate random entropy: [B, action_token_len]
         entropy = torch.rand(batch_size, action_token_len, device=device, requires_grad=True)
-        
+
         # Generate random raw logits: [B, action_token_len, vocab_size]
         raw_logits = torch.randn(batch_size, action_token_len, vocab_size, device=device, requires_grad=True)
-        
+
         # Generate random intermediate logits: [B, action_token_len, vocab_size]
         intermediate_logits = torch.randn(batch_size, action_token_len, vocab_size, device=device, requires_grad=True)
-        
+
         # Generate random processed logits: [B, action_token_len, n_action_bins]
         processed_logits = torch.randn(batch_size, action_token_len, n_action_bins, device=device, requires_grad=True)
-        
+
         output_dict = {
             "logprobs": logprobs,
             "entropy": entropy,
@@ -565,12 +603,12 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             "intermediate_logits": intermediate_logits,
             "processed_logits": processed_logits,
         }
-        
+
         # Add values if needed
         if value_model:
             values = torch.randn(batch_size, 1, device=device, requires_grad=True)
             output_dict["values"] = values
-        
+
         if return_bc_logits:
             if bc_batch_size is None:
                 bc_batch_size = batch_size
@@ -583,14 +621,23 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             return output_dict
 
     def run_training(self, is_last_step: bool = False):
-        """
-        Run training on rollout batch.
-        
+        """Consume `self.rollout_batch` (obs, actions, advantages, …) and update the policy.
+
+        Phases:
+          1) Optional GPU reload if actor weights were offloaded after rollout sync.
+          2) Flatten time×batch dims, shuffle samples (PPO-style reuse of on-policy data).
+          3) Split into **global batches per rank**, then **micro-batches** for memory.
+          4) For each micro-batch: forward (VLA `actor_forward` or CNN), `actor_loss`
+             (GRPO/PPO/…), optional BC + EWC, backward with grad accumulation, then
+             clip + optimizer step once per global batch.
+
         Args:
-            is_last_step: If True, accumulate Fisher information during backward pass for EWC
+            is_last_step: If True and `use_ewc`, hook Fisher accumulation / finalize EWC.
         """
+        # --- Memory: drop preallocate tensor from init_worker so training has headroom ---
         self._deallocate_preallocated_memory()
 
+        # --- Reload FSDP weights/optim from CPU if we offloaded after sync_model_to_rollout ---
         if self.cfg.actor.get("enable_offload", False):
             self.load_fsdp_param_and_grad(self.device)
             self.load_fsdp_optimizer(self.device)
@@ -608,11 +655,17 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                     m.eval()
 
         self.optimizer.zero_grad()
-        
-        # Initialize Fisher accumulation if this is the last step and EWC is enabled
+
+        # EWC: prepare to accumulate squared grads over minibatches on the final training step only.
         if is_last_step and self.cfg.algorithm.get("use_ewc", False):
             self._init_fisher_accumulation()
-        
+
+        # rollout batch [n_chunk_steps, rollout_epoch * num_envs, ...]
+        # = [64, 16x8, ...]
+        # product is #flat training rows.
+        # If 1 gpu actor -> world_size = 1
+        # input_ids [64, 16x8, L] -> L is prompt length
+        # action_tokens, prev_logprobs, prev_values: [64, 16x8, num_action_chunks=8, ...]
         rollout_size = (
             self.rollout_batch["input_ids"].shape[0]
             * self.rollout_batch["input_ids"].shape[1]
@@ -623,9 +676,11 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         for key, value in self.rollout_batch.items():
             self.log_on_first_rank(f"run training, {key}: {value.shape}")
 
+        # Shuffle all tensor keys in lockstep; trim dones/prev_values to length n_chunk_steps.
         with torch.no_grad():
             for key, value in self.rollout_batch.items():
                 if key in ["dones", "prev_values"]:
+                    # trim so length is consistent?
                     value = value[:-1]
                 if "env_info" in key:
                     continue
@@ -638,13 +693,17 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             == 0
         )
 
+        # How many micro-forward+backward steps before one optimizer.step (per rank).
+        # in our case (8192 / 32) / 1 = 256
         self.gradient_accumulation = (
             self.cfg.actor.global_batch_size
             // self.cfg.actor.micro_batch_size
             // self._world_size
         )
 
-        # Split to make minibatch iterator for updating the actor
+        # --- Minibatch layout (PPO-style multiple passes over rollout data) ---
+        # `global_batch_size` is total tokens/samples across all ranks per step;
+        # each rank processes `global_batch_size / world_size` rows per outer iteration.
         # See PPO paper for details. https://arxiv.org/abs/1707.06347
         rollout_size = self.rollout_batch["input_ids"].size(0)
         batch_size_per_rank = self.cfg.actor.global_batch_size // self._world_size
@@ -660,13 +719,14 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
         metrics = {}
         num_batches = 0
+        # One tqdm "it" = one **global batch** on this rank (then micro-batches inside).
         for _, train_global_batch in tqdm(
             enumerate(rollout_dataloader_iter),
             desc=f"get loss and metrics (rank={self._rank})",
         ):
             num_batches += 1
 
-            # split batch into micro_batches
+            # Further split global batch for sequential forwards that fit in GPU memory.
             train_global_batch_size = train_global_batch["input_ids"].shape[0]
             assert (
                 train_global_batch_size
@@ -681,6 +741,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 train_global_batch_size // self.cfg.actor.micro_batch_size,
             )
 
+            # Fresh accumulators for this global batch; micro-batches sum grads then one step.
             self.optimizer.zero_grad()
             use_ref_logits_bc = self.cfg.algorithm.get("use_reference_logits_bc", False)
 
@@ -725,7 +786,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                             bc_batch[k] = v.to(f"cuda:{int(os.environ['LOCAL_RANK'])}")
 
                     return_bc_logits = use_ref_logits_bc and bc_batch is not None
-                    
+
                     if self.use_garbage_outputs:
                         # Generate garbage outputs for fast debugging (bypasses model inference)
                         batch_size = data["input_ids"].shape[0]
@@ -784,6 +845,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 }
 
                 kwargs = preprocess_loss_inputs(**kwargs)
+                # Policy gradient term (embodied_grpo, embodied_gae, …) vs old logprobs + advantages.
                 rl_loss, metrics_data = actor_loss(**kwargs)
 
                 bc_loss, bc_metrics_data = 0.0, {}
@@ -863,12 +925,12 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                     metrics_data["ewc/loss"] = ewc_loss.detach().item()
                     if self._rank == 0:
                         print(f"EWC loss: {ewc_loss.detach().item()}", flush=True)
-                
+
                 loss = rl_loss + bc_loss + ewc_loss
+                # Mean grad across micro-batch replicas; summed over micros → one opt step per global batch.
                 loss /= self.gradient_accumulation
                 loss.backward()
-                
-                # Accumulate Fisher information if this is the last step
+
                 if is_last_step and self.cfg.algorithm.get("use_ewc", False):
                     self._accumulate_fisher_from_gradients()
 
@@ -879,12 +941,27 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
             torch.cuda.empty_cache()
 
+            # Single optimizer update after all micro-batches for this global batch.
+            log_param_delta = self.cfg.algorithm.get("log_param_delta", True)
+            is_lora = self.cfg.actor.model.get("is_lora", False)
+            log_all_weights = self.cfg.algorithm.get(
+                "log_param_delta_all_trainable", False
+            )
+            param_delta_snap = None
+            param_delta_lora_only = True
+            if log_param_delta and (is_lora or log_all_weights):
+                from rlinf.algorithms.ewc import snapshot_params_for_delta
+
+                param_delta_lora_only = is_lora and not log_all_weights
+                param_delta_snap = snapshot_params_for_delta(
+                    self.model, lora_only=param_delta_lora_only
+                )
+
             grad_norm = self.model.clip_grad_norm_(
                 max_norm=self.cfg.actor.optim.clip_grad
             )
             self.optimizer.step()
 
-            # Increment training step counter
             self.training_step_count += 1
 
             self.optimizer.zero_grad()
@@ -894,8 +971,20 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             }
             if self.cfg.algorithm.adv_type == "embodied_gae":
                 data["critic/lr"] = self.optimizer.param_groups[1]["lr"]
+            if param_delta_snap:
+                from rlinf.algorithms.ewc import global_param_delta_l2
+
+                pd = global_param_delta_l2(
+                    self.model,
+                    param_delta_snap,
+                    param_delta_lora_only,
+                    device=torch.device(f"cuda:{int(os.environ['LOCAL_RANK'])}"),
+                )
+                if math.isfinite(pd):
+                    data["actor/param_delta_l2"] = pd
             append_to_dict(metrics, data)
 
+        # Average logged metrics across minibatches on this rank, then across ranks.
         mean_metric_dict = {key: np.mean(value) for key, value in metrics.items()}
         mean_metric_dict = all_reduce_dict(
             mean_metric_dict, op=torch.distributed.ReduceOp.AVG
@@ -905,12 +994,103 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         torch.cuda.synchronize()
         torch.distributed.barrier()
         torch.cuda.empty_cache()
-        
-        # Finalize Fisher information if this was the last step
+
         if is_last_step and self.cfg.algorithm.get("use_ewc", False):
             self._finalize_fisher_accumulation(num_batches)
 
         return mean_metric_dict
+
+    def run_opd_bc_warmup(self, num_steps: int):
+        """Behavior-cloning warmup on expert data before OPD RL (teacher snapshot saved separately)."""
+        if self.cfg.actor.model.get("model_name") == "simple_cnn":
+            raise NotImplementedError(
+                "opd_bc_steps / run_opd_bc_warmup is only supported for VLA models"
+            )
+        self._deallocate_preallocated_memory()
+        if self.cfg.actor.get("enable_offload", False):
+            self.load_fsdp_param_and_grad(self.device)
+            self.load_fsdp_optimizer(self.device)
+
+        self.model.train()
+        device = f"cuda:{int(os.environ['LOCAL_RANK'])}"
+        bc_coeff = self.cfg.algorithm.get(
+            "opd_bc_coeff", self.cfg.algorithm.get("bc_coeff", 1.0)
+        )
+        grad_acc = (
+            self.cfg.actor.global_batch_size
+            // self.cfg.actor.micro_batch_size
+            // self._world_size
+        )
+        metrics: dict = {}
+        for _ in tqdm(
+            range(num_steps),
+            desc=f"OPD BC warmup (rank={self._rank})",
+            disable=self._rank != 0,
+        ):
+            self.optimizer.zero_grad()
+            for _ in range(grad_acc):
+                bc_batch = next(self.sft_iterator)
+                for k, v in bc_batch.items():
+                    bc_batch[k] = v.to(device)
+                bc_batch = self.model.preprocess_for_train(bc_batch)
+                action_token_len = self.model.action_dim * self.model.num_action_chunks
+                logits_processor_args = {
+                    "action_tokens": bc_batch["action_tokens"],
+                    "vocab_size": self.model.vocab_size,
+                    "n_action_bins": self.model.config.n_action_bins,
+                }
+                output_dict = custom_forward(
+                    self.model,
+                    input_ids=bc_batch["input_ids"],
+                    attention_mask=bc_batch["attention_mask"],
+                    pixel_values=bc_batch["pixel_values"],
+                    action_token_len=action_token_len,
+                    value_model=False,
+                    temperature=self.cfg.algorithm.sampling_params.temperature_train,
+                    top_k=self.cfg.algorithm.sampling_params.top_k,
+                    logits_processor_args=logits_processor_args,
+                    has_bc_batch=False,
+                )
+                expert_tok = torch.tensor(
+                    compute_action_tokens_from_actions(self.model, bc_batch["actions"]),
+                    device=device,
+                )
+                bc_loss, bc_metrics = behavior_cloning_ce_loss(
+                    intermediate_logits=output_dict["intermediate_logits"],
+                    expert_actions_tokens=expert_tok,
+                    bc_coeff=bc_coeff,
+                    vocab_size=self.model.vocab_size,
+                    n_action_bins=self.model.config.n_action_bins,
+                )
+                (bc_loss / grad_acc).backward()
+                append_to_dict(metrics, bc_metrics)
+
+            grad_norm = self.model.clip_grad_norm_(
+                max_norm=self.cfg.actor.optim.clip_grad
+            )
+            self.optimizer.step()
+            append_to_dict(
+                metrics,
+                {"actor/grad_norm": grad_norm.detach().item()},
+            )
+
+        mean_metric_dict = {key: np.mean(value) for key, value in metrics.items()}
+        mean_metric_dict = all_reduce_dict(
+            mean_metric_dict, op=torch.distributed.ReduceOp.AVG
+        )
+        torch.cuda.synchronize()
+        torch.distributed.barrier()
+        torch.cuda.empty_cache()
+        return mean_metric_dict
+
+    def set_opd_teacher_model_path(self, path: str):
+        """Ray actors keep a launch-time cfg copy; call this after BC so OPD can load the teacher."""
+        with open_dict(self.cfg.algorithm):
+            self.cfg.algorithm.opd_teacher_model_path = path
+        self._opd_teacher_model = None
+        if self._rank == 0:
+            print(f"[OPD] Actor cfg opd_teacher_model_path set to {path}", flush=True)
+        return {}
 
     def save_checkpoint(self, save_base_path, step):
         torch.distributed.barrier()
@@ -947,11 +1127,11 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 torch.save(optim_state, os.path.join(save_base_path, "optim.pt"))
 
         torch.distributed.barrier()
-    
+
     def _load_ewc_data_if_available(self):
         """Load EWC Fisher information from previous task if available.
-        
-        NOTE: old_params is NOT loaded from file. It will be captured from the 
+
+        NOTE: old_params is NOT loaded from file. It will be captured from the
         loaded checkpoint weights in init_worker() after setup_model_and_optimizer().
         """
         ewc_path = self.cfg.algorithm.get("previous_task_ewc_path", None)
@@ -960,10 +1140,10 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             try:
                 self.ewc_fisher_dict = load_ewc_data(ewc_path)
                 self.ewc_old_params = None  # Will be set in init_worker from loaded checkpoint
-                
+
                 # Maximum Fisher value (should match max_grad_norm^2)
                 max_fisher_value = 100.0 ** 2  # 10000
-                
+
                 # Validate and clean loaded Fisher data for NaN/inf
                 if self.ewc_fisher_dict is not None:
                     cleaned_count = 0
@@ -975,22 +1155,22 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                                       f"Replacing with max value {max_fisher_value} (indicating high importance).")
                             # Replace NaN/Inf with max_fisher_value (not zero!)
                             self.ewc_fisher_dict[name] = torch.nan_to_num(
-                                fisher_val, 
-                                nan=max_fisher_value, 
-                                posinf=max_fisher_value, 
+                                fisher_val,
+                                nan=max_fisher_value,
+                                posinf=max_fisher_value,
                                 neginf=0.0
                             )
                             cleaned_count += 1
-                        
+
                         # Clip to max value
                         self.ewc_fisher_dict[name] = torch.clamp(
                             self.ewc_fisher_dict[name], max=max_fisher_value
                         )
-                    
+
                     if self._rank == 0 and cleaned_count > 0:
                         print(f"  Cleaned {cleaned_count} Fisher parameters with NaN/Inf values "
                               f"(replaced with max value {max_fisher_value})")
-                
+
                 if self._rank == 0:
                     print(f"✓ Loaded EWC Fisher data from {ewc_path}")
                     print(f"  Fisher dict: {len(self.ewc_fisher_dict)} parameters")
@@ -1005,19 +1185,19 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             self.ewc_old_params = None
             if self._rank == 0 and self.use_ewc:
                 print("No previous EWC data found - training first task without EWC regularization")
-    
+
     def _init_fisher_accumulation(self):
         """Initialize Fisher information accumulation for last step."""
         # Use get_lora_parameters to get full parameter shapes (handles FSDP)
         from rlinf.algorithms.ewc import get_lora_parameters
         lora_params = get_lora_parameters(self.model)
-        
+
         self.fisher_accumulator = {}
         self.fisher_param_names = set(lora_params.keys())
         for name, param_tensor in lora_params.items():
             # Initialize with zeros matching the full parameter shape
             self.fisher_accumulator[name] = torch.zeros_like(param_tensor, device='cpu')
-        
+
         if self._rank == 0:
             print(f"Initialized Fisher accumulation for {len(self.fisher_accumulator)} LoRA parameters")
 
@@ -1025,32 +1205,32 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         """Accumulate squared gradients for Fisher information computation."""
         if not hasattr(self, 'fisher_accumulator'):
             return
-        
+
         # Maximum gradient norm to prevent overflow when squaring
         # If gradient norm exceeds this, clip before squaring
         max_grad_norm = 100.0
         max_fisher_value = max_grad_norm ** 2  # Maximum Fisher value (100^2 = 10000)
-        
+
         # Access gradients through the model
         model_to_check = self.model.module if hasattr(self.model, 'module') else self.model
-        
+
         for name, param in model_to_check.named_parameters():
             if 'lora' in name.lower() and param.requires_grad and param.grad is not None:
                 if name in self.fisher_param_names:
                     # Get gradient and clip to prevent overflow when squaring
                     grad = param.grad.data
-                    
+
                     # Clip gradients to prevent overflow when squaring
                     grad_norm = grad.norm()
                     if grad_norm > max_grad_norm:
                         grad = grad * (max_grad_norm / grad_norm)
-                    
+
                     # Square the gradient
                     grad_sq = (grad ** 2).cpu()
-                    
+
                     # Additional safety: clip any values that somehow became inf
                     grad_sq = torch.clamp(grad_sq, max=max_fisher_value)
-                    
+
                     # Check if shape matches (might be sharded)
                     if name in self.fisher_accumulator:
                         if grad_sq.shape == self.fisher_accumulator[name].shape:
@@ -1068,15 +1248,15 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         """Finalize Fisher information by averaging over batches."""
         if not hasattr(self, 'fisher_accumulator'):
             return
-        
+
         if num_batches == 0:
             if self._rank == 0:
                 print("WARNING: num_batches is 0, cannot finalize Fisher accumulation")
             return
-        
+
         # Maximum Fisher value (should match max_grad_norm^2 from accumulation)
         max_fisher_value = 100.0 ** 2  # 10000
-        
+
         # Average over batches
         for name in self.fisher_accumulator:
             # Check for inf/nan before averaging and replace with max value
@@ -1086,55 +1266,55 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                           f"Replacing with max value {max_fisher_value}.")
                 # Replace NaN/Inf with max_fisher_value (not zero!)
                 self.fisher_accumulator[name] = torch.nan_to_num(
-                    self.fisher_accumulator[name], 
-                    nan=max_fisher_value, 
-                    posinf=max_fisher_value, 
+                    self.fisher_accumulator[name],
+                    nan=max_fisher_value,
+                    posinf=max_fisher_value,
                     neginf=0.0  # Negative inf should be 0 (shouldn't happen for squared values)
                 )
-            
+
             self.fisher_accumulator[name] /= num_batches
-            
+
             # Clip after averaging to ensure no values exceed max
             self.fisher_accumulator[name] = torch.clamp(
                 self.fisher_accumulator[name], max=max_fisher_value
             )
-        
+
         # With FSDP, parameters are sharded across ranks.
         if torch.distributed.is_initialized() and self._world_size > 1:
             for name in self.fisher_accumulator:
                 fisher_tensor = self.fisher_accumulator[name].to(self.device)
-                
+
                 # Check for inf/nan before all-reduce and replace with max value
                 if torch.isnan(fisher_tensor).any() or torch.isinf(fisher_tensor).any():
                     if self._rank == 0:
                         print(f"WARNING: Fisher tensor for '{name}' contains NaN/Inf before all-reduce. "
                               f"Replacing with max value {max_fisher_value}.")
                     fisher_tensor = torch.nan_to_num(
-                        fisher_tensor, 
-                        nan=max_fisher_value, 
-                        posinf=max_fisher_value, 
+                        fisher_tensor,
+                        nan=max_fisher_value,
+                        posinf=max_fisher_value,
                         neginf=0.0
                     )
-                
+
                 torch.distributed.all_reduce(fisher_tensor, op=torch.distributed.ReduceOp.SUM)
-                
+
                 # Check for inf/nan after all-reduce
                 if torch.isnan(fisher_tensor).any() or torch.isinf(fisher_tensor).any():
                     if self._rank == 0:
                         print(f"WARNING: Fisher tensor for '{name}' contains NaN/Inf after all-reduce. "
                               f"Replacing with max value {max_fisher_value}.")
                     fisher_tensor = torch.nan_to_num(
-                        fisher_tensor, 
-                        nan=max_fisher_value, 
-                        posinf=max_fisher_value, 
+                        fisher_tensor,
+                        nan=max_fisher_value,
+                        posinf=max_fisher_value,
                         neginf=0.0
                     )
-                
+
                 # Clip to max value
                 fisher_tensor = torch.clamp(fisher_tensor, max=max_fisher_value)
-                
+
                 self.fisher_accumulator[name] = fisher_tensor.cpu()
-        
+
         if self._rank == 0:
             print(f"Finalized Fisher accumulation over {num_batches} batches")
             print(f"  Fisher computed for {len(self.fisher_accumulator)} parameters")
@@ -1161,7 +1341,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
         # Current task Fisher (already averaged over batches and all-reduced)
         current_fisher = self.fisher_accumulator
-        
+
         # Validate and clean current Fisher for NaN/inf
         for name in list(current_fisher.keys()):
             if torch.isnan(current_fisher[name]).any() or torch.isinf(current_fisher[name]).any():
@@ -1169,9 +1349,9 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                     print(f"WARNING: Current Fisher for '{name}' contains NaN/Inf. "
                           f"Replacing with max value {max_fisher_value}.")
                 current_fisher[name] = torch.nan_to_num(
-                    current_fisher[name], 
-                    nan=max_fisher_value, 
-                    posinf=max_fisher_value, 
+                    current_fisher[name],
+                    nan=max_fisher_value,
+                    posinf=max_fisher_value,
                     neginf=0.0
                 )
             # Clip to max value
@@ -1186,26 +1366,26 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                         print(f"WARNING: Previous Fisher for '{name}' contains NaN/Inf. "
                               f"Replacing with max value {max_fisher_value}.")
                     self.ewc_fisher_dict[name] = torch.nan_to_num(
-                        self.ewc_fisher_dict[name], 
-                        nan=max_fisher_value, 
-                        posinf=max_fisher_value, 
+                        self.ewc_fisher_dict[name],
+                        nan=max_fisher_value,
+                        posinf=max_fisher_value,
                         neginf=0.0
                     )
                 # Clip to max value
                 self.ewc_fisher_dict[name] = torch.clamp(
                     self.ewc_fisher_dict[name], max=max_fisher_value
                 )
-            
+
             accumulated_fisher = {}
             for name in current_fisher:
                 if name in self.ewc_fisher_dict:
                     if current_fisher[name].shape == self.ewc_fisher_dict[name].shape:
                         # Merge Fisher values
                         merged = self.ewc_fisher_dict[name] + current_fisher[name]
-                        
+
                         # Clip merged value to prevent overflow
                         merged = torch.clamp(merged, max=max_fisher_value)
-                        
+
                         # Check for inf/nan after merging (shouldn't happen after clamping)
                         if torch.isnan(merged).any() or torch.isinf(merged).any():
                             if self._rank == 0:
@@ -1233,9 +1413,9 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                             print(f"WARNING: Previous-only Fisher for '{name}' contains NaN/Inf. "
                                   f"Replacing with max value {max_fisher_value}.")
                         self.ewc_fisher_dict[name] = torch.nan_to_num(
-                            self.ewc_fisher_dict[name], 
-                            nan=max_fisher_value, 
-                            posinf=max_fisher_value, 
+                            self.ewc_fisher_dict[name],
+                            nan=max_fisher_value,
+                            posinf=max_fisher_value,
                             neginf=0.0
                         )
                     accumulated_fisher[name] = torch.clamp(
@@ -1254,9 +1434,9 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                     print(f"ERROR: Final Fisher for '{name}' still contains NaN/Inf after cleaning! "
                           f"Replacing with max value {max_fisher_value}.")
                 fisher_to_save[name] = torch.nan_to_num(
-                    fisher_to_save[name], 
-                    nan=max_fisher_value, 
-                    posinf=max_fisher_value, 
+                    fisher_to_save[name],
+                    nan=max_fisher_value,
+                    posinf=max_fisher_value,
                     neginf=0.0
                 )
             # Final clip

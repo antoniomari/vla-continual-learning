@@ -117,7 +117,12 @@ class LiberoSFTDataset(Dataset):
             filename = os.path.basename(path)
             task_desc = self._extract_task_description(filename)
             with h5py.File(path, "r") as f:
-                demo_names = sorted(list(f["data"].keys()))[:demos_per_task]
+                all_demo_names = sorted(list(f["data"].keys()))
+                # demos_per_task <= 0 or None: use all demonstrations for the task (OPD / full-data BC).
+                if demos_per_task is None or demos_per_task <= 0:
+                    demo_names = all_demo_names
+                else:
+                    demo_names = all_demo_names[:demos_per_task]
                 for name in demo_names:
                     traj_len = len(f["data"][name]["actions"])
                     self.trajectories.append((path, name, traj_len, task_desc))

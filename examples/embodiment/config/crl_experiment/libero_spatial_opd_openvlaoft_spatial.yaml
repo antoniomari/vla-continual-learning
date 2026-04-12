@@ -1,3 +1,11 @@
+# On-policy distillation (OPD): BC warmup on full expert data, then RL with frozen teacher.
+# Runner saves the post-BC adapter to `logger.log_path/opd_bc_teacher/actor` and sets
+# `algorithm.opd_teacher_model_path` before the main loop.
+#
+# Default rollout sizing (after Hydra placement scaling): tune so that
+#   n_chunk_steps * rollout_epoch * (parallel env batch) == actor.global_batch_size / num_actor_gpus
+# for a single optimizer pass per outer step (see embodied_runner + fsdp_actor_worker).
+
 defaults:
   - env/train: libero_spatial
   - env/eval: libero_spatial
@@ -14,24 +22,22 @@ cluster:
   num_nodes: 1
   component_placement:
     actor,env,rollout: all
-  # Match libero_spatial_grpo_openvlaoft_spatial.yaml (training); override per machine if needed.
-  # Override per machine: cluster.ray_object_store_memory=<bytes>
-  ray_object_store_memory: 68719476736  # 64 GiB
+  ray_object_store_memory: 34359738368  # 32 GiB
 
 runner:
   task_type: embodied
   logger:
     log_path: "../results"
     project_name: rlinf
-    experiment_name: "test_openvla"
-    logger_backends: ["wandb"] # wandb, swanlab
+    experiment_name: "opd_spatial_openvla"
+    logger_backends: ["wandb"]
 
-  max_epochs: 1000
+  max_epochs: 10
   max_steps: -1
 
   only_eval: False
   val_check_interval: -1
-  save_interval: 25
+  save_interval: 10
   seq_length: 4096
   max_prompt_length: 128
 
@@ -41,22 +47,23 @@ algorithm:
   use_fixed_reset_state_ids: True
   require_values: False
   shuffle_samples: True
-  normalize_advantages: True
-  kl_penalty: kl  # how to estimate kl divergence: kl or kl_penalty
-  group_size: 8
+  # OPD uses raw logprob margin as reward; do not normalize.
+  normalize_advantages: False
+  kl_penalty: kl
+  group_size: 4
   n_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
-  num_group_envs: 8
+  num_group_envs: 2
   rollout_epoch: 16
-  eval_rollout_epoch: 40
-  reward_type: step_level  # step_level or chunk_level
+  eval_rollout_epoch: 20
+  reward_type: step_level
   logprob_type: token_level
   entropy_type: token_level
 
   use_experience_replay: False
   bc_coeff: 0.0
-  adv_type: embodied_grpo
-  loss_type: embodied_grpo
+  adv_type: embodied_opd
+  loss_type: embodied_opd
   loss_agg_func: "token-mean"
   kl_beta: 0.0
   entropy_bonus: 0
@@ -69,6 +76,19 @@ algorithm:
   gamma: 0.99
   gae_lambda: 0.95
 
+  # --- OPD ---
+  # BC steps before RL; teacher checkpoint is written under log_path/opd_bc_teacher/actor.
+  opd_bc_steps: 200
+  # <=0 uses all demos per task in LiberoSFTDataset (full data per task).
+  opd_sft_demos_per_task: 0
+  opd_bc_coeff: 1.0
+  # Optional: override base HF dir when teacher path is adapter-only (default: actor.checkpoint_load_path).
+  # opd_teacher_base_model_path: null
+  # Set manually to skip BC warmup and use an existing teacher (adapter dir or full model dir).
+  # opd_teacher_model_path: null
+  # After BC, run the same embodied eval as the student (rollout sync from actor → env/rollout evaluate).
+  opd_eval_teacher_after_bc: True
+
   sampling_params:
     use_greedy: False
     temperature_train: 1.6
@@ -77,16 +97,12 @@ algorithm:
     top_p: 1.0
     repetition_penalty: 1.0
 
-  # length argument for autoregressive sampling
-  # max length means max amount of tokens to generate
   length_params:
     max_new_token: null
     max_length: 1024
     min_length: 1
 
-  filter_rewards: True
-  rewards_lower_bound: 0.5
-  rewards_upper_bound: 4.5
+  filter_rewards: False
 
 env:
   group_name: "EnvGroup"
@@ -95,9 +111,7 @@ env:
     queue_name: "obs_buffer"
     queue_size: 0
   eval:
-    # num_envs was 80
-    # 10 works with 32GB RAM
-    num_envs: 10
+    num_envs: 16
     eval_per_task: ${int_div:${env.eval.num_envs}, 10}
   enable_offload: False
   fixed_task_ids: null
@@ -110,8 +124,8 @@ rollout:
     queue_size: 0
   mode: "colocate"
   generation_backend: "huggingface"
-  model_dir: "/cluster/home/anmari/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1" # "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
-  enable_offload: False
+  model_dir: "/cluster/home/anmari/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1"
+  enable_offload: True
   pipeline_stage_num: 1
 
 actor:
@@ -121,16 +135,16 @@ actor:
     queue_name: "replay_buffer"
     queue_size: 0
   training_backend: "fsdp"
-  checkpoint_load_path: "/cluster/home/anmari/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1" # "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
+  checkpoint_load_path: "/cluster/home/anmari/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1"
   micro_batch_size: 32
   global_batch_size: 8192
   seed: 1234
-  enable_offload: False
-  preallocate: 0   # preallocates for actor worker (GB)
+  enable_offload: True
+  preallocate: 0
 
   model:
     model_name: "openvla_oft"
-    value_type: ${algorithm.reward_type}  # 'action' or 'token'
+    value_type: ${algorithm.reward_type}
     action_dim: 7
     num_action_chunks: 8
     use_proprio: False
@@ -165,7 +179,7 @@ actor:
 
   tokenizer:
     tokenizer_type: "HuggingFaceTokenizer"
-    tokenizer_model: "/cluster/home/anmari/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1" # "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
+    tokenizer_model: "/cluster/home/anmari/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1"
     use_fast: False
     trust_remote_code: True
     padding_side: "right"
@@ -175,4 +189,3 @@ reward:
 
 critic:
   use_critic_model: False
-
