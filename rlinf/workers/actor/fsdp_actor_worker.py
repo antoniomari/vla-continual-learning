@@ -377,15 +377,24 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 self.rollout_batch[key] = torch.cat(tensors, dim=0)
 
         self.rollout_batch = self._process_received_rollout_batch(self.rollout_batch)
+        n_chunk = int(self.rollout_batch["input_ids"].shape[0])
+        n_traj = int(self.rollout_batch["input_ids"].shape[1])
         if _log:
             has_teacher = "teacher_logprobs" in self.rollout_batch
             print(
                 f"[Actor r0] recv_rollout_batch: wall={time.perf_counter() - _t_recv:.2f}s "
                 f"split_num={split_num} keys={len(self.rollout_batch)} "
                 f"input_ids={tuple(self.rollout_batch['input_ids'].shape)} "
+                f"trajectory_slots={n_traj} chunk_steps={n_chunk} "
+                f"chunk_x_traj_cells={n_chunk * n_traj} "
                 f"teacher_logprobs_in_batch={has_teacher}",
                 flush=True,
             )
+        return {
+            "n_chunk_steps": n_chunk,
+            "n_rollout_trajectories": n_traj,
+            "n_chunk_times_traj": n_chunk * n_traj,
+        }
 
     def _process_received_rollout_batch(self, rollout_batch):
         """

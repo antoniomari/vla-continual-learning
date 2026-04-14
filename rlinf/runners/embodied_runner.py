@@ -96,6 +96,18 @@ class EmbodiedRunner:
         # W&B requires monotonically increasing step; teacher eval must not reuse step=0 after BC
         # logged steps 0..N-1 or W&B drops those metrics.
         self._opd_bc_wandb_step_cursor = 0
+        # Added to RL step index for W&B after OPD BC (+1 if teacher eval logged at cursor).
+        self._wandb_rl_step_offset = 0
+
+    def _refresh_wandb_rl_step_offset(self) -> None:
+        """RL metrics must log at steps after BC (0..N-1) and optional teacher eval (at cursor)."""
+        if not self._opd_bc_warmup_completed:
+            self._wandb_rl_step_offset = 0
+            return
+        off = self._opd_bc_wandb_step_cursor
+        if self.cfg.algorithm.get("opd_eval_teacher_after_bc", True):
+            off += 1  # teacher eval used step == cursor
+        self._wandb_rl_step_offset = off
 
     def init_workers(self):
         # Actor first (OPD BC uses only actor + LiberoSFT), then rollout, then env (MuJoCo).
@@ -208,8 +220,23 @@ class EmbodiedRunner:
         rollout_futures = self.rollout.generate()
         actor_futures = self.actor.recv_rollout_batch()
         env_futures.wait()
-        actor_futures.wait()
+        actor_results = actor_futures.wait()
         rollout_futures.wait()
+        if actor_results and self.cfg.runner.get("log_rollout_collection_summary", True):
+            stats = next((r for r in actor_results if isinstance(r, dict)), None)
+            if stats:
+                nt = stats.get("n_rollout_trajectories")
+                nc = stats.get("n_chunk_steps")
+                nx = stats.get("n_chunk_times_traj")
+                if nt is not None and nc is not None and nx is not None:
+                    print(
+                        "[EmbodiedRunner] Rollout phase: "
+                        f"{int(nt)} trajectory slots in batch "
+                        f"({int(nc)} policy chunk steps each, "
+                        f"{int(nx)} chunk×trajectory cells before shuffle/split). "
+                        "Same layout per actor rank if batch is replicated.",
+                        flush=True,
+                    )
 
     def evaluate(self):
         env_futures = self.env.evaluate()
@@ -251,6 +278,8 @@ class EmbodiedRunner:
                     )
                     self.metric_logger.log(data=teacher_eval_metrics, step=te_step)
 
+        self._refresh_wandb_rl_step_offset()
+
         start_step = self.global_step
         _show_pbar = cfg_show_progress_bar(self.cfg)
         for _step in tqdm(
@@ -258,6 +287,7 @@ class EmbodiedRunner:
             ncols=120,
             disable=not _show_pbar,
         ):
+            _wb_step = _step + self._wandb_rl_step_offset
             if (
                 _step % self.cfg.runner.val_check_interval == 0
                 and self.cfg.runner.val_check_interval > 0
@@ -266,7 +296,7 @@ class EmbodiedRunner:
                     self.update_rollout_weights()
                     eval_metrics = self.evaluate()
                     eval_metrics = {f"eval/{k}": v for k, v in eval_metrics.items()}
-                    self.metric_logger.log(data=eval_metrics, step=_step)
+                    self.metric_logger.log(data=eval_metrics, step=_wb_step)
 
             with self.timer("step"):
                 _log_wall = self.cfg.runner.get("log_step_phase_timings", True)
@@ -373,9 +403,9 @@ class EmbodiedRunner:
             training_metrics = {
                 f"train/{k}": v for k, v in actor_training_metrics[0].items()
             }
-            self.metric_logger.log(rollout_metrics, _step)
-            self.metric_logger.log(time_metrics, _step)
-            self.metric_logger.log(training_metrics, _step)
+            self.metric_logger.log(rollout_metrics, _wb_step)
+            self.metric_logger.log(time_metrics, _wb_step)
+            self.metric_logger.log(training_metrics, _wb_step)
 
         self.metric_logger.finish()
 

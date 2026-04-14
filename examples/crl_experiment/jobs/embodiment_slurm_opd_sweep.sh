@@ -88,7 +88,9 @@ TRAIN_ROLLOUT_EPOCHS=(2)
 
 # ============== EVAL SWEEP ==============
 # Same OpenVLA-OFT Libero spatial eval config as GRPO (student LoRA after OPD).
-EVAL_CHECKPOINT_LOCS=("logs/sequential/task_0_seed1234")
+# Keep EVAL_* in sync with TRAIN_* above: checkpoint dir is logs/sequential/task_<id>_seed<SEED>/;
+# EVAL_STEPS should match TRAIN_MAX_EPOCHS (global_step_<N> folder). Edit if you change seeds or log roots.
+EVAL_CHECKPOINT_LOCS=("logs/sequential/task_0_seed4096")
 EVAL_STEPS=(10)
 EVAL_CONFIG_NAMES=("crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial")
 
