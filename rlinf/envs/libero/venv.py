@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import warnings
 from multiprocessing import Pipe, connection
 from multiprocessing.context import Process
@@ -38,6 +39,36 @@ gym_new_venv_step_type = Tuple[
 warnings.simplefilter("once", DeprecationWarning)
 
 
+def _prepare_mujoco_egl_env_in_subprocess() -> None:
+    """Fix MuJoCo EGL device indexing for Ray workers (LIBERO subprocess only).
+
+    Ray sets ``CUDA_VISIBLE_DEVICES`` to a single *physical* GPU id (e.g. ``2``). dm_control /
+    MuJoCo's EGL helper then uses ``int(CUDA_VISIBLE_DEVICES)`` as the *EGL* device index, but
+    ``eglQueryDevicesEXT`` often exposes only index ``0`` for the job-visible GPU → runtime error.
+
+    We set ``MUJOCO_EGL_DEVICE_ID=0`` and adjust ``CUDA_VISIBLE_DEVICES`` so robosuite's
+    substring check passes: it requires ``MUJOCO_EGL_DEVICE_ID`` to appear inside the
+    ``CUDA_VISIBLE_DEVICES`` string (`robosuite.utils.binding_utils`).
+
+    Listing ``{gpu},0`` maps ``cuda:0`` to the Ray-assigned GPU (first id) and appends ``0`` so
+    ``"0"`` is a substring. Disable with ``RLINF_LIBERO_EGL_REMAP=0`` if your site misbehaves.
+    """
+    if os.environ.get("RLINF_LIBERO_EGL_REMAP", "1") in ("0", "false", "False"):
+        return
+    if os.environ.get("MUJOCO_GL", "egl").lower() != "egl":
+        return
+    if os.environ.get("PYOPENGL_PLATFORM", "egl").lower() != "egl":
+        return
+    cvd = os.environ.get("CUDA_VISIBLE_DEVICES", "").strip()
+    if not cvd or "," in cvd:
+        return
+    if not cvd.isdigit():
+        return
+    if "0" not in cvd:
+        os.environ["CUDA_VISIBLE_DEVICES"] = f"{cvd},0"
+    os.environ["MUJOCO_EGL_DEVICE_ID"] = "0"
+
+
 def _worker(
     parent: connection.Connection,
     p: connection.Connection,
@@ -58,6 +89,7 @@ def _worker(
         return None
 
     parent.close()
+    _prepare_mujoco_egl_env_in_subprocess()
     env = env_fn_wrapper.data()
     try:
         while True:

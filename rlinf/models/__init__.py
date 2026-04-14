@@ -482,7 +482,16 @@ def get_model(
     if not cfg.is_lora and not cfg.partial_finetune:
         for param in model.parameters():
             param.requires_grad = True
-        print("Full base model set to trainable (no LoRA, no partial finetune).")
+        # OPD teacher base uses is_lora=False then PeftModel.from_pretrained on the adapter;
+        # this is not the RL student (student uses cfg.is_lora=True from actor.model).
+        if load_role is not None and "opd_teacher" in load_role:
+            print(
+                "[OPD teacher] Base HF weights loaded without LoRA in get_model; "
+                "adapter is attached in load_opd_teacher_model (RL student is unchanged).",
+                flush=True,
+            )
+        else:
+            print("Full base model set to trainable (no LoRA, no partial finetune).")
 
     if hasattr(cfg, "ckpt_path") and cfg.ckpt_path is not None:
         print(f"LOADING MODEL CHECKPOINT from: {cfg.ckpt_path}")

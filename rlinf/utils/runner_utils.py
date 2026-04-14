@@ -14,7 +14,22 @@
 
 import os
 import tempfile
-from typing import Union
+from typing import Any, Union
+
+
+def cfg_show_progress_bar(cfg: Any) -> bool:
+    """Whether to show tqdm bars (rollout, BC, PPO/GRPO training).
+
+    Default is False so Slurm logs stay readable. Enable with ``runner.show_progress_bar: true``.
+    If unset on the runner, falls back to ``rollout.show_progress_bar`` for backward compatibility.
+    """
+    rv = cfg.runner.get("show_progress_bar", None)
+    if rv is not None:
+        return bool(rv)
+    rv = cfg.rollout.get("show_progress_bar", None)
+    if rv is not None:
+        return bool(rv)
+    return False
 
 
 def safe_is_divisible(a, b):

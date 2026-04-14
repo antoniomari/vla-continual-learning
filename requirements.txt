@@ -14,7 +14,6 @@ diffusers>=0.30.0
 gymnasium>=0.29.0
 robosuite==1.4.1
 mujoco>=3.3.0
-sapien>=3.0.0
 
 hydra-core>=1.3.0
 omegaconf>=2.3.0

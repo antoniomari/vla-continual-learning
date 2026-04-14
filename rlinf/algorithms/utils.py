@@ -75,14 +75,27 @@ def preprocess_loss_inputs(**kwargs) -> dict:
     loss_mask_sum = kwargs.get("loss_mask_sum", None)
 
     bsz = logprobs.shape[0]
+    raw_lp_shape = logprobs.shape
 
     if logprob_type == "token_level":
         logprobs = logprobs.reshape(bsz, -1, single_action_dim)
         old_logprobs = old_logprobs.reshape(bsz, -1, single_action_dim)
-        advantages = advantages.unsqueeze(-1)
+        # Per-token advantages (e.g. embodied_opd: teacher_lp - student_lp) match flat
+        # logprob layout [bsz, n_tokens]. Per-chunk scalar advantages use [bsz, n_chunks].
+        if advantages.shape == raw_lp_shape:
+            advantages = advantages.reshape(bsz, -1, single_action_dim)
+        else:
+            advantages = advantages.unsqueeze(-1)
         if loss_mask is not None:
-            loss_mask = loss_mask.unsqueeze(-1)
-            loss_mask_sum = loss_mask_sum.unsqueeze(-1)
+            if loss_mask.shape == raw_lp_shape:
+                loss_mask = loss_mask.reshape(bsz, -1, single_action_dim)
+            else:
+                loss_mask = loss_mask.unsqueeze(-1)
+        if loss_mask_sum is not None:
+            if loss_mask_sum.shape == raw_lp_shape:
+                loss_mask_sum = loss_mask_sum.reshape(bsz, -1, single_action_dim)
+            else:
+                loss_mask_sum = loss_mask_sum.unsqueeze(-1)
 
     elif logprob_type == "action_level":
         logprobs = logprobs.reshape(bsz, -1, single_action_dim).sum(dim=-1)

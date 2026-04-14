@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import os
+import shutil
+import time
 
 import torch
 from omegaconf import open_dict
@@ -23,10 +25,37 @@ from rlinf.utils.distributed import ScopedTimer
 from rlinf.utils.metric_logger import MetricLogger
 from rlinf.utils.model_load_info import log_embodied_driver_inventory
 from rlinf.utils.metric_utils import compute_evaluate_metrics
-from rlinf.utils.runner_utils import check_progress
+from rlinf.utils.runner_utils import cfg_show_progress_bar, check_progress
 from rlinf.workers.actor.fsdp_actor_worker import EmbodiedFSDPActor
 from rlinf.workers.env.env_worker import EnvWorker
 from rlinf.workers.rollout.hf.huggingface_worker import MultiStepRolloutWorker
+
+
+def _format_rollout_env_success(metrics: dict) -> str:
+    """One-line summary of env success rates from compute_rollout_metrics."""
+    parts = []
+    for k, v in sorted(metrics.items()):
+        if not k.startswith("env_info/"):
+            continue
+        if "success" not in k.lower():
+            continue
+        try:
+            parts.append(f"{k.replace('env_info/', '')}={float(v):.3f}")
+        except (TypeError, ValueError):
+            continue
+    return ", ".join(parts)
+
+
+def _format_eval_success(metrics: dict) -> str:
+    """Format task success keys from compute_evaluate_metrics (env_info/task_*_success)."""
+    parts = []
+    for k, v in sorted(metrics.items()):
+        if "success" in k and "task_" in k:
+            try:
+                parts.append(f"{k.split('/')[-1]}={float(v):.3f}")
+            except (TypeError, ValueError):
+                continue
+    return ", ".join(parts)
 
 
 class EmbodiedRunner:
@@ -62,13 +91,110 @@ class EmbodiedRunner:
         self.timer = ScopedTimer(reduction="max", sync_cuda=False)
 
         self.metric_logger = MetricLogger(cfg)
+        # OPD: BC warmup runs in init_workers after actor init, before rollout/env (no sim needed).
+        self._opd_bc_warmup_completed = False
+        # W&B requires monotonically increasing step; teacher eval must not reuse step=0 after BC
+        # logged steps 0..N-1 or W&B drops those metrics.
+        self._opd_bc_wandb_step_cursor = 0
 
     def init_workers(self):
-        # create worker in order to decrease the maximum memory usage
+        # Actor first (OPD BC uses only actor + LiberoSFT), then rollout, then env (MuJoCo).
         self.actor.init_worker().wait()
+        opd_bc_steps = self.cfg.algorithm.get("opd_bc_steps", 0)
+        if opd_bc_steps > 0:
+            self._run_opd_bc_warmup_and_save_teacher(opd_bc_steps)
         self.rollout.init_worker().wait()
         self.env.init_worker().wait()
+        if self._opd_bc_warmup_completed and self.cfg.algorithm.get(
+            "opd_eval_teacher_after_bc", True
+        ):
+            with self.timer("opd_teacher_eval"):
+                print(
+                    "[OPD] Teacher eval: pushing post-BC actor weights to rollout "
+                    "(same state as opd_bc_teacher/actor and opd_bc_student/actor), then Libero eval.",
+                    flush=True,
+                )
+                self.update_rollout_weights()
+                teacher_eval_metrics = self.evaluate()
+                te_line = _format_eval_success(teacher_eval_metrics)
+                if te_line:
+                    print(f"[OPD] Teacher eval (sim success): {te_line}", flush=True)
+                teacher_eval_metrics = {
+                    f"eval_teacher/{k}": v for k, v in teacher_eval_metrics.items()
+                }
+                te_step = self._opd_bc_wandb_step_cursor
+                print(
+                    f"[OPD] Logging eval_teacher to metrics ({len(teacher_eval_metrics)} keys) "
+                    f"at wandb step={te_step} (after opd_bc steps 0..{te_step - 1}).",
+                    flush=True,
+                )
+                self.metric_logger.log(data=teacher_eval_metrics, step=te_step)
         log_embodied_driver_inventory(self.cfg)
+
+    def _run_opd_bc_warmup_and_save_teacher(self, opd_bc_steps: int) -> None:
+        if self.cfg.algorithm.adv_type != "embodied_opd":
+            print(
+                "[OPD] Warning: opd_bc_steps > 0 but adv_type is not embodied_opd; "
+                "BC still runs and opd_teacher_model_path will be set, but RL will not use OPD rewards.",
+                flush=True,
+            )
+        with self.timer("opd_bc_warmup"):
+            bc_futures = self.actor.run_opd_bc_warmup(opd_bc_steps)
+            bc_metrics_list = bc_futures.wait()
+            bc_pack = bc_metrics_list[0]
+            if isinstance(bc_pack, dict) and "per_step" in bc_pack:
+                for step_i, step_m in enumerate(bc_pack["per_step"]):
+                    self.metric_logger.log(
+                        {f"opd_bc/{k}": v for k, v in step_m.items()},
+                        step=step_i,
+                    )
+                n_bc = len(bc_pack["per_step"])
+                self._opd_bc_wandb_step_cursor = n_bc if n_bc > 0 else 1
+            else:
+                self.metric_logger.log(
+                    {f"opd_bc/{k}": v for k, v in bc_pack.items()},
+                    step=0,
+                )
+                self._opd_bc_wandb_step_cursor = 1
+        teacher_root = os.path.join(
+            self.cfg.runner.logger.log_path,
+            "opd_bc_teacher",
+        )
+        os.makedirs(teacher_root, exist_ok=True)
+        teacher_actor_path = os.path.join(teacher_root, "actor")
+        save_futures = self.actor.save_checkpoint(teacher_actor_path, 0)
+        save_futures.wait()
+        student_root = os.path.join(
+            self.cfg.runner.logger.log_path,
+            "opd_bc_student",
+        )
+        student_actor_path = os.path.join(student_root, "actor")
+        os.makedirs(student_root, exist_ok=True)
+        if os.path.isdir(student_actor_path):
+            shutil.rmtree(student_actor_path)
+        shutil.copytree(teacher_actor_path, student_actor_path)
+        self.actor.set_opd_teacher_model_path(teacher_actor_path).wait()
+        self.rollout.set_opd_teacher_model_path(teacher_actor_path).wait()
+        with open_dict(self.cfg.algorithm):
+            self.cfg.algorithm.opd_teacher_model_path = teacher_actor_path
+        self._opd_bc_warmup_completed = True
+        if isinstance(bc_pack, dict) and bc_pack.get("mean"):
+            mean_m = bc_pack["mean"]
+            loss = mean_m.get("bc/loss")
+            tok_acc = mean_m.get("bc/token_accuracy")
+            if loss is not None and tok_acc is not None:
+                print(
+                    f"[OPD] BC warmup summary: mean bc/loss={float(loss):.4f}, "
+                    f"mean bc/token_accuracy={float(tok_acc):.4f} "
+                    f"(expert action tokens; sim success follows in teacher eval)",
+                    flush=True,
+                )
+            elif loss is not None:
+                print(
+                    f"[OPD] BC warmup summary: mean bc/loss={float(loss):.4f} "
+                    f"(cross-entropy on expert action tokens; not sim task success)",
+                    flush=True,
+                )
 
     def update_rollout_weights(self):
         rollout_futures = self.rollout.sync_model_from_actor()
@@ -98,43 +224,40 @@ class EmbodiedRunner:
 
     def run(self):
         opd_bc_steps = self.cfg.algorithm.get("opd_bc_steps", 0)
-        if opd_bc_steps > 0 and self.cfg.algorithm.adv_type != "embodied_opd":
-            print(
-                "[OPD] Warning: opd_bc_steps > 0 but adv_type is not embodied_opd; "
-                "BC still runs and opd_teacher_model_path will be set, but RL will not use OPD rewards.",
-                flush=True,
-            )
-        if opd_bc_steps > 0:
-            with self.timer("opd_bc_warmup"):
-                bc_futures = self.actor.run_opd_bc_warmup(opd_bc_steps)
-                bc_metrics_list = bc_futures.wait()
-                bc_metrics = {f"opd_bc/{k}": v for k, v in bc_metrics_list[0].items()}
-                self.metric_logger.log(bc_metrics, step=0)
-            teacher_root = os.path.join(
-                self.cfg.runner.logger.log_path,
-                "opd_bc_teacher",
-            )
-            os.makedirs(teacher_root, exist_ok=True)
-            teacher_actor_path = os.path.join(teacher_root, "actor")
-            save_futures = self.actor.save_checkpoint(teacher_actor_path, 0)
-            save_futures.wait()
-            self.actor.set_opd_teacher_model_path(teacher_actor_path).wait()
-            with open_dict(self.cfg.algorithm):
-                self.cfg.algorithm.opd_teacher_model_path = teacher_actor_path
-
-            # Same eval protocol as the student: sync post-BC weights to rollout, then env.evaluate + rollout.evaluate.
+        # OPD BC normally finishes in init_workers (before env). Fallback if run() is entered alone.
+        if opd_bc_steps > 0 and not self._opd_bc_warmup_completed:
+            self._run_opd_bc_warmup_and_save_teacher(opd_bc_steps)
             if self.cfg.algorithm.get("opd_eval_teacher_after_bc", True):
                 with self.timer("opd_teacher_eval"):
+                    print(
+                        "[OPD] Teacher eval: pushing post-BC actor weights to rollout "
+                        "(same state as opd_bc_teacher/actor and opd_bc_student/actor), then Libero eval.",
+                        flush=True,
+                    )
                     self.update_rollout_weights()
                     teacher_eval_metrics = self.evaluate()
+                    te_line = _format_eval_success(teacher_eval_metrics)
+                    if te_line:
+                        print(f"[OPD] Teacher eval (sim success): {te_line}", flush=True)
                     teacher_eval_metrics = {
                         f"eval_teacher/{k}": v
                         for k, v in teacher_eval_metrics.items()
                     }
-                    self.metric_logger.log(data=teacher_eval_metrics, step=0)
+                    te_step = self._opd_bc_wandb_step_cursor
+                    print(
+                        f"[OPD] Logging eval_teacher to metrics ({len(teacher_eval_metrics)} keys) "
+                        f"at wandb step={te_step} (after opd_bc steps 0..{te_step - 1}).",
+                        flush=True,
+                    )
+                    self.metric_logger.log(data=teacher_eval_metrics, step=te_step)
 
         start_step = self.global_step
-        for _step in tqdm(range(start_step, self.max_steps), ncols=120):
+        _show_pbar = cfg_show_progress_bar(self.cfg)
+        for _step in tqdm(
+            range(start_step, self.max_steps),
+            ncols=120,
+            disable=not _show_pbar,
+        ):
             if (
                 _step % self.cfg.runner.val_check_interval == 0
                 and self.cfg.runner.val_check_interval > 0
@@ -146,22 +269,80 @@ class EmbodiedRunner:
                     self.metric_logger.log(data=eval_metrics, step=_step)
 
             with self.timer("step"):
+                _log_wall = self.cfg.runner.get("log_step_phase_timings", True)
                 with self.timer("rollout"):
                     # Syncs model weights from actor to rollout
+                    _tw0 = time.perf_counter()
                     self.update_rollout_weights()
+                    _tw1 = time.perf_counter()
                     # Generates rollouts using the updated rollout model
                     self.generate_rollouts()
+                    _tw2 = time.perf_counter()
+                    if _log_wall:
+                        print(
+                            f"[train step {_step}] driver_wall_s: "
+                            f"sync_actor_to_rollout={_tw1 - _tw0:.2f} "
+                            f"generate_rollouts={_tw2 - _tw1:.2f} "
+                            f"rollout_total={_tw2 - _tw0:.2f}",
+                            flush=True,
+                        )
 
                 # compute advantages and returns.
                 with self.timer("cal_adv_and_returns"):
+                    _ta0 = time.perf_counter()
                     actor_futures = self.actor.compute_advantages_and_returns()
                     actor_rollout_metrics = actor_futures.wait()
+                    if _log_wall:
+                        print(
+                            f"[train step {_step}] driver_wall_s: "
+                            f"compute_advantages_and_returns={time.perf_counter() - _ta0:.2f}",
+                            flush=True,
+                        )
+
+                rm0 = actor_rollout_metrics[0]
+                succ_line = _format_rollout_env_success(rm0)
+                rew = rm0.get("rewards")
+                rew_s = ""
+                if rew is not None:
+                    try:
+                        rew_s = f" mean_reward={float(rew):.4f}"
+                    except (TypeError, ValueError):
+                        rew_s = ""
+                if succ_line or rew_s:
+                    print(
+                        f"[train step {_step}] rollout:{rew_s} env_success: {succ_line or '(none)'}",
+                        flush=True,
+                    )
 
                 # actor training.
                 with self.timer("actor_training"):
                     is_last_step = (_step == self.max_steps - 1)
-                    actor_training_futures = self.actor.run_training(is_last_step=is_last_step)
+                    _tt0 = time.perf_counter()
+                    actor_training_futures = self.actor.run_training(
+                        is_last_step=is_last_step
+                    )
                     actor_training_metrics = actor_training_futures.wait()
+                    if _log_wall:
+                        print(
+                            f"[train step {_step}] driver_wall_s: "
+                            f"run_training={time.perf_counter() - _tt0:.2f}",
+                            flush=True,
+                        )
+
+                if self.cfg.runner.get("log_training_step_summary", True):
+                    tm0 = actor_training_metrics[0]
+                    pref = [k for k in sorted(tm0.keys()) if k.startswith("actor/")][:5]
+                    tparts = []
+                    for k in pref:
+                        try:
+                            tparts.append(f"{k}={float(tm0[k]):.4f}")
+                        except (TypeError, ValueError):
+                            continue
+                    if tparts:
+                        print(
+                            f"[train step {_step}] train: " + " ".join(tparts),
+                            flush=True,
+                        )
 
                 self.global_step += 1
 
@@ -178,6 +359,12 @@ class EmbodiedRunner:
                     self._save_checkpoint()
 
             time_metrics = self.timer.consume_durations()
+            if self.cfg.runner.get("log_step_phase_timings", True) and time_metrics:
+                parts = [f"{k}={v:.2f}s" for k, v in sorted(time_metrics.items())]
+                print(
+                    f"[train step {_step}] ScopedTimer: " + " ".join(parts),
+                    flush=True,
+                )
 
             rollout_metrics = {
                 f"rollout/{k}": v for k, v in actor_rollout_metrics[0].items()

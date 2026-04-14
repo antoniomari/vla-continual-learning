@@ -79,6 +79,13 @@ class LiberoEnv(gym.Env):
 
     def _init_env(self):
         env_fns = self.get_env_fns()
+        if not env_fns:
+            raise ValueError(
+                "LiberoEnv: no parallel envs to create (env_fns is empty). "
+                f"cfg.num_envs is {self.cfg.num_envs!r}. "
+                "For training, ensure algorithm.group_size * algorithm.num_group_envs > 0. "
+                "For eval-only runs, set env.eval.num_envs > 0."
+            )
         self.env = ReconfigureSubprocEnv(env_fns)
 
     def get_env_fns(self):

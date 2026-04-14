@@ -16,7 +16,7 @@ cluster:
     actor,env,rollout: all
   # Match libero_spatial_grpo_openvlaoft_spatial.yaml (training); override per machine if needed.
   # Override per machine: cluster.ray_object_store_memory=<bytes>
-  ray_object_store_memory: 68719476736  # 64 GiB
+  ray_object_store_memory: 34359738368  # 32 GiB
 
 runner:
   task_type: embodied
@@ -48,7 +48,7 @@ algorithm:
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   num_group_envs: 8
   rollout_epoch: 16
-  eval_rollout_epoch: 40
+  eval_rollout_epoch: 10  # was 40
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
   entropy_type: token_level
@@ -97,7 +97,7 @@ env:
   eval:
     # num_envs was 80
     # 10 works with 32GB RAM
-    num_envs: 10
+    num_envs: 80
     eval_per_task: ${int_div:${env.eval.num_envs}, 10}
   enable_offload: False
   fixed_task_ids: null
@@ -110,7 +110,7 @@ rollout:
     queue_size: 0
   mode: "colocate"
   generation_backend: "huggingface"
-  model_dir: "${oc.env:SCRATCH}/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1" # e.g. copy under ${oc.env:SCRATCH}/.cache/continual_learning_models/
+  model_dir: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
   enable_offload: False
   pipeline_stage_num: 1
 
@@ -121,7 +121,7 @@ actor:
     queue_name: "replay_buffer"
     queue_size: 0
   training_backend: "fsdp"
-  checkpoint_load_path: "${oc.env:SCRATCH}/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1" # e.g. copy under ${oc.env:SCRATCH}/.cache/continual_learning_models/
+  checkpoint_load_path: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
   micro_batch_size: 32
   global_batch_size: 8192
   seed: 1234
@@ -165,7 +165,7 @@ actor:
 
   tokenizer:
     tokenizer_type: "HuggingFaceTokenizer"
-    tokenizer_model: "${oc.env:SCRATCH}/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1" # e.g. copy under ${oc.env:SCRATCH}/.cache/continual_learning_models/
+    tokenizer_model: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
     use_fast: False
     trust_remote_code: True
     padding_side: "right"

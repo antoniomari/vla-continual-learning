@@ -12,7 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from typing import Dict
+
+# Libero / robosuite pull in Numba; it emits a noisy UserWarning on every new hash use
+# (aarch64 / some builds). Harmless for training; hide from Slurm logs.
+warnings.filterwarnings(
+    "ignore",
+    message="FNV hashing is not implemented in Numba.",
+    category=UserWarning,
+)
 
 import numpy as np
 import torch
@@ -92,6 +101,17 @@ class EnvWorker(Worker):
     def init_worker(self):
         enable_offload = self.cfg.env.enable_offload
         only_eval = getattr(self.cfg.runner, "only_eval", False)
+        # Periodic eval, eval-only runs, or OPD post-BC teacher eval all call EnvWorker.evaluate(),
+        # which requires eval_simulator_list. OPD configs often set val_check_interval: -1.
+        opd_teacher_eval_after_bc = (
+            self.cfg.algorithm.get("opd_bc_steps", 0) > 0
+            and self.cfg.algorithm.get("opd_eval_teacher_after_bc", True)
+        )
+        needs_eval_simulators = (
+            self.cfg.runner.val_check_interval > 0
+            or only_eval
+            or opd_teacher_eval_after_bc
+        )
         if self.cfg.env.train.simulator_type == "maniskill":
             from rlinf.envs.maniskill.maniskill_env import ManiskillEnv
 
@@ -106,7 +126,7 @@ class EnvWorker(Worker):
                             enable_offload=enable_offload,
                         )
                     )
-            if self.cfg.runner.val_check_interval > 0 or only_eval:
+            if needs_eval_simulators:
                 for _ in range(self.stage_num):
                     self.eval_simulator_list.append(
                         EnvManager(
@@ -131,7 +151,7 @@ class EnvWorker(Worker):
                             enable_offload=enable_offload,
                         )
                     )
-            if self.cfg.runner.val_check_interval > 0 or only_eval:
+            if needs_eval_simulators:
                 for _ in range(self.stage_num):
                     self.eval_simulator_list.append(
                         EnvManager(
@@ -157,7 +177,7 @@ class EnvWorker(Worker):
                         )
                         # RoboTwin(self.cfg.env.train, rank=self._rank, world_size=self._world_size)
                     )
-            if self.cfg.runner.val_check_interval > 0 or only_eval:
+            if needs_eval_simulators:
                 for _ in range(self.stage_num):
                     self.eval_simulator_list.append(
                         EnvManager(

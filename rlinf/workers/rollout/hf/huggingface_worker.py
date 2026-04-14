@@ -14,6 +14,7 @@
 
 import gc
 import os
+import time
 from collections import defaultdict
 
 import numpy as np
@@ -30,6 +31,11 @@ from rlinf.models.embodiment.model_utils import (
 from rlinf.scheduler import Cluster, Worker
 from rlinf.utils.metric_utils import compute_split_num
 from rlinf.utils.placement import HybridComponentPlacement
+from rlinf.utils.runner_utils import cfg_show_progress_bar
+from rlinf.workers.actor.opd_teacher import (
+    compute_teacher_logprobs_one_batch,
+    load_opd_teacher_model,
+)
 
 
 def create_rollout_batch(data):
@@ -109,6 +115,7 @@ class MultiStepRolloutWorker(Worker):
             )
 
         self.use_proprio = self.cfg.actor.model.get("use_proprio", False)
+        self._opd_teacher_model = None
 
         # Debug logging setup
         self.enable_action_logging = cfg.rollout.get("enable_action_logging", False)
@@ -138,6 +145,37 @@ class MultiStepRolloutWorker(Worker):
         self.setup_sample_params()
         if self.cfg.rollout.get("enable_offload", False):
             self.offload_model()
+
+    def _should_precompute_teacher_in_rollout(self) -> bool:
+        return self.cfg.algorithm.get("adv_type") == "embodied_opd" and bool(
+            self.cfg.algorithm.get("opd_precompute_teacher_in_rollout", True)
+        )
+
+    def _ensure_opd_teacher_for_rollout(self) -> None:
+        if not self._should_precompute_teacher_in_rollout():
+            return
+        path = self.cfg.algorithm.get("opd_teacher_model_path", None)
+        if not path:
+            raise ValueError(
+                "opd_precompute_teacher_in_rollout requires algorithm.opd_teacher_model_path "
+                "(set after BC via runner, or in config)."
+            )
+        if self._opd_teacher_model is None:
+            self._opd_teacher_model = load_opd_teacher_model(self.cfg, self._rank)
+
+    def set_opd_teacher_model_path(self, path: str):
+        """Mirror actor: BC writes teacher path so rollout can load the same checkpoint."""
+        from omegaconf import open_dict
+
+        with open_dict(self.cfg.algorithm):
+            self.cfg.algorithm.opd_teacher_model_path = path
+        self._opd_teacher_model = None
+        if self._rank == 0:
+            print(
+                f"[OPD] Rollout opd_teacher_model_path set to {path}",
+                flush=True,
+            )
+        return {}
 
     def setup_sample_params(self):
         # length parameters for rollout
@@ -325,8 +363,13 @@ class MultiStepRolloutWorker(Worker):
                 )
 
     async def generate(self, global_step=0):
+        _log = self._rank == 0 and self.cfg.runner.get("log_step_phase_timings", True)
+        _t_gen = time.perf_counter()
         if self.cfg.rollout.get("enable_offload", False):
-            self.reload_model()
+            self.reload_model(
+                load_opd_teacher=self._should_precompute_teacher_in_rollout()
+            )
+        self._ensure_opd_teacher_for_rollout()
         self.buffer_list = []
         for i in range(self.stage_num):
             self.buffer_list.append(defaultdict(list))
@@ -339,6 +382,7 @@ class MultiStepRolloutWorker(Worker):
             for step in tqdm(
                 range(self.cfg.algorithm.n_chunk_steps),
                 desc=f"Rollout ID {self._rank} Epoch {rollout_epoch} in Generate Step",
+                disable=not cfg_show_progress_bar(self.cfg),
             ):
                 # Stage_num is number of parallel pipeline stages in one rollout collection
                 # there are stage_num simulators
@@ -379,6 +423,21 @@ class MultiStepRolloutWorker(Worker):
                     self.buffer_list[i]["prev_logprobs"].append(
                         chunk_logprobs.cpu().contiguous()
                     )
+                    if self._should_precompute_teacher_in_rollout():
+                        t_lp = compute_teacher_logprobs_one_batch(
+                            self._opd_teacher_model,
+                            self.hf_model,
+                            processed_obs["input_ids"],
+                            processed_obs["attention_mask"],
+                            processed_obs["pixel_values"],
+                            chunk_action_token.reshape(
+                                chunk_action_token.shape[0], -1
+                            ),
+                            self.cfg,
+                        )
+                        self.buffer_list[i]["teacher_logprobs"].append(
+                            t_lp.cpu().contiguous()
+                        )
                     self.buffer_list[i]["prev_values"].append(
                         chunk_values.cpu().contiguous()
                     )
@@ -416,6 +475,15 @@ class MultiStepRolloutWorker(Worker):
             await self.send_rollout_batch(i)
             self.buffer_list[i].clear()
 
+        if _log:
+            print(
+                f"[Rollout r0] generate: total_wall={time.perf_counter() - _t_gen:.2f}s "
+                f"precompute_teacher={self._should_precompute_teacher_in_rollout()} "
+                f"stages={self.stage_num} rollout_epoch={self.cfg.algorithm.rollout_epoch} "
+                f"n_chunk_steps={self.cfg.algorithm.n_chunk_steps}",
+                flush=True,
+            )
+
         gc.collect()
 
         if self.cfg.rollout.get("enable_offload", False):
@@ -423,11 +491,13 @@ class MultiStepRolloutWorker(Worker):
 
     async def evaluate(self):
         if self.cfg.rollout.get("enable_offload", False):
-            self.reload_model()
+            self.reload_model(load_opd_teacher=False)
         eval_info = defaultdict(list)
 
         for step in tqdm(
-            range(self.cfg.algorithm.n_eval_chunk_steps), desc="Rollout in Eval Step"
+            range(self.cfg.algorithm.n_eval_chunk_steps),
+            desc="Rollout in Eval Step",
+            disable=not cfg_show_progress_bar(self.cfg),
         ):
             for i in range(self.stage_num):
                 env_batch = await self.recv_env_batch()
@@ -463,11 +533,16 @@ class MultiStepRolloutWorker(Worker):
 
     def offload_model(self):
         self.hf_model = self.hf_model.to("cpu")
+        if self._opd_teacher_model is not None:
+            self._opd_teacher_model = self._opd_teacher_model.to("cpu")
         gc.collect()
         torch.cuda.empty_cache()
 
-    def reload_model(self):
+    def reload_model(self, load_opd_teacher: bool = False):
+        """Restore rollout student to GPU; optionally OPD teacher (skipped during eval)."""
         self.hf_model = self.hf_model.to(self.device)
+        if load_opd_teacher and self._opd_teacher_model is not None:
+            self._opd_teacher_model = self._opd_teacher_model.to(self.device)
 
     def _wait_for_actor_offload(self, threshold_gb=2.0):
         """Wait until Actor process on this GPU uses less than threshold_gb memory."""

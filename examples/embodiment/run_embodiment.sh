@@ -4,16 +4,35 @@
 #
 # Environment Variables (optional overrides):
 #   - LIBERO_REPO_PATH: Path to LIBERO repository (defaults to ${REPO_PATH}/LIBERO)
+#   - RLINF_LIBERO_USE_OSMESA: Set to 1 for OSMesa (CPU render, slow). Default: EGL; LIBERO env
+#     subprocesses remap CUDA_VISIBLE_DEVICES for Ray (see rlinf/envs/libero/venv.py).
+#   - RLINF_LIBERO_EGL_REMAP: Set to 0 to disable EGL remapping in env workers if it causes issues.
+#   - RLINF_CUDA_LAUNCH_BLOCKING: Set to 1 to enable CUDA_LAUNCH_BLOCKING (debug only; makes rollout
+#     / inference far slower — leave unset for normal training).
 #
 # Note: REPO_PATH is automatically set to the parent directory of examples/
 #       If you need to override it, set it before running this script.
+#
+# Core dumps: on many HPC systems failed workers write huge files like core_nid<PID>_<...>
+# in the current directory. Disable unless debugging (RLINF_ALLOW_CORE_DUMPS=1).
+if [ "${RLINF_ALLOW_CORE_DUMPS:-0}" != "1" ]; then
+    ulimit -c 0 2>/dev/null || true
+fi
 
 export EMBODIED_PATH="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export REPO_PATH=$(dirname $(dirname "$EMBODIED_PATH"))
 export SRC_FILE="${EMBODIED_PATH}/train_embodied_agent.py"
 
-export MUJOCO_GL="egl"
-export PYOPENGL_PLATFORM="egl"
+# MuJoCo offscreen: EGL is faster; on many clusters only EGL device 0 exists while Ray sets
+# CUDA_VISIBLE_DEVICES to a single physical GPU index → MuJoCo EGL errors. OSMesa is CPU/software GL.
+if [ "${RLINF_LIBERO_USE_OSMESA:-0}" = "1" ] || [ "${RLINF_LIBERO_USE_OSMESA:-}" = "true" ]; then
+    export MUJOCO_GL="osmesa"
+    export PYOPENGL_PLATFORM="osmesa"
+    unset MUJOCO_EGL_DEVICE_ID
+else
+    export MUJOCO_GL="egl"
+    export PYOPENGL_PLATFORM="egl"
+fi
 export PYTHONPATH=${REPO_PATH}:$PYTHONPATH
 # NOTE: set LIBERO_REPO_PATH to the path of the LIBERO repo
 # Defaults to ${REPO_PATH}/LIBERO if not set
@@ -22,13 +41,18 @@ export LIBERO_REPO_PATH="${LIBERO_REPO_PATH:-${REPO_PATH}/LIBERO}"
 export LIBERO_CONFIG_PATH=${LIBERO_REPO_PATH}
 
 export PYTHONPATH=${LIBERO_REPO_PATH}:$PYTHONPATH
-export CUDA_LAUNCH_BLOCKING=1
+# Do not set CUDA_LAUNCH_BLOCKING by default: it serializes GPU work and tanks VLA rollout speed.
+if [ "${RLINF_CUDA_LAUNCH_BLOCKING:-0}" = "1" ] || [ "${RLINF_CUDA_LAUNCH_BLOCKING:-}" = "true" ]; then
+    export CUDA_LAUNCH_BLOCKING=1
+fi
 export HYDRA_FULL_ERROR=1
 
 export RAY_DISABLE_IMPORT_WARNING=1
 # export RAY_LOG_TO_STDERR=1
 # export RAY_BACKEND_LOG_LEVEL=DEBUG 
 export RAY_DISABLE_DASHBOARD=1
+# cluster.py reads RLINF_RAY_INCLUDE_DASHBOARD (default on); align with dashboard off above
+export RLINF_RAY_INCLUDE_DASHBOARD=0
 # Ray plasma/raylet sockets: Linux AF_UNIX paths must stay <=107 bytes. Long paths under $HOME/repo fail ray.init.
 export RAY_TMPDIR="${RAY_TMPDIR:-/tmp/ray_${USER}}"
 mkdir -p "$RAY_TMPDIR"

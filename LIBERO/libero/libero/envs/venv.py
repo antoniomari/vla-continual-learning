@@ -573,6 +573,10 @@ class BaseVectorEnv(object):
         timeout: Optional[float] = None,
     ) -> None:
         self._env_fns = env_fns
+        if not env_fns:
+            raise ValueError(
+                "BaseVectorEnv requires a non-empty env_fns list (at least one environment)."
+            )
         # A VectorEnv contains a pool of EnvWorkers, which corresponds to
         # interact with the given envs (one worker <-> one env).
         self.workers = [worker_fn(fn) for fn in env_fns]

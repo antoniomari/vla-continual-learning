@@ -1,53 +1,49 @@
 #!/bin/bash
-# Submit SLURM jobs that run:
-#   - sequential embodied training:  examples/crl_experiment/run_embodiment_sequential.sh
-#   - or checkpoint evaluation:       examples/crl_experiment/eval_embodiment.sh
-# Eval-only helper: jobs/embodiment_slurm_eval_sweep.sh
-# OPD (on-policy distillation): jobs/embodiment_slurm_opd_sweep.sh
+# Submit SLURM jobs for on-policy distillation (OPD) embodied training / eval.
+# Same layout as embodiment_slurm_sweep.sh but defaults to:
+#   - train: crl_experiment/libero_spatial_opd_openvlaoft_spatial
+#   - eval:  crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial
+#     (no separate opd_*_eval yaml in-repo; student checkpoint uses same eval setup as GRPO.)
 #
-# Style aligned with meta_vlas/meta_libero/jobs/on_policy_distillation_sweep.sh
-# (PROJECT_ROOT, venv, log dir, nested loops, sbatch).
+# Train entrypoint: examples/crl_experiment/run_embodiment_opd_sequential.sh (wraps run_embodiment_sequential.sh)
+# Eval entrypoint:  examples/crl_experiment/eval_embodiment.sh
+# GRPO / generic sweep: jobs/embodiment_slurm_sweep.sh
+#
+# OPD notes (see libero_spatial_opd_openvlaoft_spatial.yaml):
+#   - opd_bc_steps, LiberoSFT / teacher paths — tune in config or Hydra overrides.
+#   - BC teacher under logger.log_path/opd_bc_teacher/actor; same snapshot at opd_bc_student/actor.
 #
 # Usage:
 #   export RUN_MODE=train   # or eval
-#   bash examples/crl_experiment/jobs/embodiment_slurm_sweep.sh
-#
-# Eval base model (no LoRA) on Slurm: RUN_MODE=eval and EVAL_CHECKPOINT_LOCS=("base"), EVAL_STEPS=(0).
+#   bash examples/crl_experiment/jobs/embodiment_slurm_opd_sweep.sh
 #
 # Optional:
 #   DRY_RUN=1 bash ... # print jobs without sbatch
 #   GRPO_HP_FROM_SWEEP=0 — do not override algorithm.group_size / num_group_envs / rollout_epoch /
-#       actor.global_batch_size (yaml only). Default1 uses TRAIN_GROUP_SIZES × TRAIN_NUM_GROUP_ENVS ×
-#       TRAIN_ROLLOUT_EPOCHS × TRAIN_SEEDS with global_batch_size = product of the first three.
-#   TRAIN_MAX_EPOCHS — passed as 3rd arg to run_embodiment_sequential (runner.max_epochs + checkpoint index).
-#       Post-train eval uses global_step_<TRAIN_MAX_EPOCHS>; keep EVAL_STEPS in sync for RUN_MODE=eval.
-#   Eval-only jobs: W&B run name eval_<basename(LOG_DIR)>_step_<STEP> via EVAL_HYDRA_OVERRIDES.
-#   PROJECT_ROOT, VENV_PATH, SLURM_LOG_DIR — overrides
-#   SLURM_PARTITION — optional on any cluster
-#   SLURM_ACCOUNT — on other clusters; on $HOME=/users/anmari defaults to a143 (override if needed)
-#   SBATCH_EXTRA — extra sbatch flags
+#       actor.global_batch_size (yaml only). Default 1 uses TRAIN_GROUP_SIZES × TRAIN_NUM_GROUP_ENVS ×
+#       TRAIN_ROLLOUT_EPOCHS × TRAIN_SEEDS with SWEEP_GLOBAL_BATCH_SIZE = group_size × num_group_envs × rollout_epoch × 64
+#       (same formula as jobs/embodiment_slurm_sweep.sh; passed via env vars read by run_embodiment_sequential.sh).
+#   PROJECT_ROOT, VENV_PATH, SLURM_LOG_DIR — overrides (default logs: logs/slurm_embodiment_opd)
+#   SLURM_PARTITION, SLURM_ACCOUNT, SBATCH_EXTRA
 #
-# Libero: export LIBERO_REPO_PATH=/absolute/path/to/LIBERO before running if not at ${REPO_PATH}/LIBERO.
-#   Optional: LIBERO_CONFIG_PATH (defaults to LIBERO_REPO_PATH in the job).
+# Libero: training/eval scripts default to ${REPO_PATH}/LIBERO. If your clone lives elsewhere,
+#   export LIBERO_REPO_PATH=/absolute/path/to/LIBERO
+# before running this script (values are baked into each sbatch script). Optional:
+#   export LIBERO_CONFIG_PATH=...   # defaults to LIBERO_REPO_PATH when exporting.
 #
 # Cluster: if HOME is /users/anmari, emit only #SBATCH --time (no cpus/mem/gpus); --account defaults to a143.
-# Else emit --time, --cpus-per-task, --mem-per-cpu, --gpus. Override TIME, etc. via env.
 #
 set -euo pipefail
 
-# Repo root: this file lives in examples/crl_experiment/jobs/
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
-SLURM_LOG_DIR="${SLURM_LOG_DIR:-${PROJECT_ROOT}/logs/slurm_embodiment}"
+SLURM_LOG_DIR="${SLURM_LOG_DIR:-${PROJECT_ROOT}/logs/slurm_embodiment_opd}"
 VENV_PATH="${VENV_PATH:-${PROJECT_ROOT}/.venv}"
 
 RUN_MODE="${RUN_MODE:-train}" # train | eval
 
 mkdir -p "${SLURM_LOG_DIR}"
 
-# ============== SLURM RESOURCES (edit for your cluster) ==============
-# Defaults aligned with an interactive allocation like:
-#   srun --time=24:0:0 --cpus-per-task=8 --mem-per-cpu=16G --gpus=pro_6000:1 --pty bash -l
 TIME="${TIME:-12:00:00}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-8}"
 MEM_PER_CPU="${MEM_PER_CPU:-16G}"
@@ -63,41 +59,39 @@ else
   NEW_CLUSTER_ACCOUNT=""
 fi
 
+# Baked into each job if non-empty (see header). Otherwise run_embodiment.sh uses ${REPO_PATH}/LIBERO.
 LIBERO_REPO_PATH="${LIBERO_REPO_PATH:-}"
 LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-}"
 
-# ============== TRAIN SWEEP (run_embodiment_sequential.sh) ==============
-# Args to run_embodiment_sequential.sh:
-#   TASK_ID_OR_RANGE [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
+# ============== TRAIN SWEEP (run_embodiment_opd_sequential.sh → run_embodiment_sequential.sh) ==============
+# Args: TASK_ID_OR_RANGE [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
 TRAIN_TASK_INPUTS=("0,1")
-TRAIN_MANUAL_CHECKPOINT=("") # e.g. ("" "/abs/path") — usually ""
-# Passed as MAX_EPOCH to run_embodiment_sequential (sets runner.max_epochs and checkpoint global_step).
-# Empty = training uses yaml max_epochs but inter-task / post-train eval still use get_default_global_step (50 for spatial).
+TRAIN_MANUAL_CHECKPOINT=("")
+# Passed as MAX_EPOCH (runner.max_epochs + checkpoint index). Empty = yaml max_epochs; post-train eval
+# step still uses get_default_global_step for checkpoint folder unless you align EVAL_STEPS.
 TRAIN_MAX_EPOCHS=(50)
-# GRPO: no LiberoSFT replay buffer. For OPD (`libero_spatial_opd_*`) set opd_bc_steps>0 and
-# LIBERO_REPO_PATH + datasets_with_logits/... or use_experience_replay needs the same data.
-TRAIN_CONFIG_NAMES=("crl_experiment/libero_spatial_grpo_openvlaoft_spatial")
+# LiberoSFT / opd_bc_steps / teacher paths — tune in libero_spatial_opd_openvlaoft_spatial.yaml or Hydra.
+TRAIN_CONFIG_NAMES=("crl_experiment/libero_spatial_opd_openvlaoft_spatial")
 TRAIN_SEEDS=(4096)
 
-# GRPO algorithm / batch overrides (Hydra), passed via env vars read by run_embodiment_sequential.sh.
-# Cartesian product of the three lists × TRAIN_SEEDS. For each combo:
-#   SWEEP_GLOBAL_BATCH_SIZE = group_size × num_group_envs × rollout_epoch
-# GRPO_HP_FROM_SWEEP=0 disables (yaml defaults for these fields only).
+# Rollout geometry overrides (Hydra), same env vars as jobs/embodiment_slurm_sweep.sh.
+# OPD: algorithm.normalize_advantages is false — group_size / num_group_envs / rollout_epoch do not
+# reshape rewards via group normalization; they only scale how many parallel rollouts you collect
+# (and, with filter_rewards, which prompts share a group). SWEEP_GLOBAL_BATCH_SIZE should still
+# match the rollout product ×64 so actor.global_batch_size stays consistent with the batch builder.
+# Cartesian product of the three lists × TRAIN_SEEDS when GRPO_HP_FROM_SWEEP=1:
+#   SWEEP_GLOBAL_BATCH_SIZE = group_size × num_group_envs × rollout_epoch × 64
 GRPO_HP_FROM_SWEEP="${GRPO_HP_FROM_SWEEP:-1}"
 TRAIN_GROUP_SIZES=(8)
 TRAIN_NUM_GROUP_ENVS=(4)
 TRAIN_ROLLOUT_EPOCHS=(2)
 
-# ============== EVAL SWEEP (eval_embodiment.sh) ==============
-# Usage of eval_embodiment.sh:
-#   CHECKPOINT_LOCATION [STEP_NUMBER] [CONFIG_NAME]
-# CHECKPOINT_LOCATION is relative to repo root (see eval_embodiment.sh header).
+# ============== EVAL SWEEP ==============
+# Same OpenVLA-OFT Libero spatial eval config as GRPO (student LoRA after OPD).
 EVAL_CHECKPOINT_LOCS=("logs/sequential/task_0_seed1234")
-# Must match the global_step_* folder produced by training (typically == runner.max_epochs).
-EVAL_STEPS=(50)
+EVAL_STEPS=(10)
 EVAL_CONFIG_NAMES=("crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial")
 
-# ============== SUBMIT HELPER ==============
 submit_job() {
   local job_name="$1"
   local cmd="$2"
@@ -146,8 +140,7 @@ submit_job() {
   rm -f "${batch}"
 }
 
-# ============== MAIN ==============
-echo "Embodied SLURM sweep — RUN_MODE=${RUN_MODE}"
+echo "OPD embodied SLURM sweep — RUN_MODE=${RUN_MODE}"
 echo "GRPO_HP_FROM_SWEEP=${GRPO_HP_FROM_SWEEP} (1 = override group_size, num_group_envs, rollout_epoch, global_batch_size)"
 echo "PROJECT_ROOT=${PROJECT_ROOT}"
 echo "SLURM_LOG_DIR=${SLURM_LOG_DIR}"
@@ -176,18 +169,18 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                 for RE in "${TRAIN_ROLLOUT_EPOCHS[@]}"; do
                   G_BATCH=$((GS * NGE * RE * 64))
                   for SEED in "${TRAIN_SEEDS[@]}"; do
-                    JOB_NAME="emb_g${GS}n${NGE}r${RE}s${SEED}"
+                    JOB_NAME="opd_g${GS}n${NGE}r${RE}s${SEED}"
                     JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
                     if ((${#JOB_NAME} > 40)); then
                       JOB_NAME="${JOB_NAME:0:40}"
                     fi
 
-                    ARGS=(bash examples/crl_experiment/run_embodiment_sequential.sh "${TASK}")
+                    ARGS=(bash examples/crl_experiment/run_embodiment_opd_sequential.sh "${TASK}")
                     [[ -n "${CKPT}" ]] && ARGS+=("${CKPT}") || ARGS+=("")
                     [[ -n "${MAX_EP}" ]] && ARGS+=("${MAX_EP}") || ARGS+=("")
                     ARGS+=("${CFG}" "${SEED}")
                     CMD="SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} $(printf '%q ' "${ARGS[@]}")"
-                    echo "Submit train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH}"
+                    echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH}"
 
                     submit_job "${JOB_NAME}" "${CMD}"
                     job_count=$((job_count + 1))
@@ -197,19 +190,19 @@ if [[ "${RUN_MODE}" == "train" ]]; then
             done
           else
             for SEED in "${TRAIN_SEEDS[@]}"; do
-              JOB_NAME="emb_t${TASK}_s${SEED}"
+              JOB_NAME="opd_t${TASK}_s${SEED}"
               JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
               if ((${#JOB_NAME} > 40)); then
                 JOB_NAME="${JOB_NAME:0:40}"
               fi
 
-              ARGS=(bash examples/crl_experiment/run_embodiment_sequential.sh "${TASK}")
+              ARGS=(bash examples/crl_experiment/run_embodiment_opd_sequential.sh "${TASK}")
               [[ -n "${CKPT}" ]] && ARGS+=("${CKPT}") || ARGS+=("")
               [[ -n "${MAX_EP}" ]] && ARGS+=("${MAX_EP}") || ARGS+=("")
               ARGS+=("${CFG}" "${SEED}")
 
               CMD=$(printf '%q ' "${ARGS[@]}")
-              echo "Submit train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none}"
+              echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none}"
 
               submit_job "${JOB_NAME}" "${CMD}"
               job_count=$((job_count + 1))
@@ -223,17 +216,14 @@ elif [[ "${RUN_MODE}" == "eval" ]]; then
   for LOC in "${EVAL_CHECKPOINT_LOCS[@]}"; do
     for STEP in "${EVAL_STEPS[@]}"; do
       for ECFG in "${EVAL_CONFIG_NAMES[@]}"; do
-        EVAL_LOC_STEM="$(basename "${LOC%/}")"
-        EVAL_WANDB_NAME="eval_${EVAL_LOC_STEM}_step_${STEP}"
-        EVAL_WANDB_NAME="${EVAL_WANDB_NAME//[^a-zA-Z0-9._-]/_}"
-        JOB_NAME="${EVAL_WANDB_NAME}"
+        JOB_NAME="opd_ev_s${STEP}"
+        JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
         if ((${#JOB_NAME} > 40)); then
           JOB_NAME="${JOB_NAME:0:40}"
         fi
 
-        EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${EVAL_WANDB_NAME}"
-        CMD=$(printf '%q ' env EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES}" bash examples/crl_experiment/eval_embodiment.sh "${LOC}" "${STEP}" "${ECFG}")
-        echo "Submit eval: loc=${LOC} step=${STEP} cfg=${ECFG} wandb_name=${EVAL_WANDB_NAME}"
+        CMD=$(printf '%q ' bash examples/crl_experiment/eval_embodiment.sh "${LOC}" "${STEP}" "${ECFG}")
+        echo "Submit OPD eval: loc=${LOC} step=${STEP} cfg=${ECFG}"
 
         submit_job "${JOB_NAME}" "${CMD}"
         job_count=$((job_count + 1))

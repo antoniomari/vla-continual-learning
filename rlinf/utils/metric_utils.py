@@ -295,3 +295,27 @@ def compute_loss_mask(dones):
     loss_mask_sum = loss_mask_sum.expand_as(loss_mask)
 
     return loss_mask, loss_mask_sum
+
+
+def expand_loss_mask_to_match_logprob_tokens(loss_mask, loss_mask_sum, logprobs):
+    """Broadcast chunk-level mask to token-level logprobs for OPD / token-level policy.
+
+    ``compute_loss_mask`` yields ``[..., num_action_chunks]`` while rollout ``prev_logprobs``
+    are ``[..., action_dim * num_action_chunks]`` (one logprob per discretized action token).
+    Repeat each chunk's mask across ``action_dim`` so advantages and actor loss multiply
+    element-wise with logprobs.
+    """
+    if loss_mask is None:
+        return loss_mask, loss_mask_sum
+    n_chunk = loss_mask.shape[-1]
+    n_tok = logprobs.shape[-1]
+    if n_chunk == n_tok:
+        return loss_mask, loss_mask_sum
+    if n_tok % n_chunk != 0:
+        raise ValueError(
+            f"loss_mask last dim ({n_chunk}) must divide logprobs last dim ({n_tok}); "
+            f"loss_mask.shape={tuple(loss_mask.shape)}, logprobs.shape={tuple(logprobs.shape)}"
+        )
+    loss_mask = loss_mask.repeat_interleave(n_tok // n_chunk, dim=-1)
+    loss_mask_sum = loss_mask.sum(dim=(0, 2), keepdim=True).expand_as(loss_mask)
+    return loss_mask, loss_mask_sum

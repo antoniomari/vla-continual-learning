@@ -68,6 +68,9 @@ source .venv/bin/activate
 # 3. Install core dependencies
 uv pip install -r requirements.txt
 
+# On Clariden, instead:
+CC=gcc CXX=g++ uv pip install -r requirements.txt
+
 # 4. Install bundled packages (included in this repo)
 cd transformers-openvla-oft && uv pip install -e . && cd ..
 cd openvla-oft && uv pip install -e . && cd ..

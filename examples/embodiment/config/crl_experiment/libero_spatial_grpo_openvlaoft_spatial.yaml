@@ -17,22 +17,25 @@ cluster:
   # Plasma object store in bytes. The previous ~430GiB default often overcommits RAM and can
   # cause worker OOM / "Failed to register worker to Raylet: IOError: End of file" on one node.
   # Override per machine: cluster.ray_object_store_memory=<bytes>
-  ray_object_store_memory: 68719476736  # 64 GiB
+  ray_object_store_memory: 34359738368  # 32 GiB
 
 runner:
   task_type: embodied
+  show_progress_bar: false
+  log_training_step_summary: true
+  log_training_tensor_shapes: false
   logger:
     log_path: "../results"
     project_name: rlinf
     experiment_name: "test_openvla"
     logger_backends: ["wandb"] # wandb, swanlab
 
-  max_epochs: 10
+  max_epochs: 50
   max_steps: -1
 
   only_eval: False
   val_check_interval: -1
-  save_interval: 10
+  save_interval: 50
   seq_length: 4096
   max_prompt_length: 128
 
@@ -47,8 +50,10 @@ algorithm:
   group_size: 4  # was 8
   n_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
-  num_group_envs: 2  # was 8
-  rollout_epoch: 4
+  # Must be >= (# env GPUs) * pipeline_stage_num after validate_embodied_cfg divides by both
+  # (e.g. 4 GPUs × 1 stage → num_group_envs >= 4, or 2 would become 0 and num_envs=0).
+  num_group_envs: 8
+  rollout_epoch: 1
   eval_rollout_epoch: 20
   reward_type: step_level  # step_level or chunk_level
   logprob_type: token_level
@@ -109,8 +114,7 @@ rollout:
     queue_size: 0
   mode: "colocate"
   generation_backend: "huggingface"
-  model_dir: "${oc.env:SCRATCH}/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1"      # e.g. copy under ${oc.env:SCRATCH}/.cache/continual_learning_models/
-  enable_offload: True
+  model_dir: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
   pipeline_stage_num: 1
 
 actor:
@@ -120,7 +124,7 @@ actor:
     queue_name: "replay_buffer"
     queue_size: 0
   training_backend: "fsdp"
-  checkpoint_load_path: "${oc.env:SCRATCH}/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1" # e.g. copy under ${oc.env:SCRATCH}/.cache/continual_learning_models/
+  checkpoint_load_path: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
   micro_batch_size: 32
   global_batch_size: 2048 # 8192
   seed: 1234
@@ -164,7 +168,7 @@ actor:
 
   tokenizer:
     tokenizer_type: "HuggingFaceTokenizer"
-    tokenizer_model: "${oc.env:SCRATCH}/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1"  # e.g. copy under ${oc.env:SCRATCH}/.cache/continual_learning_models/
+    tokenizer_model: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
     use_fast: False
     trust_remote_code: True
     padding_side: "right"

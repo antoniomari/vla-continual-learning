@@ -1,10 +1,14 @@
 # On-policy distillation (OPD): BC warmup on full expert data, then RL with frozen teacher.
-# Runner saves the post-BC adapter to `logger.log_path/opd_bc_teacher/actor` and sets
-# `algorithm.opd_teacher_model_path` before the main loop.
+# Runner saves the post-BC adapter to `logger.log_path/opd_bc_teacher/actor` (frozen teacher)
+# and a copy to `logger.log_path/opd_bc_student/actor` (student snapshot at BC end); sets
+# `algorithm.opd_teacher_model_path` to the teacher path before the main loop.
 #
-# Default rollout sizing (after Hydra placement scaling): tune so that
-#   n_chunk_steps * rollout_epoch * (parallel env batch) == actor.global_batch_size / num_actor_gpus
-# for a single optimizer pass per outer step (see embodied_runner + fsdp_actor_worker).
+# Batch sizing:
+#   RL: tune rollout env batch (group_size × num_group_envs × rollout_epoch × …) vs
+#       actor.global_batch_size / num_actor_gpus (see embodied_runner + fsdp_actor_worker).
+#   OPD BC warmup: LiberoSFT uses algorithm.opd_bc_batch_size (per GPU). Each BC optimizer step
+#       uses global samples = algorithm.opd_bc_global_batch_size (if set) else actor.global_batch_size,
+#       with grad accumulation = that_global / (opd_bc_batch_size × num_actor_gpus).
 
 defaults:
   - env/train: libero_spatial
@@ -26,9 +30,16 @@ cluster:
 
 runner:
   task_type: embodied
+  # tqdm bars (rollout / BC / policy update). Set false for quieter Slurm logs.
+  show_progress_bar: true
+  # One-line train metrics after each policy update (actor/*).
+  log_training_step_summary: true
+  # Per-tensor shape spam during run_training (debug only).
+  log_training_tensor_shapes: false
   logger:
     log_path: "../results"
     project_name: rlinf
+    # Default run name; sequential launcher overrides with opd_<task>_<seed>_... (see EXPERIMENT_NAME_PREFIX).
     experiment_name: "opd_spatial_openvla"
     logger_backends: ["wandb"]
 
@@ -53,14 +64,16 @@ algorithm:
   group_size: 4
   n_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
   n_eval_chunk_steps: ${int_div:${env.train.max_episode_steps}, ${actor.model.num_action_chunks}}
-  num_group_envs: 2
-  rollout_epoch: 16
+  num_group_envs: 8
+  rollout_epoch: 1
   eval_rollout_epoch: 20
   reward_type: step_level
   logprob_type: token_level
   entropy_type: token_level
 
   use_experience_replay: False
+  # Auxiliary BC term mixed into the *RL* loss when use_experience_replay (or similar) is on.
+  # OPD teacher BC uses actor.optim.opd_teacher_* only. Keep 0 here for standard OPD.
   bc_coeff: 0.0
   adv_type: embodied_opd
   loss_type: embodied_opd
@@ -77,17 +90,37 @@ algorithm:
   gae_lambda: 0.95
 
   # --- OPD ---
-  # BC steps before RL; teacher checkpoint is written under log_path/opd_bc_teacher/actor.
+  # BC warmup runs after the actor inits, before rollout/env (Libero). RL rollouts start only in run().
+  # BC warmup uses actor.optim.opd_teacher_lr / opd_teacher_value_lr; RL uses lr / value_lr (restored after BC).
+  # Checkpoints after BC: teacher log_path/opd_bc_teacher/actor; same weights copied to
+  # log_path/opd_bc_student/actor. If MuJoCo/EGL segfaults on env init, try
+  # RLINF_LIBERO_USE_OSMESA=1 (see examples/embodiment/run_embodiment.sh).
   opd_bc_steps: 200
   # <=0 uses all demos per task in LiberoSFTDataset (full data per task).
   opd_sft_demos_per_task: 0
-  opd_bc_coeff: 1.0
+  # Total expert samples per BC optimizer step (overrides actor.global_batch_size for warmup only).
+  opd_bc_global_batch_size: 32
+  # Per-GPU LiberoSFT microbatch during BC. Must satisfy:
+  #   opd_bc_global_batch_size % (opd_bc_batch_size × num_actor_gpus) == 0
+  # e.g. global 32 @ 8 GPUs → opd_bc_batch_size 4 (or 2 with grad_acc2). Single GPU: keep 32.
+  opd_bc_batch_size: 8
   # Optional: override base HF dir when teacher path is adapter-only (default: actor.checkpoint_load_path).
   # opd_teacher_base_model_path: null
   # Set manually to skip BC warmup and use an existing teacher (adapter dir or full model dir).
   # opd_teacher_model_path: null
-  # After BC, run the same embodied eval as the student (rollout sync from actor → env/rollout evaluate).
+  # After BC, sync actor→rollout and run evaluate() on the current training task(s) only.
+  # Post-training eval from run_embodiment_sequential.sh / run_embodiment_opd_sequential.sh uses
+  # env.fixed_task_ids=null (full suite, e.g. 10 tasks for spatial); see EVAL_HYDRA_OVERRIDES there.
   opd_eval_teacher_after_bc: True
+  # If true (default), rollout worker runs the frozen teacher on each chunk (same obs + student actions)
+  # and sends teacher_logprobs with the batch—no second full teacher pass on the actor. Needs extra VRAM
+  # on rollout GPUs (student + teacher). Set false to keep the old actor-side teacher scoring.
+  opd_precompute_teacher_in_rollout: true
+  # Teacher forward during compute_advantages (OPD): microbatch size; can exceed actor.micro_batch_size
+  # if VRAM allows (teacher-only forward, no student grads).
+  # opd_teacher_micro_batch_size: 32
+  # Only if GPU OOM: set true to stage logprobs on CPU (much slower, looks like idle GPU).
+  # opd_teacher_stash_logprobs_on_cpu: false
 
   sampling_params:
     use_greedy: False
@@ -124,7 +157,7 @@ rollout:
     queue_size: 0
   mode: "colocate"
   generation_backend: "huggingface"
-  model_dir: "${oc.env:SCRATCH}/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1"
+  model_dir: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
   enable_offload: True
   pipeline_stage_num: 1
 
@@ -135,9 +168,10 @@ actor:
     queue_name: "replay_buffer"
     queue_size: 0
   training_backend: "fsdp"
-  checkpoint_load_path: "${oc.env:SCRATCH}/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1"
+  checkpoint_load_path: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
+  # RL training: per-GPU microbatch and global token/sample count per step (all actor GPUs).
   micro_batch_size: 32
-  global_batch_size: 8192
+  global_batch_size: 2048 # was 8192
   seed: 1234
   enable_offload: True
   preallocate: 0
@@ -170,8 +204,12 @@ actor:
     gradient_checkpointing: False
 
   optim:
+    # Student / RL phase (after OPD BC warmup).
     lr: 2.0e-5
     value_lr: 3.0e-3
+    # Teacher: BC-only warmup. Omit to reuse lr / value_lr for BC as well.
+    opd_teacher_lr: 2.0e-5
+    opd_teacher_value_lr: 3.0e-3
     adam_beta1: 0.9
     adam_beta2: 0.999
     adam_eps: 1.0e-05
@@ -179,7 +217,7 @@ actor:
 
   tokenizer:
     tokenizer_type: "HuggingFaceTokenizer"
-    tokenizer_model: "${oc.env:SCRATCH}/.cache/continual_learning_models/Openvla-oft-SFT-libero-spatial-traj1"
+    tokenizer_model: "${oc.env:REPO_PATH}/model/Openvla-oft-SFT-libero-spatial-traj1/"
     use_fast: False
     trust_remote_code: True
     padding_side: "right"

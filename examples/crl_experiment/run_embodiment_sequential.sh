@@ -1,9 +1,10 @@
 #!/bin/bash
 ### Usage: bash examples/crl_experiment/run_embodiment_sequential.sh TASK_ID_OR_RANGE [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
+### OPD default config: bash examples/crl_experiment/run_embodiment_opd_sequential.sh TASK_ID_OR_RANGE [...same optional args...]
 ### Example (single task): bash examples/crl_experiment/run_embodiment_sequential.sh 0
 ### Example (task range): bash examples/crl_experiment/run_embodiment_sequential.sh "0,3"
 ### Example (with max_epoch): bash examples/crl_experiment/run_embodiment_sequential.sh 0 "" 15
-### Example (continue from checkpoint): bash examples/crl_experiment/run_embodiment_sequential.sh 0 ./logs/sequential/task_0_seed1234/checkpoints/global_step_10/actor 20
+### Example (continue from checkpoint): bash examples/crl_experiment/run_embodiment_sequential.sh 0 ./logs/sequential/task_0_seed1234/checkpoints/global_step_50/actor 20
 ### Example (with seed): bash examples/crl_experiment/run_embodiment_sequential.sh 0 "" "" "" 42
 ### Note: TASK_ID_OR_RANGE can be:
 ###       - A single task ID (e.g., "0") - trains that task only
@@ -12,6 +13,14 @@
 ###       If CHECKPOINT_PATH is provided for a range, it will only be used for the first task
 ###       MAX_EPOCH is optional and can always be specified to override the default max_epochs
 ###       SEED is optional and defaults to 1234 if not provided
+### Optional: EXPERIMENT_NAME_PREFIX=opd_ prepended to runner.logger.experiment_name (WandB run name);
+###           run_embodiment_opd_sequential.sh sets this by default.
+### Optional (Slurm sweep): SWEEP_GROUP_SIZE, SWEEP_NUM_GROUP_ENVS, SWEEP_ROLLOUT_EPOCH,
+###           SWEEP_GLOBAL_BATCH_SIZE — appended as Hydra overrides for GRPO / actor batch sizing.
+### Eval after each task: passes global_step (= MAX_EPOCH or get_default_global_step), seed,
+###           env.fixed_task_ids=null (all suite tasks, e.g. 10 for LIBERO spatial), same SWEEP_* as training,
+###           and runner.logger.experiment_name=eval_<train_name>_step_<N>. Training still uses one task per stage.
+### Optional: EVAL_HYDRA_OVERRIDES is consumed by eval_embodiment.sh (do not set manually unless extending).
 
 TASK_INPUT=${1:-0}
 MANUAL_CHECKPOINT_PATH=$2
@@ -76,7 +85,12 @@ source "examples/crl_experiment/common_functions.sh"
 # Extract config tag and derive eval config name
 CONFIG_TAG=$(extract_config_tag "$CONFIG_NAME")
 EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
-GLOBAL_STEP=$(get_default_global_step "$CONFIG_NAME")
+# Final checkpoint folder is global_step_<N> with N == max_epochs for embodied training.
+if [ -n "$MAX_EPOCH" ]; then
+    GLOBAL_STEP="$MAX_EPOCH"
+else
+    GLOBAL_STEP=$(get_default_global_step "$CONFIG_NAME")
+fi
 FIRST_TASK_ID=$(get_first_task_id "$CONFIG_NAME")
 
 # Main training loop
@@ -173,6 +187,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ -n "$CONFIG_TAG" ]; then
         EXPERIMENT_NAME="${EXPERIMENT_NAME}_${CONFIG_TAG}"
     fi
+    if [ -n "${EXPERIMENT_NAME_PREFIX:-}" ]; then
+        EXPERIMENT_NAME="${EXPERIMENT_NAME_PREFIX}${EXPERIMENT_NAME}"
+    fi
 
     echo "Configuration:"
     echo "  Task ID: $TASK_ID"
@@ -226,6 +243,21 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         OVERRIDES="$OVERRIDES runner.max_epochs=${MAX_EPOCH}"
     fi
 
+    # Optional: Slurm sweep (examples/crl_experiment/jobs/embodiment_slurm_sweep.sh) exports these
+    # to override GRPO rollout geometry and actor.global_batch_size without editing the yaml.
+    if [ -n "${SWEEP_GROUP_SIZE:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.group_size=${SWEEP_GROUP_SIZE}"
+    fi
+    if [ -n "${SWEEP_NUM_GROUP_ENVS:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.num_group_envs=${SWEEP_NUM_GROUP_ENVS}"
+    fi
+    if [ -n "${SWEEP_ROLLOUT_EPOCH:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.rollout_epoch=${SWEEP_ROLLOUT_EPOCH}"
+    fi
+    if [ -n "${SWEEP_GLOBAL_BATCH_SIZE:-}" ]; then
+        OVERRIDES="$OVERRIDES actor.global_batch_size=${SWEEP_GLOBAL_BATCH_SIZE}"
+    fi
+
     echo "Running with Hydra overrides:"
     echo "$OVERRIDES"
     echo ""
@@ -241,9 +273,27 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "Checkpoint saved to: ${LOG_DIR}"
 
         CHECKPOINT_LOCATION=$(echo "$LOG_DIR" | sed 's|^\./||')
+        EVAL_GLOBAL_STEP="${GLOBAL_STEP}"
+        EVAL_EXPERIMENT_NAME="eval_${EXPERIMENT_NAME}_step_${EVAL_GLOBAL_STEP}"
+        EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${EVAL_EXPERIMENT_NAME} actor.seed=${SEED} env.fixed_task_ids=null"
+        if [ -n "${SWEEP_GROUP_SIZE:-}" ]; then
+            EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} algorithm.group_size=${SWEEP_GROUP_SIZE}"
+        fi
+        if [ -n "${SWEEP_NUM_GROUP_ENVS:-}" ]; then
+            EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} algorithm.num_group_envs=${SWEEP_NUM_GROUP_ENVS}"
+        fi
+        if [ -n "${SWEEP_ROLLOUT_EPOCH:-}" ]; then
+            EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} algorithm.rollout_epoch=${SWEEP_ROLLOUT_EPOCH}"
+        fi
+        if [ -n "${SWEEP_GLOBAL_BATCH_SIZE:-}" ]; then
+            EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} actor.global_batch_size=${SWEEP_GLOBAL_BATCH_SIZE}"
+        fi
+        export EVAL_HYDRA_OVERRIDES
         echo ""
-        echo "Running evaluation for: ${CHECKPOINT_LOCATION}"
-        bash examples/crl_experiment/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "" "${EVAL_CONFIG_NAME}"
+        echo "Running evaluation (all suite tasks; env.fixed_task_ids=null) for: ${CHECKPOINT_LOCATION} global_step=${EVAL_GLOBAL_STEP}"
+        echo "  W&B eval run name (experiment_name): ${EVAL_EXPERIMENT_NAME}"
+        bash examples/crl_experiment/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "${EVAL_GLOBAL_STEP}" "${EVAL_CONFIG_NAME}"
+        unset EVAL_HYDRA_OVERRIDES
     else
         echo "Task $TASK_ID failed with exit code $EXIT_CODE"
         OVERALL_EXIT_CODE=$EXIT_CODE

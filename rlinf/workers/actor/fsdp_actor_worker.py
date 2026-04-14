@@ -65,8 +65,10 @@ from rlinf.utils.metric_utils import (
     compute_loss_mask,
     compute_rollout_metrics as compute_rollout_metrics_simple,
     compute_split_num,
+    expand_loss_mask_to_match_logprob_tokens,
 )
 from rlinf.utils.placement import HybridComponentPlacement
+from rlinf.utils.runner_utils import cfg_show_progress_bar
 
 
 class EmbodiedFSDPActor(FSDPModelManager, Worker):
@@ -177,10 +179,16 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         precision = torch_dtype_from_precision(self.cfg.actor.model.precision)
         collate_fn = make_collate_fn(self.cfg, input_processor, precision)
 
+        sft_batch = (
+            int(self.cfg.algorithm.get("opd_bc_batch_size", self.cfg.actor.micro_batch_size))
+            if self._opd_bc_steps > 0
+            else int(self.cfg.actor.micro_batch_size)
+        )
+
         self.sft_dataloader = cycle(
             DataLoader(
                 self.sft_dataset,
-                batch_size=self.cfg.actor.micro_batch_size,
+                batch_size=sft_batch,
                 shuffle=True,
                 num_workers=8,
                 pin_memory=True,
@@ -329,6 +337,8 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             torch.cuda.empty_cache()
 
     async def recv_rollout_batch(self):
+        _log = self._rank == 0 and self.cfg.runner.get("log_step_phase_timings", True)
+        _t_recv = time.perf_counter()
         send_num = self._component_placement.get_world_size("rollout") * self.stage_num
         recv_num = self._component_placement.get_world_size("actor")
         split_num = compute_split_num(send_num, recv_num)
@@ -367,6 +377,15 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 self.rollout_batch[key] = torch.cat(tensors, dim=0)
 
         self.rollout_batch = self._process_received_rollout_batch(self.rollout_batch)
+        if _log:
+            has_teacher = "teacher_logprobs" in self.rollout_batch
+            print(
+                f"[Actor r0] recv_rollout_batch: wall={time.perf_counter() - _t_recv:.2f}s "
+                f"split_num={split_num} keys={len(self.rollout_batch)} "
+                f"input_ids={tuple(self.rollout_batch['input_ids'].shape)} "
+                f"teacher_logprobs_in_batch={has_teacher}",
+                flush=True,
+            )
 
     def _process_received_rollout_batch(self, rollout_batch):
         """
@@ -458,6 +477,8 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         Compute advantages and returns on the actor side and aggregate
         rollout-level metrics in a distributed-safe way.
         """
+        _log = self._rank == 0 and self.cfg.runner.get("log_step_phase_timings", True)
+        _t0 = time.perf_counter()
         stage_num = self.cfg.rollout.pipeline_stage_num
         env_world_size = self._component_placement.get_world_size("env")
         actor_world_size = self._component_placement.get_world_size("actor")
@@ -471,19 +492,51 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         loss_mask = self.rollout_batch.get("loss_mask", None)
 
         if self.cfg.algorithm.adv_type == "embodied_opd":
-            if self._opd_teacher_model is None:
-                self._opd_teacher_model = load_opd_teacher_model(
-                    self.cfg, self._rank
+            loss_mask_sum = self.rollout_batch.get("loss_mask_sum", None)
+            if loss_mask is not None:
+                loss_mask, loss_mask_sum = expand_loss_mask_to_match_logprob_tokens(
+                    loss_mask,
+                    loss_mask_sum,
+                    self.rollout_batch["prev_logprobs"],
                 )
+                self.rollout_batch["loss_mask"] = loss_mask
+                self.rollout_batch["loss_mask_sum"] = loss_mask_sum
             student_core = (
                 self.model.module if hasattr(self.model, "module") else self.model
             )
-            teacher_lp = compute_teacher_logprobs_for_rollout(
-                self._opd_teacher_model,
-                self.rollout_batch,
-                self.cfg,
-                student_core,
-            )
+            pre_lp = self.rollout_batch.get("teacher_logprobs", None)
+            _t_teacher = time.perf_counter()
+            if pre_lp is not None:
+                teacher_lp = pre_lp
+                if _log:
+                    print(
+                        "[Actor r0] OPD compute_adv: using teacher_logprobs from rollout "
+                        f"(device={teacher_lp.device})",
+                        flush=True,
+                    )
+            else:
+                if _log:
+                    print(
+                        "[Actor r0] OPD compute_adv: no rollout teacher_logprobs — "
+                        "scoring on actor (slow)",
+                        flush=True,
+                    )
+                if self._opd_teacher_model is None:
+                    self._opd_teacher_model = load_opd_teacher_model(
+                        self.cfg, self._rank
+                    )
+                teacher_lp = compute_teacher_logprobs_for_rollout(
+                    self._opd_teacher_model,
+                    self.rollout_batch,
+                    self.cfg,
+                    student_core,
+                )
+            if _log:
+                print(
+                    f"[Actor r0] OPD compute_adv: teacher_logprobs_ready "
+                    f"wall={time.perf_counter() - _t_teacher:.2f}s",
+                    flush=True,
+                )
             kwargs = {
                 "adv_type": "embodied_opd",
                 "rewards": rewards,
@@ -512,12 +565,30 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             }
 
         kwargs = preprocess_advantages_inputs(**kwargs)
+        _t_adv = time.perf_counter()
         advantages, returns = calculate_adv_and_returns(**kwargs)
+        if _log:
+            print(
+                f"[Actor r0] compute_adv: calculate_adv_and_returns "
+                f"wall={time.perf_counter() - _t_adv:.2f}s",
+                flush=True,
+            )
 
         self.rollout_batch.update({"advantages": advantages, "returns": returns})
+        # Rollout-precomputed teacher logprobs are only needed for advantages; drop before
+        # run_training shuffles/splits the batch (saves VRAM and keeps microbatch keys clean).
+        self.rollout_batch.pop("teacher_logprobs", None)
 
         # This uses the distributed-safe implementation in metric_utils.
+        _t_rm = time.perf_counter()
         rollout_metrics = compute_rollout_metrics_simple(self.rollout_batch)
+        if _log:
+            print(
+                f"[Actor r0] compute_adv: compute_rollout_metrics "
+                f"wall={time.perf_counter() - _t_rm:.2f}s "
+                f"total_wall={time.perf_counter() - _t0:.2f}s",
+                flush=True,
+            )
         return rollout_metrics
 
     def _get_peft_base_model(self):
@@ -634,6 +705,8 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         Args:
             is_last_step: If True and `use_ewc`, hook Fisher accumulation / finalize EWC.
         """
+        _log = self._rank == 0 and self.cfg.runner.get("log_step_phase_timings", True)
+        _rt0 = time.perf_counter()
         # --- Memory: drop preallocate tensor from init_worker so training has headroom ---
         self._deallocate_preallocated_memory()
 
@@ -673,8 +746,9 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
         shuffle_id = torch.randperm(rollout_size)
 
-        for key, value in self.rollout_batch.items():
-            self.log_on_first_rank(f"run training, {key}: {value.shape}")
+        if self.cfg.runner.get("log_training_tensor_shapes", False):
+            for key, value in self.rollout_batch.items():
+                self.log_on_first_rank(f"run training, {key}: {value.shape}")
 
         # Shuffle all tensor keys in lockstep; trim dones/prev_values to length n_chunk_steps.
         with torch.no_grad():
@@ -719,12 +793,28 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
         metrics = {}
         num_batches = 0
+        _outer_total = rollout_size // batch_size_per_rank
+        if _log:
+            torch.cuda.synchronize()
+            print(
+                f"[Actor r0] run_training: prep+shuffle_wall={time.perf_counter() - _rt0:.2f}s "
+                f"flat_rows={rollout_size} batch_per_rank={batch_size_per_rank} "
+                f"outer_batches_this_rank={_outer_total} "
+                f"micro_batch={self.cfg.actor.micro_batch_size} "
+                f"grad_accum={self.gradient_accumulation}",
+                flush=True,
+            )
+        _rt_loop = time.perf_counter()
         # One tqdm "it" = one **global batch** on this rank (then micro-batches inside).
+        _pbar = cfg_show_progress_bar(self.cfg)
         for _, train_global_batch in tqdm(
             enumerate(rollout_dataloader_iter),
             desc=f"get loss and metrics (rank={self._rank})",
+            disable=not _pbar or self._rank != 0,
         ):
             num_batches += 1
+            if _log and num_batches == 1:
+                _t_first = time.perf_counter()
 
             # Further split global batch for sequential forwards that fit in GPU memory.
             train_global_batch_size = train_global_batch["input_ids"].shape[0]
@@ -961,6 +1051,13 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 max_norm=self.cfg.actor.optim.clip_grad
             )
             self.optimizer.step()
+            if _log and num_batches == 1:
+                torch.cuda.synchronize()
+                print(
+                    f"[Actor r0] run_training: first_outer_batch_wall="
+                    f"{time.perf_counter() - _t_first:.2f}s (incl. sync)",
+                    flush=True,
+                )
 
             self.training_step_count += 1
 
@@ -998,7 +1095,31 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         if is_last_step and self.cfg.algorithm.get("use_ewc", False):
             self._finalize_fisher_accumulation(num_batches)
 
+        if _log:
+            torch.cuda.synchronize()
+            print(
+                f"[Actor r0] run_training: loop_wall={time.perf_counter() - _rt_loop:.2f}s "
+                f"outer_batches={num_batches} total_wall_incl_barrier="
+                f"{time.perf_counter() - _rt0:.2f}s",
+                flush=True,
+            )
+
         return mean_metric_dict
+
+    def _opd_bc_optimizer_lrs(self, saved_lrs: list) -> list:
+        """Per-param-group LRs for OPD teacher BC warmup (restored after warmup)."""
+        o = self.cfg.actor.optim
+        t_main = float(o.get("opd_teacher_lr", o.lr))
+        vh = self.cfg.actor.model.get("vh_mode", "none")
+        n = len(saved_lrs)
+        if n == 1:
+            return [t_main]
+        if n == 2 and vh in ("a", "a0", "a6"):
+            t_vh = float(o.get("opd_teacher_value_lr", o.value_lr))
+            return [t_main, t_vh]
+        base = float(o.lr)
+        scale = t_main / base if base > 0 else 1.0
+        return [s * scale for s in saved_lrs]
 
     def run_opd_bc_warmup(self, num_steps: int):
         """Behavior-cloning warmup on expert data before OPD RL (teacher snapshot saved separately)."""
@@ -1013,75 +1134,128 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
 
         self.model.train()
         device = f"cuda:{int(os.environ['LOCAL_RANK'])}"
-        bc_coeff = self.cfg.algorithm.get(
-            "opd_bc_coeff", self.cfg.algorithm.get("bc_coeff", 1.0)
+        saved_lrs = [float(pg["lr"]) for pg in self.optimizer.param_groups]
+        teacher_lrs = self._opd_bc_optimizer_lrs(saved_lrs)
+        for pg, lr in zip(self.optimizer.param_groups, teacher_lrs):
+            pg["lr"] = lr
+        bc_bs = int(
+            self.cfg.algorithm.get("opd_bc_batch_size", self.cfg.actor.micro_batch_size)
         )
-        grad_acc = (
-            self.cfg.actor.global_batch_size
-            // self.cfg.actor.micro_batch_size
-            // self._world_size
+        _bc_gbs = self.cfg.algorithm.get("opd_bc_global_batch_size")
+        gbs = (
+            int(_bc_gbs)
+            if _bc_gbs is not None
+            else int(self.cfg.actor.global_batch_size)
         )
-        metrics: dict = {}
-        for _ in tqdm(
-            range(num_steps),
-            desc=f"OPD BC warmup (rank={self._rank})",
-            disable=self._rank != 0,
-        ):
-            self.optimizer.zero_grad()
-            for _ in range(grad_acc):
-                bc_batch = next(self.sft_iterator)
-                for k, v in bc_batch.items():
-                    bc_batch[k] = v.to(device)
-                bc_batch = self.model.preprocess_for_train(bc_batch)
-                action_token_len = self.model.action_dim * self.model.num_action_chunks
-                logits_processor_args = {
-                    "action_tokens": bc_batch["action_tokens"],
-                    "vocab_size": self.model.vocab_size,
-                    "n_action_bins": self.model.config.n_action_bins,
+        ws = int(self._world_size)
+        if gbs % (bc_bs * ws) != 0:
+            raise ValueError(
+                f"OPD BC: opd_bc_global_batch_size or actor.global_batch_size ({gbs}) "
+                f"must be divisible by opd_bc_batch_size ({bc_bs}) * world_size ({ws})"
+            )
+        grad_acc = gbs // bc_bs // ws
+        if grad_acc < 1:
+            raise ValueError(
+                f"OPD BC: per-step global batch ({gbs}) is smaller than one microbatch "
+                f"across ranks ({bc_bs} * {ws} = {bc_bs * ws}); lower opd_bc_batch_size "
+                f"or raise opd_bc_global_batch_size"
+            )
+        per_step_metrics: list = []
+        try:
+            _pbar = cfg_show_progress_bar(self.cfg)
+            for _ in tqdm(
+                range(num_steps),
+                desc=f"OPD BC warmup (rank={self._rank})",
+                disable=not _pbar or self._rank != 0,
+            ):
+                step_metrics: dict = {}
+                self.optimizer.zero_grad()
+                for _ in range(grad_acc):
+                    bc_batch = next(self.sft_iterator)
+                    bc_batch = {k: v.to(device) for k, v in bc_batch.items()}
+                    # Same path as experience_replay: concat [rl_batch | bc_batch] in actor_forward;
+                    # rl half gets preprocess_for_train + action_tokens; bc half is raw SFT collate.
+                    rl_batch = {
+                        k: v.clone() if torch.is_tensor(v) else v
+                        for k, v in bc_batch.items()
+                    }
+                    rl_batch["action_tokens"] = torch.tensor(
+                        compute_action_tokens_from_actions(
+                            self.model, bc_batch["actions"]
+                        ),
+                        device=device,
+                    )
+                    rl_batch = self.model.preprocess_for_train(rl_batch)
+                    action_token_len = self.model.action_dim * self.model.num_action_chunks
+                    sampling_params = OmegaConf.to_container(
+                        self.cfg.algorithm.sampling_params, resolve=True
+                    )
+                    logits_processor_args = {
+                        "action_tokens": rl_batch["action_tokens"],
+                        "vocab_size": self.model.vocab_size,
+                        "n_action_bins": self.model.config.n_action_bins,
+                    }
+                    output_dict = actor_forward(
+                        self.model,
+                        rl_batch=rl_batch,
+                        bc_batch=bc_batch,
+                        action_token_len=action_token_len,
+                        value_model=False,
+                        value_head_mode=self.cfg.actor.model.get("vh_mode", None),
+                        temperature=self.cfg.algorithm.sampling_params.temperature_train,
+                        top_k=self.cfg.algorithm.sampling_params.top_k,
+                        logits_processor_args=logits_processor_args,
+                        do_sample=not sampling_params["use_greedy"],
+                        return_bc_logits=False,
+                        logits_type=self.logits_type,
+                    )
+                    expert_tok = torch.tensor(
+                        compute_action_tokens_from_actions(
+                            self.model, bc_batch["actions"]
+                        ),
+                        device=device,
+                    )
+                    # Pure BC: coefficient 1.0 (tune step size via opd_teacher_* LRs).
+                    bc_loss, bc_metrics = behavior_cloning_ce_loss(
+                        intermediate_logits=output_dict["intermediate_logits"],
+                        expert_actions_tokens=expert_tok,
+                        bc_coeff=1.0,
+                        vocab_size=self.model.vocab_size,
+                        n_action_bins=self.model.config.n_action_bins,
+                    )
+                    (bc_loss / grad_acc).backward()
+                    append_to_dict(step_metrics, bc_metrics)
+
+                grad_norm = self.model.clip_grad_norm_(
+                    max_norm=self.cfg.actor.optim.clip_grad
+                )
+                self.optimizer.step()
+                append_to_dict(
+                    step_metrics,
+                    {"actor/grad_norm": grad_norm.detach().item()},
+                )
+                step_mean = {
+                    key: float(np.mean(value)) for key, value in step_metrics.items()
                 }
-                output_dict = custom_forward(
-                    self.model,
-                    input_ids=bc_batch["input_ids"],
-                    attention_mask=bc_batch["attention_mask"],
-                    pixel_values=bc_batch["pixel_values"],
-                    action_token_len=action_token_len,
-                    value_model=False,
-                    temperature=self.cfg.algorithm.sampling_params.temperature_train,
-                    top_k=self.cfg.algorithm.sampling_params.top_k,
-                    logits_processor_args=logits_processor_args,
-                    has_bc_batch=False,
+                step_mean = all_reduce_dict(
+                    step_mean, op=torch.distributed.ReduceOp.AVG
                 )
-                expert_tok = torch.tensor(
-                    compute_action_tokens_from_actions(self.model, bc_batch["actions"]),
-                    device=device,
-                )
-                bc_loss, bc_metrics = behavior_cloning_ce_loss(
-                    intermediate_logits=output_dict["intermediate_logits"],
-                    expert_actions_tokens=expert_tok,
-                    bc_coeff=bc_coeff,
-                    vocab_size=self.model.vocab_size,
-                    n_action_bins=self.model.config.n_action_bins,
-                )
-                (bc_loss / grad_acc).backward()
-                append_to_dict(metrics, bc_metrics)
+                per_step_metrics.append(step_mean)
+        finally:
+            for pg, lr in zip(self.optimizer.param_groups, saved_lrs):
+                pg["lr"] = lr
 
-            grad_norm = self.model.clip_grad_norm_(
-                max_norm=self.cfg.actor.optim.clip_grad
-            )
-            self.optimizer.step()
-            append_to_dict(
-                metrics,
-                {"actor/grad_norm": grad_norm.detach().item()},
-            )
-
-        mean_metric_dict = {key: np.mean(value) for key, value in metrics.items()}
-        mean_metric_dict = all_reduce_dict(
-            mean_metric_dict, op=torch.distributed.ReduceOp.AVG
-        )
+        mean_metric_dict = {}
+        if per_step_metrics:
+            keys = per_step_metrics[0].keys()
+            mean_metric_dict = {
+                k: float(np.mean([float(d[k]) for d in per_step_metrics]))
+                for k in keys
+            }
         torch.cuda.synchronize()
         torch.distributed.barrier()
         torch.cuda.empty_cache()
-        return mean_metric_dict
+        return {"per_step": per_step_metrics, "mean": mean_metric_dict}
 
     def set_opd_teacher_model_path(self, path: str):
         """Ray actors keep a launch-time cfg copy; call this after BC so OPD can load the teacher."""

@@ -494,10 +494,27 @@ def validate_embodied_cfg(cfg):
     )
     stage_num = cfg.rollout.pipeline_stage_num
     env_world_size = component_placement.get_world_size("env")
+    raw_num_group_envs = cfg.algorithm.num_group_envs
     cfg.algorithm.num_group_envs = (
         cfg.algorithm.num_group_envs // stage_num // env_world_size
     )
+    if cfg.algorithm.num_group_envs < 1:
+        raise ValueError(
+            "After dividing by rollout.pipeline_stage_num and the number of env GPUs, "
+            "algorithm.num_group_envs became 0. Increase `algorithm.num_group_envs` in "
+            "your config so that "
+            f"num_group_envs >= {stage_num * env_world_size} "
+            f"(you had {raw_num_group_envs}, env GPUs={env_world_size}, "
+            f"pipeline_stage_num={stage_num})."
+        )
     cfg.env.eval.num_envs = cfg.env.eval.num_envs // stage_num // env_world_size
+    if cfg.env.eval.num_envs < 1:
+        raise ValueError(
+            "After dividing by pipeline_stage_num and env GPU count, env.eval.num_envs "
+            "became 0. Increase `env.eval.num_envs` so that "
+            f"env.eval.num_envs >= {stage_num * env_world_size} "
+            f"(env GPUs={env_world_size}, pipeline_stage_num={stage_num})."
+        )
 
     with open_dict(cfg):
         cfg.actor.model.sharding_strategy = cfg.actor.model.get(

@@ -90,18 +90,28 @@ class LiberoSFTDataset(Dataset):
     ):
         self.cfg = cfg
         self.logits_type = logits_type
-        task_suite_name = (
-            cfg.env.train.task_suite_name
-            if not use_preprocessed
-            else f"{cfg.env.train.task_suite_name}_simplevla"
-        )
-        dataset_dir = (
-            "datasets"
-            if not use_cached_logits and not use_preprocessed
-            else "datasets_with_logits"
-        )
+        # Path layout:
+        # - BC / OPD without cached logits: libero/datasets/<suite> (standard LIBERO demo download).
+        # - DER / reference logits: libero/datasets_with_logits/<suite>_simplevla (precomputed logits).
+        # use_preprocessed is kept for API compatibility; path choice follows use_cached_logits.
+        suite = cfg.env.train.task_suite_name
+        if use_cached_logits:
+            task_suite_name = f"{suite}_simplevla"
+            dataset_dir = "datasets_with_logits"
+        else:
+            task_suite_name = suite
+            dataset_dir = "datasets"
         self.root_dir = os.path.join(root_dir, "libero", dataset_dir, task_suite_name)
+        self.file_handles = {}
         print(f"root dir: {self.root_dir}")
+        if not os.path.isdir(self.root_dir):
+            raise FileNotFoundError(
+                f"LiberoSFTDataset: directory does not exist: {self.root_dir}\n"
+                f"  Install demos under LIBERO (see LIBERO/benchmark_scripts/download_libero_datasets.py), "
+                f"e.g. libero/datasets/{suite}/\n"
+                f"  For logits-augmented HDF5, precompute/cache and use use_cached_logits=True "
+                f"(libero/datasets_with_logits/{suite}_simplevla/)."
+            )
         self.task_files = [
             os.path.join(self.root_dir, f)
             for f in os.listdir(self.root_dir)
@@ -135,7 +145,6 @@ class LiberoSFTDataset(Dataset):
                     self.sample_indices.append((path, demo_name, t, task_desc))
 
         self.sample_indices = self.sample_indices[rank::world_size]
-        self.file_handles = {}
 
         print(f"LiberoSFTDataset: {len(self.sample_indices)} samples (rank {rank}/{world_size})")
 
@@ -190,8 +199,14 @@ class LiberoSFTDataset(Dataset):
         return output
 
     def __del__(self):
-        for fh in self.file_handles.values():
-            fh.close()
+        handles = getattr(self, "file_handles", None)
+        if not handles:
+            return
+        for fh in list(handles.values()):
+            try:
+                fh.close()
+            except Exception:
+                pass
 
 
 @hydra.main(

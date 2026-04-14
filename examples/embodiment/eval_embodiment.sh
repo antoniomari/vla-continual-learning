@@ -7,18 +7,30 @@ set -o pipefail
 #
 # Environment Variables (optional overrides):
 #   - LIBERO_REPO_PATH: Path to LIBERO repository (defaults to ${REPO_PATH}/LIBERO)
+#   - RLINF_LIBERO_USE_OSMESA: Set to 1 for OSMesa (slow); else EGL + venv.py Ray remap (see run_embodiment.sh).
+#   - RLINF_LIBERO_EGL_REMAP: Set to 0 to disable EGL remapping (see run_embodiment.sh).
+#   - RLINF_CUDA_LAUNCH_BLOCKING: Set to 1 for synchronous CUDA (debug only; much slower).
 #
 # Note: REPO_PATH is automatically set to the parent directory of examples/
 #       If you need to override it, set it before running this script.
+#
+# Avoid filling $PWD with HPC core dumps (e.g. core_nid*). Enable with RLINF_ALLOW_CORE_DUMPS=1.
+if [ "${RLINF_ALLOW_CORE_DUMPS:-0}" != "1" ]; then
+    ulimit -c 0 2>/dev/null || true
+fi
 
 export EMBODIED_PATH="$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export REPO_PATH=$(dirname $(dirname "$EMBODIED_PATH"))
 export SRC_FILE="${EMBODIED_PATH}/eval_embodied_agent.py"
 
-export MUJOCO_GL="egl"
-export PYOPENGL_PLATFORM="egl"
-# export MUJOCO_GL="osmesa"
-# export PYOPENGL_PLATFORM="osmesa"
+if [ "${RLINF_LIBERO_USE_OSMESA:-0}" = "1" ] || [ "${RLINF_LIBERO_USE_OSMESA:-}" = "true" ]; then
+    export MUJOCO_GL="osmesa"
+    export PYOPENGL_PLATFORM="osmesa"
+    unset MUJOCO_EGL_DEVICE_ID
+else
+    export MUJOCO_GL="egl"
+    export PYOPENGL_PLATFORM="egl"
+fi
 
 export PYTHONPATH=${REPO_PATH}:$PYTHONPATH
 # NOTE: set LIBERO_REPO_PATH to the path of the LIBERO repo
@@ -28,7 +40,9 @@ export LIBERO_REPO_PATH="${LIBERO_REPO_PATH:-${REPO_PATH}/LIBERO}"
 export LIBERO_CONFIG_PATH=${LIBERO_REPO_PATH}
 
 export PYTHONPATH=${LIBERO_REPO_PATH}:$PYTHONPATH
-export CUDA_LAUNCH_BLOCKING=1
+if [ "${RLINF_CUDA_LAUNCH_BLOCKING:-0}" = "1" ] || [ "${RLINF_CUDA_LAUNCH_BLOCKING:-}" = "true" ]; then
+    export CUDA_LAUNCH_BLOCKING=1
+fi
 export HYDRA_FULL_ERROR=1
 # Line-buffered python stdout/stderr so logs show progress before ray.init returns (tee-safe).
 export PYTHONUNBUFFERED=1
@@ -39,6 +53,7 @@ export TF_CPP_MIN_LOG_LEVEL=3
 # (sequential scripts run training then eval; missing these can leave eval stuck inside ray.init()).
 export RAY_DISABLE_IMPORT_WARNING=1
 export RAY_DISABLE_DASHBOARD=1
+export RLINF_RAY_INCLUDE_DASHBOARD=0
 # Plasma/raylet sockets: Linux AF_UNIX paths must stay <=107 bytes; long paths under $HOME can break or hang ray.init.
 export RAY_TMPDIR="${RAY_TMPDIR:-/tmp/ray_${USER}}"
 mkdir -p "$RAY_TMPDIR"

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 import torch
 import torch.distributed as dist
@@ -79,6 +80,44 @@ def load_opd_teacher_model(cfg: DictConfig, rank: int) -> torch.nn.Module:
     return model
 
 
+def compute_teacher_logprobs_one_batch(
+    teacher_model: torch.nn.Module,
+    student_core: torch.nn.Module,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    pixel_values: torch.Tensor,
+    action_tokens_flat: torch.Tensor,
+    cfg: DictConfig,
+) -> torch.Tensor:
+    """Teacher log p(a|s) for fixed student actions; one microbatch.
+
+    Args:
+        action_tokens_flat: [B, action_dim * num_action_chunks], same device as vision/text.
+    Returns:
+        logprobs with same shape as student ``predict`` / ``prev_logprobs`` for this batch.
+    """
+    action_token_len = student_core.action_dim * student_core.num_action_chunks
+    logits_processor_args = {
+        "action_tokens": action_tokens_flat,
+        "vocab_size": student_core.vocab_size,
+        "n_action_bins": student_core.config.n_action_bins,
+    }
+    with torch.no_grad():
+        od = custom_forward(
+            teacher_model,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            pixel_values=pixel_values,
+            action_token_len=action_token_len,
+            value_model=False,
+            temperature=cfg.algorithm.sampling_params.temperature_train,
+            top_k=cfg.algorithm.sampling_params.top_k,
+            logits_processor_args=logits_processor_args,
+            has_bc_batch=False,
+        )
+    return od["logprobs"].detach()
+
+
 def compute_teacher_logprobs_for_rollout(
     teacher_model: torch.nn.Module,
     rollout_batch: dict,
@@ -95,7 +134,12 @@ def compute_teacher_logprobs_for_rollout(
 
     t_steps, b_env = input_ids.shape[:2]
     flat_n = t_steps * b_env
-    mb = cfg.actor.micro_batch_size
+    mb = int(
+        cfg.algorithm.get(
+            "opd_teacher_micro_batch_size",
+            cfg.actor.micro_batch_size,
+        )
+    )
 
     ids_f = input_ids.reshape(flat_n, *input_ids.shape[2:]).to(device)
     attn_f = attention_mask.reshape(flat_n, *attention_mask.shape[2:]).to(device)
@@ -105,31 +149,39 @@ def compute_teacher_logprobs_for_rollout(
         flat_n, student_model.action_dim * student_model.num_action_chunks
     )
 
-    action_token_len = student_model.action_dim * student_model.num_action_chunks
+    # Stashing each microbatch on CPU forces a device sync every step and leaves the GPU
+    # idle (looks like ~0% utilization for a long time). Default: keep tensors on GPU.
+    stash_on_cpu = bool(cfg.algorithm.get("opd_teacher_stash_logprobs_on_cpu", False))
     outs: list[torch.Tensor] = []
+    _main = (not dist.is_initialized()) or dist.get_rank() == 0
+    _t0 = time.perf_counter()
+    if _main:
+        print(
+            f"[OPD] Teacher logprobs: {flat_n} rows, microbatch={mb}, "
+            f"stash_on_cpu={stash_on_cpu}",
+            flush=True,
+        )
     with torch.no_grad():
         for start in range(0, flat_n, mb):
             sl = slice(start, min(start + mb, flat_n))
-            logits_processor_args = {
-                "action_tokens": act_f[sl],
-                "vocab_size": student_model.vocab_size,
-                "n_action_bins": student_model.config.n_action_bins,
-            }
-            od = custom_forward(
+            chunk = compute_teacher_logprobs_one_batch(
                 teacher_model,
-                input_ids=ids_f[sl],
-                attention_mask=attn_f[sl],
-                pixel_values=pix_f[sl],
-                action_token_len=action_token_len,
-                value_model=False,
-                temperature=cfg.algorithm.sampling_params.temperature_train,
-                top_k=cfg.algorithm.sampling_params.top_k,
-                logits_processor_args=logits_processor_args,
-                has_bc_batch=False,
+                student_model,
+                ids_f[sl],
+                attn_f[sl],
+                pix_f[sl],
+                act_f[sl],
+                cfg,
             )
-            outs.append(od["logprobs"].detach().cpu())
+            outs.append(chunk.cpu() if stash_on_cpu else chunk)
 
     teacher_lp = torch.cat(outs, dim=0)
     teacher_lp = teacher_lp.reshape(prev_lp.shape)
-    return teacher_lp.to(dtype=prev_lp.dtype, device=prev_lp.device)
+    out = teacher_lp.to(dtype=prev_lp.dtype, device=prev_lp.device)
+    if _main:
+        print(
+            f"[OPD] Teacher logprobs done in {time.perf_counter() - _t0:.1f}s",
+            flush=True,
+        )
+    return out
 

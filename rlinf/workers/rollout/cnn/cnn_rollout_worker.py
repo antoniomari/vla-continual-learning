@@ -35,6 +35,7 @@ from rlinf.models.simple_cnn_policy import SimpleCNNPolicy
 from rlinf.scheduler import Cluster, Worker
 from rlinf.utils.metric_utils import compute_split_num
 from rlinf.utils.placement import HybridComponentPlacement
+from rlinf.utils.runner_utils import cfg_show_progress_bar
 
 
 class CNNRolloutWorker(Worker):
@@ -322,6 +323,7 @@ class CNNRolloutWorker(Worker):
             for step in tqdm(
                 range(self.cfg.algorithm.n_chunk_steps),
                 desc=f"CNN Rollout {self._rank} Epoch {rollout_epoch}",
+                disable=not cfg_show_progress_bar(self.cfg),
             ):
                 for i in range(self.stage_num):
                     env_batch = await self.recv_env_batch()
@@ -425,6 +427,7 @@ class CNNRolloutWorker(Worker):
         for step in tqdm(
             range(self.cfg.algorithm.n_eval_chunk_steps),
             desc=f"CNN Rollout {self._rank} Eval",
+            disable=not cfg_show_progress_bar(self.cfg),
         ):
             for i in range(self.stage_num):
                 env_batch = await self.recv_env_batch()

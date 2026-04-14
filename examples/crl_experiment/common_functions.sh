@@ -62,7 +62,14 @@ inject_config_tag_into_log_path() {
 derive_eval_config_name() {
     local train_config="$1"
     local eval_config="$train_config"
-    
+
+    # OPD train configs (..._opd_openvlaoft_<suite>) use the GRPO eval yaml (no separate *_opd_*eval* file).
+    # e.g. libero_spatial_opd_openvlaoft_spatial -> libero_spatial_grpo_openvlaoft_eval_spatial
+    if [[ "$train_config" =~ _opd_openvlaoft_ ]]; then
+        echo "$train_config" | sed 's|_opd_openvlaoft_|_grpo_openvlaoft_eval_|'
+        return
+    fi
+
     # If config doesn't already end with _eval, insert _eval before any tag
     if [[ ! "$train_config" =~ _eval$ ]] && [[ ! "$train_config" =~ _eval_ ]]; then
         # Check if config ends with _openvlaoft_lr_{tag} (lr with tag case, e.g., _lr_long)
@@ -88,10 +95,10 @@ derive_eval_config_name() {
     echo "$eval_config"
 }
 
-# Get the default global_step checkpoint index for a given config.
-# For standard configs (e.g., libero_spatial), we default to 10.
-# For "long" configs (e.g., libero_10_grpo_openvlaoft_long), we use 5
-# to match runner.max_epochs/save_interval in the long config.
+# Get the default global_step checkpoint index for a given config when MAX_EPOCH is not passed.
+# Embodied training saves a final checkpoint at global_step == runner.max_epochs (see embodied_runner).
+# Defaults should match typical yaml max_epochs: libero_spatial_grpo_openvlaoft_spatial uses 50.
+# For "long" configs (e.g., libero_10_grpo_openvlaoft_long), keep 5 unless you override MAX_EPOCH.
 get_default_global_step() {
     local config_name="$1"
     local config_tag
@@ -99,6 +106,6 @@ get_default_global_step() {
     if [ "$config_tag" = "long" ]; then
         echo "5"
     else
-        echo "10"
+        echo "50"
     fi
 }

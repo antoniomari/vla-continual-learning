@@ -12,7 +12,8 @@
 # Note: CHECKPOINT_LOCATION should be relative to workspace root (e.g., logs/bcrl_logit/0.3/task_0)
 #       For LoRA: The script will construct: ${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/
 #       For simple_cnn: The script will construct: ${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/model.pt
-#       STEP_NUMBER: global step number (default: 10)
+#       STEP_NUMBER: global step folder index (default: 10 if omitted; use final training step, usually max_epochs)
+# Optional env: EVAL_HYDRA_OVERRIDES — extra Hydra overrides appended to eval (e.g. seed, task, W&B name, GRPO sweep)
 
 CHECKPOINT_LOCATION=$1
 STEP_NUMBER=$2
@@ -104,13 +105,13 @@ export EVAL_STEP_NUMBER="${STEP_NUMBER}"
 
 
 if [ "$IS_BASE_EVAL" = true ]; then
-    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} actor.model.is_lora=False
+    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} actor.model.is_lora=False ${EVAL_HYDRA_OVERRIDES:-}
 elif [ "$IS_SIMPLE_CNN" = true ]; then
     # For simple_cnn, use rollout.checkpoint_path (points to model.pt file)
-    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} rollout.checkpoint_path="${CHECKPOINT_PATH}"
+    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} rollout.checkpoint_path="${CHECKPOINT_PATH}" ${EVAL_HYDRA_OVERRIDES:-}
 else
     # For LoRA models, use actor.model.lora_path (points to directory)
-    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} +actor.model.lora_path="${CHECKPOINT_PATH}"
+    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} +actor.model.lora_path="${CHECKPOINT_PATH}" ${EVAL_HYDRA_OVERRIDES:-}
 fi
 
 EXIT_CODE=$?

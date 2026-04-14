@@ -17,10 +17,15 @@ def behavior_cloning_ce_loss(**kwargs):
     bc_loss = F.cross_entropy(logits, target=expert_actions_tokens, reduction="mean")
     weighted_loss = bc_coeff * bc_loss
 
+    with torch.no_grad():
+        pred = logits.argmax(dim=1)
+        token_acc = (pred == expert_actions_tokens).float().mean()
+
     metrics = {
         "bc/loss": bc_loss.detach().item(),
         "bc/weighted_loss": weighted_loss.detach().item(),
         "bc/coeff": bc_coeff,
+        "bc/token_accuracy": token_acc.detach().item(),
     }
 
     return weighted_loss, metrics
