@@ -43,12 +43,12 @@ runner:
     experiment_name: "opd_spatial_openvla"
     logger_backends: ["wandb"]
 
-  max_epochs: 10
+  max_epochs: 50
   max_steps: -1
 
   only_eval: False
   val_check_interval: -1
-  save_interval: 10
+  save_interval: 50
   seq_length: 4096
   max_prompt_length: 128
 
@@ -95,15 +95,15 @@ algorithm:
   # Checkpoints after BC: teacher log_path/opd_bc_teacher/actor; same weights copied to
   # log_path/opd_bc_student/actor. If MuJoCo/EGL segfaults on env init, try
   # RLINF_LIBERO_USE_OSMESA=1 (see examples/embodiment/run_embodiment.sh).
-  opd_bc_steps: 200
+  opd_bc_steps: 600
   # <=0 uses all demos per task in LiberoSFTDataset (full data per task).
   opd_sft_demos_per_task: 0
   # Total expert samples per BC optimizer step (overrides actor.global_batch_size for warmup only).
-  opd_bc_global_batch_size: 32
+  opd_bc_global_batch_size: 256
   # Per-GPU LiberoSFT microbatch during BC. Must satisfy:
   #   opd_bc_global_batch_size % (opd_bc_batch_size × num_actor_gpus) == 0
   # e.g. global 32 @ 8 GPUs → opd_bc_batch_size 4 (or 2 with grad_acc2). Single GPU: keep 32.
-  opd_bc_batch_size: 8
+  opd_bc_batch_size: 32
   # Optional: override base HF dir when teacher path is adapter-only (default: actor.checkpoint_load_path).
   # opd_teacher_base_model_path: null
   # Set manually to skip BC warmup and use an existing teacher (adapter dir or full model dir).

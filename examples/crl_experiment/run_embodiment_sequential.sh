@@ -17,6 +17,8 @@
 ###           run_embodiment_opd_sequential.sh sets this by default.
 ### Optional (Slurm sweep): SWEEP_GROUP_SIZE, SWEEP_NUM_GROUP_ENVS, SWEEP_ROLLOUT_EPOCH,
 ###           SWEEP_GLOBAL_BATCH_SIZE — appended as Hydra overrides for GRPO / actor batch sizing.
+### Optional (OPD Slurm sweep): SWEEP_OPD_BC_GLOBAL_BATCH_SIZE, SWEEP_OPD_BC_BATCH_SIZE,
+###           SWEEP_OPD_BC_STEPS, SWEEP_OPD_TEACHER_LR — BC warmup overrides (see jobs/embodiment_slurm_opd_sweep.sh).
 ### Eval after each task: passes global_step (= MAX_EPOCH or get_default_global_step), seed,
 ###           env.fixed_task_ids=null (all suite tasks, e.g. 10 for LIBERO spatial), same SWEEP_* as training,
 ###           and runner.logger.experiment_name=eval_<train_name>_step_<N>. Training still uses one task per stage.
@@ -256,6 +258,18 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     if [ -n "${SWEEP_GLOBAL_BATCH_SIZE:-}" ]; then
         OVERRIDES="$OVERRIDES actor.global_batch_size=${SWEEP_GLOBAL_BATCH_SIZE}"
+    fi
+    if [ -n "${SWEEP_OPD_BC_GLOBAL_BATCH_SIZE:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.opd_bc_global_batch_size=${SWEEP_OPD_BC_GLOBAL_BATCH_SIZE}"
+    fi
+    if [ -n "${SWEEP_OPD_BC_BATCH_SIZE:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.opd_bc_batch_size=${SWEEP_OPD_BC_BATCH_SIZE}"
+    fi
+    if [ -n "${SWEEP_OPD_BC_STEPS:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.opd_bc_steps=${SWEEP_OPD_BC_STEPS}"
+    fi
+    if [ -n "${SWEEP_OPD_TEACHER_LR:-}" ]; then
+        OVERRIDES="$OVERRIDES actor.optim.opd_teacher_lr=${SWEEP_OPD_TEACHER_LR}"
     fi
 
     echo "Running with Hydra overrides:"
