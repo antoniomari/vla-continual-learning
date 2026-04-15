@@ -117,6 +117,46 @@ class LiberoSFTDataset(Dataset):
             for f in os.listdir(self.root_dir)
             if f.endswith(".hdf5")
         ]
+
+        # Add task files sorted by task id
+        self.task_files = sorted(self.task_files)
+
+        # Optional: restrict BC/SFT data to selected train task ids (sequential setting).
+        # Apply only for OPD runs so other training scripts remain unchanged.
+        # This uses LIBERO benchmark ordering (same source used by LiberoEnv).
+        is_opd = cfg.algorithm.get("adv_type", None) == "embodied_opd"
+        fixed_task_ids = cfg.env.train.get("fixed_task_ids", None)
+        if is_opd and fixed_task_ids is not None:
+            fixed_task_ids = [int(x) for x in fixed_task_ids]
+            if len(fixed_task_ids) > 0:
+                from libero.libero.benchmark import get_benchmark
+
+                benchmark = get_benchmark(suite)()
+                num_tasks = benchmark.get_num_tasks()
+                invalid_ids = [tid for tid in fixed_task_ids if tid < 0 or tid >= num_tasks]
+                if invalid_ids:
+                    raise ValueError(
+                        f"LiberoSFTDataset: invalid fixed_task_ids={invalid_ids} for suite "
+                        f"{suite} with num_tasks={num_tasks}"
+                    )
+
+                allowed_files = {
+                    f"{benchmark.get_task(tid).name}_demo.hdf5" for tid in fixed_task_ids
+                }
+                self.task_files = [
+                    p for p in self.task_files if os.path.basename(p) in allowed_files
+                ]
+                if len(self.task_files) == 0:
+                    raise ValueError(
+                        "LiberoSFTDataset: task filter removed all files. "
+                        f"suite={suite}, fixed_task_ids={fixed_task_ids}, "
+                        f"expected files={sorted(allowed_files)} in {self.root_dir}"
+                    )
+                selected_files = [os.path.basename(p) for p in self.task_files]
+                print(
+                    f"LiberoSFTDataset: filtered to {len(self.task_files)} task file(s) "
+                    f"for fixed_task_ids={fixed_task_ids}; files={selected_files}"
+                )
         self.demos_per_task = demos_per_task
         self.num_action_chunks = cfg.actor.model.num_action_chunks
 
