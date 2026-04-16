@@ -5,6 +5,7 @@
 ### Example (task range): bash examples/crl_experiment/run_embodiment_sequential.sh "0,3"
 ### Example (with max_epoch): bash examples/crl_experiment/run_embodiment_sequential.sh 0 "" 15
 ### Example (continue from checkpoint): bash examples/crl_experiment/run_embodiment_sequential.sh 0 ./logs/sequential/task_0_seed1234/checkpoints/global_step_50/actor 20
+### Example (force base model): bash examples/crl_experiment/run_embodiment_sequential.sh 4 base 50
 ### Example (with seed): bash examples/crl_experiment/run_embodiment_sequential.sh 0 "" "" "" 42
 ### Note: TASK_ID_OR_RANGE can be:
 ###       - A single task ID (e.g., "0") - trains that task only
@@ -29,6 +30,14 @@ MANUAL_CHECKPOINT_PATH=$2
 MAX_EPOCH=$3
 CONFIG_NAME=${4:-crl_experiment/libero_spatial_grpo_openvlaoft_spatial}
 SEED=${5:-1234}
+
+# Special token: if CHECKPOINT_PATH is literal "base", force first task to start
+# from base model (no previous-task checkpoint), even when TASK_ID > FIRST_TASK_ID.
+USE_BASE_MODEL_START=0
+if [[ "${MANUAL_CHECKPOINT_PATH,,}" == "base" ]]; then
+    USE_BASE_MODEL_START=1
+    MANUAL_CHECKPOINT_PATH=""
+fi
 
 # Log subdirectory for this experiment type
 EXPERIMENT_TYPE="sequential"
@@ -109,7 +118,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     echo "========================================="
 
     # Determine checkpoint path
-    if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
+    if [ "$TASK_ID" -eq "$TASK_START" ] && [ "$USE_BASE_MODEL_START" -eq 1 ]; then
+        CHECKPOINT_PATH=""
+    elif [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
         CHECKPOINT_PATH="$MANUAL_CHECKPOINT_PATH"
     elif [ "$TASK_ID" -eq $FIRST_TASK_ID ]; then
         CHECKPOINT_PATH=""
@@ -141,7 +152,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
 
     # Determine LOG_DIR based on checkpoint path
-    if [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
+    if [ "$TASK_ID" -eq "$TASK_START" ] && [ "$USE_BASE_MODEL_START" -eq 1 ]; then
+        LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_seed${SEED}"
+    elif [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
         if [[ "$CHECKPOINT_PATH" =~ task_([0-9]+) ]]; then
             SOURCE_TASK="${BASH_REMATCH[1]}"
             if [[ "$CHECKPOINT_PATH" =~ global_step_([0-9]+) ]]; then
@@ -217,7 +230,11 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         fi
         echo "  Loading from checkpoint: $CHECKPOINT_PATH"
     else
-        echo "  Training from base model (SFT checkpoint) - First task (task $FIRST_TASK_ID)"
+        if [ "$TASK_ID" -eq "$TASK_START" ] && [ "$USE_BASE_MODEL_START" -eq 1 ]; then
+            echo "  Training from base model (SFT checkpoint) - BASE override for task $TASK_ID"
+        else
+            echo "  Training from base model (SFT checkpoint) - First task (task $FIRST_TASK_ID)"
+        fi
     fi
 
     if [ -n "$MAX_EPOCH" ]; then
@@ -270,6 +287,18 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     if [ -n "${SWEEP_OPD_TEACHER_LR:-}" ]; then
         OVERRIDES="$OVERRIDES actor.optim.opd_teacher_lr=${SWEEP_OPD_TEACHER_LR}"
+    fi
+    if [ -n "${SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS:-}" ]; then
+        OVERRIDES="$OVERRIDES +algorithm.sft_filter_fixed_task_ids_for_opd=${SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS}"
+    fi
+    if [ -n "${SWEEP_OPD_SFT_MATCH_TASK_LANGUAGE:-}" ]; then
+        OVERRIDES="$OVERRIDES +algorithm.sft_match_rollout_task_language=${SWEEP_OPD_SFT_MATCH_TASK_LANGUAGE}"
+    fi
+    if [ -n "${SWEEP_OPD_SFT_MATCH_IMAGE_ROTATION:-}" ]; then
+        OVERRIDES="$OVERRIDES +algorithm.sft_match_rollout_image_rotation=${SWEEP_OPD_SFT_MATCH_IMAGE_ROTATION}"
+    fi
+    if [ -n "${SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT:-}" ]; then
+        OVERRIDES="$OVERRIDES +algorithm.sft_match_rollout_obs_action_alignment=${SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT}"
     fi
 
     echo "Running with Hydra overrides:"

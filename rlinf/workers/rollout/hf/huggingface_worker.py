@@ -116,6 +116,19 @@ class MultiStepRolloutWorker(Worker):
 
         self.use_proprio = self.cfg.actor.model.get("use_proprio", False)
         self._opd_teacher_model = None
+        self._debug_sft_rollout_checks = bool(
+            self.cfg.algorithm.get(
+                "debug_sft_rollout_checks",
+                self.cfg.algorithm.get("adv_type", None) == "embodied_opd",
+            )
+        )
+        self._debug_rollout_dump_done = False
+        self._debug_dir = os.path.join(
+            self.cfg.runner.logger.log_path, "debug_sft_rollout_checks"
+        )
+        self._debug_rollout_img_path = os.path.join(
+            self._debug_dir, "teacher_eval_first_rollout_obs.png"
+        )
 
         # Debug logging setup
         self.enable_action_logging = cfg.rollout.get("enable_action_logging", False)
@@ -202,6 +215,61 @@ class MultiStepRolloutWorker(Worker):
             "top_p": self._sampling_params["top_p"],
             "max_new_tokens": self._length_params["max_new_token"],
         }
+
+    def _maybe_dump_first_teacher_eval_sample(self, env_batch, chunk_actions):
+        if (
+            not self._debug_sft_rollout_checks
+            or self._debug_rollout_dump_done
+            or self._rank != 0
+        ):
+            return
+        try:
+            os.makedirs(self._debug_dir, exist_ok=True)
+            raw_task = env_batch["obs"]["task_descriptions"][0]
+            formatted_prompt = (
+                f"In: What action should the robot take to {str(raw_task).lower()}?\nOut: "
+            )
+            raw_img = env_batch["obs"]["images_and_states"]["full_image"][0]
+            if torch.is_tensor(raw_img):
+                img_np = raw_img.detach().cpu().numpy()
+            else:
+                img_np = np.asarray(raw_img)
+            img_np = np.asarray(img_np)
+
+            acts_np = np.asarray(chunk_actions)
+            print(
+                "[DBG ROLLOUT] first teacher-eval sample: "
+                f"obs_shape={img_np.shape}, obs_dtype={img_np.dtype}, "
+                f"obs_min={float(img_np.min()):.3f}, obs_max={float(img_np.max()):.3f}, "
+                f"actions_shape={acts_np.shape}, actions_dtype={acts_np.dtype}, "
+                f"actions_min={float(acts_np.min()):.6f}, actions_max={float(acts_np.max()):.6f}",
+                flush=True,
+            )
+            print(
+                f"[DBG ROLLOUT] first raw task_description='{raw_task}'",
+                flush=True,
+            )
+            print(
+                f"[DBG ROLLOUT] first formatted prompt='{formatted_prompt}'",
+                flush=True,
+            )
+            print(
+                f"[DBG ROLLOUT] first rollout action chunk[0,0]={np.array2string(acts_np[0, 0], precision=6)}",
+                flush=True,
+            )
+
+            try:
+                from PIL import Image
+
+                Image.fromarray(img_np.astype(np.uint8)).save(self._debug_rollout_img_path)
+                print(
+                    f"[DBG ROLLOUT] saved first rollout obs image to: {self._debug_rollout_img_path}",
+                    flush=True,
+                )
+            except Exception as e:
+                print(f"[DBG ROLLOUT] failed to save rollout obs image: {e}", flush=True)
+        finally:
+            self._debug_rollout_dump_done = True
 
     def predict(self, processed_obs, mode="train"):
         action_token_len = self.hf_model.action_dim * self.hf_model.num_action_chunks
@@ -514,6 +582,7 @@ class MultiStepRolloutWorker(Worker):
                     processed_obs,
                     mode="eval",
                 )
+                self._maybe_dump_first_teacher_eval_sample(env_batch, chunk_actions)
                 await self.send_chunk_actions(chunk_actions)
 
                 if "meta" in env_batch:

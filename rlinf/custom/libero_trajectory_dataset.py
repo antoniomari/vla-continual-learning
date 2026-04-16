@@ -4,6 +4,7 @@ import h5py
 import hydra
 import numpy as np
 import torch
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 from rlinf.config import torch_dtype_from_precision
@@ -27,9 +28,44 @@ def make_collate_fn(cfg, input_processor, precision):
     model_name = cfg.actor.model.model_name
     use_proprio = cfg.actor.model.use_proprio
     max_length = cfg.runner.max_prompt_length
+    debug_checks = bool(
+        cfg.algorithm.get(
+            "debug_sft_rollout_checks",
+            cfg.algorithm.get("adv_type", None) == "embodied_opd",
+        )
+    )
+    debug_dir = os.path.join(cfg.runner.logger.log_path, "debug_sft_rollout_checks")
+    sft_marker_path = os.path.join(debug_dir, "sft_dump_done.txt")
+    sft_img_path = os.path.join(debug_dir, "sft_first_obs.png")
 
     def collate_fn(samples):
         # samples: list of dicts with 'obs_rgb', 'task_desc', 'actions', optionally logits
+        if debug_checks and not os.path.exists(sft_marker_path):
+            os.makedirs(debug_dir, exist_ok=True)
+            obs0 = np.array(samples[0]["obs_rgb"])
+            act0 = np.array(samples[0]["actions"])
+            print(
+                "[DBG SFT] first sample: "
+                f"task='{samples[0]['task_desc']}', "
+                f"obs_shape={obs0.shape}, obs_dtype={obs0.dtype}, "
+                f"obs_min={float(obs0.min()):.3f}, obs_max={float(obs0.max()):.3f}, "
+                f"actions_shape={act0.shape}, actions_dtype={act0.dtype}, "
+                f"actions_min={float(act0.min()):.6f}, actions_max={float(act0.max()):.6f}",
+                flush=True,
+            )
+            print(
+                f"[DBG SFT] first action chunk[0]={np.array2string(act0[0], precision=6)}",
+                flush=True,
+            )
+            try:
+                from PIL import Image
+
+                Image.fromarray(obs0.astype(np.uint8)).save(sft_img_path)
+                print(f"[DBG SFT] saved first SFT obs image to: {sft_img_path}", flush=True)
+            except Exception as e:
+                print(f"[DBG SFT] failed to save SFT obs image: {e}", flush=True)
+            with open(sft_marker_path, "w", encoding="utf-8") as f:
+                f.write("done\n")
 
         # List of [H,W,C] uint8 numpy -> list of float tensors
         images = [torch.from_numpy(s["obs_rgb"]).float() for s in samples]
@@ -95,11 +131,38 @@ class LiberoSFTDataset(Dataset):
         # - DER / reference logits: libero/datasets_with_logits/<suite>_simplevla (precomputed logits).
         # use_preprocessed is kept for API compatibility; path choice follows use_cached_logits.
         suite = cfg.env.train.task_suite_name
+        # Optional SFT preprocessing controls (primarily for OPD debugging/sweeps).
+        # `sft_match_rollout_format` is a convenience umbrella flag; the specific
+        # toggles below can override each behavior independently.
+        match_rollout_format = bool(cfg.algorithm.get("sft_match_rollout_format", False))
+        self._match_rollout_task_language = bool(
+            cfg.algorithm.get("sft_match_rollout_task_language", match_rollout_format)
+        )
+        self._match_rollout_image_rotation = bool(
+            cfg.algorithm.get("sft_match_rollout_image_rotation", match_rollout_format)
+        )
+        self._match_rollout_obs_action_alignment = bool(
+            cfg.algorithm.get(
+                "sft_match_rollout_obs_action_alignment", match_rollout_format
+            )
+        )
+        # Match raw SFT obs resolution to env camera resolution (e.g., 256x256 in OPD configs).
+        self._sft_resize_to_env_resolution = bool(
+            cfg.algorithm.get(
+                "sft_resize_to_env_resolution",
+                cfg.algorithm.get("adv_type", None) == "embodied_opd",
+            )
+        )
+        init_params = cfg.env.train.get("init_params", {})
+        self._target_h = int(init_params.get("camera_heights", 256))
+        self._target_w = int(init_params.get("camera_widths", 256))
         if use_cached_logits:
             task_suite_name = f"{suite}_simplevla"
             dataset_dir = "datasets_with_logits"
         else:
-            task_suite_name = suite
+            # Optional override to load SFT/BC demos from a custom datasets subfolder
+            # (e.g., preprocessed RLDS-converted HDF5 under libero/datasets/<custom_name>).
+            task_suite_name = cfg.algorithm.get("sft_dataset_task_suite_name", suite)
             dataset_dir = "datasets"
         self.root_dir = os.path.join(root_dir, "libero", dataset_dir, task_suite_name)
         self.file_handles = {}
@@ -125,8 +188,11 @@ class LiberoSFTDataset(Dataset):
         # Apply only for OPD runs so other training scripts remain unchanged.
         # This uses LIBERO benchmark ordering (same source used by LiberoEnv).
         is_opd = cfg.algorithm.get("adv_type", None) == "embodied_opd"
+        use_task_filter = bool(
+            cfg.algorithm.get("sft_filter_fixed_task_ids_for_opd", is_opd)
+        )
         fixed_task_ids = cfg.env.train.get("fixed_task_ids", None)
-        if is_opd and fixed_task_ids is not None:
+        if use_task_filter and fixed_task_ids is not None:
             fixed_task_ids = [int(x) for x in fixed_task_ids]
             if len(fixed_task_ids) > 0:
                 from libero.libero.benchmark import get_benchmark
@@ -162,6 +228,16 @@ class LiberoSFTDataset(Dataset):
 
         self.precision = torch_dtype_from_precision(cfg.actor.model.precision)
 
+        self._task_name_to_language = {}
+        if self._match_rollout_task_language:
+            from libero.libero.benchmark import get_benchmark
+
+            benchmark = get_benchmark(suite)()
+            self._task_name_to_language = {
+                benchmark.get_task(i).name: benchmark.get_task(i).language
+                for i in range(benchmark.get_num_tasks())
+            }
+
         self.trajectories = []
         for path in self.task_files:
             filename = os.path.basename(path)
@@ -179,9 +255,11 @@ class LiberoSFTDataset(Dataset):
 
         self.sample_indices = []
         for path, demo_name, traj_len, task_desc in self.trajectories:
-            valid_len = traj_len - self.num_action_chunks + 1
+            # Optional rollout alignment pairs obs(t-1) with actions[t:t+chunk].
+            t_start = 1 if self._match_rollout_obs_action_alignment else 0
+            valid_len = traj_len - self.num_action_chunks + 1 - t_start
             if valid_len > 0:
-                for t in range(valid_len):
+                for t in range(t_start, t_start + valid_len):
                     self.sample_indices.append((path, demo_name, t, task_desc))
 
         self.sample_indices = self.sample_indices[rank::world_size]
@@ -193,6 +271,12 @@ class LiberoSFTDataset(Dataset):
         parts = name.split("_")
         if parts[-1] == "demo":
             parts = parts[:-1]
+        task_name = "_".join(parts)
+        if (
+            self._match_rollout_task_language
+            and task_name in self._task_name_to_language
+        ):
+            return self._task_name_to_language[task_name]
         return " ".join(parts)
 
     def __len__(self):
@@ -207,8 +291,26 @@ class LiberoSFTDataset(Dataset):
 
         demo = f["data"][demo_name]
 
-        # Return RAW numpy — no processor call here
-        obs = np.array(demo["obs"]["agentview_rgb"][timestep])
+        # Return RAW numpy — no processor call here.
+        # Optional rollout alignment uses obs at previous step.
+        obs_idx = (
+            timestep - 1 if self._match_rollout_obs_action_alignment else timestep
+        )
+        obs = np.array(demo["obs"]["agentview_rgb"][obs_idx])
+        if self._match_rollout_image_rotation:
+            obs = np.ascontiguousarray(obs[::-1, ::-1])
+        if (
+            self._sft_resize_to_env_resolution
+            and obs.ndim == 3
+            and (obs.shape[0] != self._target_h or obs.shape[1] != self._target_w)
+        ):
+            obs = np.array(
+                Image.fromarray(obs.astype(np.uint8)).resize(
+                    (self._target_w, self._target_h),
+                    resample=Image.BILINEAR,
+                )
+            )
+            obs = np.ascontiguousarray(obs)
         actions = np.array(
             demo["actions"][timestep : timestep + self.num_action_chunks]
         )

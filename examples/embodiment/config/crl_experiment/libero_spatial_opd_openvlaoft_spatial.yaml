@@ -98,6 +98,8 @@ algorithm:
   opd_bc_steps: 600
   # <=0 uses all demos per task in LiberoSFTDataset (full data per task).
   opd_sft_demos_per_task: 0
+  # Use preprocessed RLDS->HDF5 demos for OPD BC warmup (under LIBERO/libero/datasets/<name>).
+  sft_dataset_task_suite_name: libero_spatial_256_from_rlds_rot180_fliplast
   # Total expert samples per BC optimizer step (overrides actor.global_batch_size for warmup only).
   opd_bc_global_batch_size: 256
   # Per-GPU LiberoSFT microbatch during BC. Must satisfy:
