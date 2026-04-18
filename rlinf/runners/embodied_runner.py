@@ -93,6 +93,7 @@ class EmbodiedRunner:
         self.metric_logger = MetricLogger(cfg)
         # OPD: BC warmup runs in init_workers after actor init, before rollout/env (no sim needed).
         self._opd_bc_warmup_completed = False
+        self._opd_student_base_actor_path = None
         # W&B requires monotonically increasing step; teacher eval must not reuse step=0 after BC
         # logged steps 0..N-1 or W&B drops those metrics.
         self._opd_bc_wandb_step_cursor = 0
@@ -122,8 +123,8 @@ class EmbodiedRunner:
         ):
             with self.timer("opd_teacher_eval"):
                 print(
-                    "[OPD] Teacher eval: pushing post-BC actor weights to rollout "
-                    "(same state as opd_bc_teacher/actor and opd_bc_student/actor), then Libero eval.",
+                    "[OPD] Teacher eval: pushing post-BC teacher weights to rollout "
+                    "(student restored to pre-BC base right after eval), then Libero eval.",
                     flush=True,
                 )
                 self.update_rollout_weights()
@@ -141,6 +142,7 @@ class EmbodiedRunner:
                     flush=True,
                 )
                 self.metric_logger.log(data=teacher_eval_metrics, step=te_step)
+            self._restore_student_after_bc()
         log_embodied_driver_inventory(self.cfg)
 
     def _run_opd_bc_warmup_and_save_teacher(self, opd_bc_steps: int) -> None:
@@ -150,6 +152,31 @@ class EmbodiedRunner:
                 "BC still runs and opd_teacher_model_path will be set, but RL will not use OPD rewards.",
                 flush=True,
             )
+        # Save pre-BC student snapshot so RL starts from base model (not BC-trained teacher).
+        student_base_root = os.path.join(self.cfg.runner.logger.log_path, "opd_student_base")
+        os.makedirs(student_base_root, exist_ok=True)
+        self._opd_student_base_actor_path = os.path.join(student_base_root, "actor")
+        if os.path.isdir(self._opd_student_base_actor_path):
+            shutil.rmtree(self._opd_student_base_actor_path)
+        self.actor.save_checkpoint(self._opd_student_base_actor_path, 0).wait()
+
+        # Optional: initialize teacher warmup from an explicit checkpoint path.
+        # This path is expected to be a save_checkpoint-style directory
+        # (adapter_model.bin for LoRA or model.pt for full-model).
+        teacher_init_path = self.cfg.algorithm.get("opd_teacher_init_model_path", None)
+        if teacher_init_path:
+            print(
+                f"[OPD] Initializing BC teacher from opd_teacher_init_model_path={teacher_init_path}",
+                flush=True,
+            )
+            self.actor.restore_student_from_checkpoint(teacher_init_path).wait()
+        else:
+            print(
+                "[OPD] BC teacher warmup starts from actor initialization "
+                f"(actor.checkpoint_load_path={self.cfg.actor.checkpoint_load_path}).",
+                flush=True,
+            )
+
         with self.timer("opd_bc_warmup"):
             bc_futures = self.actor.run_opd_bc_warmup(opd_bc_steps)
             bc_metrics_list = bc_futures.wait()
@@ -184,7 +211,7 @@ class EmbodiedRunner:
         os.makedirs(student_root, exist_ok=True)
         if os.path.isdir(student_actor_path):
             shutil.rmtree(student_actor_path)
-        shutil.copytree(teacher_actor_path, student_actor_path)
+        shutil.copytree(self._opd_student_base_actor_path, student_actor_path)
         self.actor.set_opd_teacher_model_path(teacher_actor_path).wait()
         self.rollout.set_opd_teacher_model_path(teacher_actor_path).wait()
         with open_dict(self.cfg.algorithm):
@@ -207,6 +234,17 @@ class EmbodiedRunner:
                     f"(cross-entropy on expert action tokens; not sim task success)",
                     flush=True,
                 )
+
+    def _restore_student_after_bc(self) -> None:
+        if not self._opd_student_base_actor_path:
+            raise RuntimeError("[OPD] Missing pre-BC student snapshot for restore.")
+        print(
+            "[OPD] Restoring RL student to pre-BC base snapshot "
+            f"from {self._opd_student_base_actor_path}.",
+            flush=True,
+        )
+        self.actor.restore_student_from_checkpoint(self._opd_student_base_actor_path).wait()
+        self.update_rollout_weights()
 
     def update_rollout_weights(self):
         rollout_futures = self.rollout.sync_model_from_actor()
@@ -257,8 +295,8 @@ class EmbodiedRunner:
             if self.cfg.algorithm.get("opd_eval_teacher_after_bc", True):
                 with self.timer("opd_teacher_eval"):
                     print(
-                        "[OPD] Teacher eval: pushing post-BC actor weights to rollout "
-                        "(same state as opd_bc_teacher/actor and opd_bc_student/actor), then Libero eval.",
+                        "[OPD] Teacher eval: pushing post-BC teacher weights to rollout "
+                        "(student restored to pre-BC base right after eval), then Libero eval.",
                         flush=True,
                     )
                     self.update_rollout_weights()
@@ -277,6 +315,7 @@ class EmbodiedRunner:
                         flush=True,
                     )
                     self.metric_logger.log(data=teacher_eval_metrics, step=te_step)
+            self._restore_student_after_bc()
 
         self._refresh_wandb_rl_step_offset()
 

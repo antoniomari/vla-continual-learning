@@ -1275,6 +1275,66 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             print(f"[OPD] Actor cfg opd_teacher_model_path set to {path}", flush=True)
         return {}
 
+    def restore_student_from_checkpoint(self, path: str):
+        """
+        Restore actor (student) weights from a saved checkpoint path.
+        """
+        if self.cfg.actor.get("enable_offload", False):
+            self.load_fsdp_param_and_grad(self.device)
+            self.load_fsdp_optimizer(self.device)
+
+        is_lora = self.cfg.actor.model.get("is_lora", False)
+        if is_lora:
+            adapter_path = os.path.join(path, "adapter_model.bin")
+            if not os.path.isfile(adapter_path):
+                raise FileNotFoundError(
+                    f"[OPD] restore_student_from_checkpoint: missing {adapter_path}"
+                )
+            adapter_state = torch.load(adapter_path, map_location="cpu")
+            loaded = False
+            model_to_restore = self.model.module if hasattr(self.model, "module") else self.model
+            try:
+                from peft import set_peft_model_state_dict
+
+                set_peft_model_state_dict(model_to_restore, adapter_state, adapter_name="default")
+                loaded = True
+            except Exception as e:
+                if self._rank == 0:
+                    print(
+                        "[OPD] PEFT adapter restore path failed, falling back to load_state_dict: "
+                        f"{e}",
+                        flush=True,
+                    )
+            if not loaded:
+                with FSDP.state_dict_type(self.model, StateDictType.FULL_STATE_DICT):
+                    incompatible = self.model.load_state_dict(adapter_state, strict=False)
+                loaded_count = max(
+                    0,
+                    len(adapter_state) - len(getattr(incompatible, "unexpected_keys", [])),
+                )
+                if loaded_count == 0:
+                    raise RuntimeError(
+                        "[OPD] restore_student_from_checkpoint: loaded 0 adapter tensors."
+                    )
+        else:
+            model_path = os.path.join(path, "model.pt")
+            if not os.path.isfile(model_path):
+                raise FileNotFoundError(
+                    f"[OPD] restore_student_from_checkpoint: missing {model_path}"
+                )
+            model_state = torch.load(model_path, map_location="cpu")
+            with FSDP.state_dict_type(self.model, StateDictType.FULL_STATE_DICT):
+                self.model.load_state_dict(model_state, strict=True)
+
+        self.optimizer.state.clear()
+        self._opd_teacher_model = None
+        if self._rank == 0:
+            print(
+                f"[OPD] Restored student actor weights from {path} and reset optimizer state.",
+                flush=True,
+            )
+        return {}
+
     def save_checkpoint(self, save_base_path, step):
         torch.distributed.barrier()
         is_lora = self.cfg.actor.model.get("is_lora", False)

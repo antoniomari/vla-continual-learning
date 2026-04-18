@@ -99,7 +99,7 @@ algorithm:
   # <=0 uses all demos per task in LiberoSFTDataset (full data per task).
   opd_sft_demos_per_task: 0
   # Use preprocessed RLDS->HDF5 demos for OPD BC warmup (under LIBERO/libero/datasets/<name>).
-  sft_dataset_task_suite_name: libero_spatial_256_from_rlds_rot180_fliplast
+  sft_dataset_task_suite_name: libero_spatial_256_from_rlds_reverted
   # Total expert samples per BC optimizer step (overrides actor.global_batch_size for warmup only).
   opd_bc_global_batch_size: 256
   # Per-GPU LiberoSFT microbatch during BC. Must satisfy:
@@ -108,6 +108,10 @@ algorithm:
   opd_bc_batch_size: 32
   # Optional: override base HF dir when teacher path is adapter-only (default: actor.checkpoint_load_path).
   # opd_teacher_base_model_path: null
+  # Optional: initialize BC teacher warmup from an explicit checkpoint directory
+  # (adapter_model.bin for LoRA, or model.pt for full-model). If null, BC starts from
+  # actor.checkpoint_load_path.
+  # opd_teacher_init_model_path: null
   # Set manually to skip BC warmup and use an existing teacher (adapter dir or full model dir).
   # opd_teacher_model_path: null
   # After BC, sync actor→rollout and run evaluate() on the current training task(s) only.

@@ -417,38 +417,12 @@ def compute_embodied_grpo_actor_loss_fn(**kwargs) -> Tuple[torch.Tensor, Dict]:
 @register_policy_loss("embodied_opd")
 def compute_embodied_opd_actor_loss_fn(**kwargs) -> Tuple[torch.Tensor, Dict]:
     """
-    On-policy distillation policy gradient: maximize sum_t log pi(a_t|s) * r_t^OPD.
-    r_t^OPD is passed in as advantages (teacher_logprob - student_logprob), no normalization.
+    OPD with GRPO-style clipped actor objective.
+
+    Advantages are still OPD-specific (teacher_logprob - student_logprob), but
+    optimization mirrors embodied_grpo (ratio clipping, ppo_kl, clipfrac, entropy).
     """
-    logprobs = kwargs["logprobs"]
-    advantages = kwargs["advantages"]
-    loss_mask = kwargs.get("loss_mask", None)
-    entropy = kwargs.get("entropy", None)
-    entropy_bonus = kwargs.get("entropy_bonus", 0.0)
-
-    if loss_mask is not None:
-        loss_mask = loss_mask.bool()
-
-    if loss_mask is not None:
-        policy_loss = -masked_mean(logprobs * advantages.detach(), loss_mask)
-    else:
-        policy_loss = -(logprobs * advantages.detach()).mean()
-
-    entropy_loss = torch.tensor(0.0, device=logprobs.device, dtype=logprobs.dtype)
-    if entropy is not None and entropy_bonus != 0.0:
-        if loss_mask is not None:
-            entropy_loss = masked_mean(entropy, loss_mask)
-        else:
-            entropy_loss = entropy.mean()
-
-    total_loss = policy_loss - entropy_bonus * entropy_loss
-
-    metrics_data = {
-        "actor/raw_loss": total_loss.detach().item(),
-        "actor/policy_loss": policy_loss.detach().item(),
-        "actor/entropy_loss": entropy_loss.detach().item(),
-    }
-    return total_loss, metrics_data
+    return compute_embodied_grpo_actor_loss_fn(**kwargs)
 
 
 @register_policy_loss("math_ppo_actor")
