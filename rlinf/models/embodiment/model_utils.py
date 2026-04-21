@@ -437,12 +437,21 @@ def prepare_observations_for_vla(
     ]
 
     if simulator_type == "libero":
-        image_tensor = torch.stack(
+        imgs_state = raw_obs["images_and_states"]
+        agent_stack = torch.stack(
             [
                 value.clone().to(device).permute(2, 0, 1)
-                for value in raw_obs["images_and_states"]["full_image"]
+                for value in imgs_state["full_image"]
             ]
         )
+        wrist_stack = None
+        if "wrist_image" in imgs_state and imgs_state["wrist_image"] is not None:
+            wrist_stack = torch.stack(
+                [
+                    value.clone().to(device).permute(2, 0, 1)
+                    for value in imgs_state["wrist_image"]
+                ]
+            )
     elif simulator_type == "maniskill":
         images = raw_obs["images"]
         image_tensor = images.to(device=device, dtype=precision)
@@ -464,12 +473,17 @@ def prepare_observations_for_vla(
             for key in proprio_keys
         }
 
-    # Add num_images dimension
-    if image_tensor.ndim == 4:
-        image_tensor = image_tensor.unsqueeze(1)
-    assert image_tensor.ndim == 5
-
+    # Add num_images dimension / pack multi-camera inputs for the VLA processor.
     if model_name == "openvla":
+        image_tensor = agent_stack
+        if wrist_stack is not None:
+            raise NotImplementedError(
+                "openvla path currently supports a single camera tensor; use openvla_oft with "
+                "MultiInputPrismaticProcessor for wrist + agent inputs."
+            )
+        if image_tensor.ndim == 4:
+            image_tensor = image_tensor.unsqueeze(1)
+        assert image_tensor.ndim == 5
         processed_obs = processor(
             text=task_descriptions,
             images=image_tensor,
@@ -477,7 +491,19 @@ def prepare_observations_for_vla(
             max_length=max_length,
         )
     elif model_name == "openvla_oft":
-        images = {"images": image_tensor}
+        if wrist_stack is None:
+            image_tensor = agent_stack
+            if image_tensor.ndim == 4:
+                image_tensor = image_tensor.unsqueeze(1)
+            assert image_tensor.ndim == 5
+            images = {"images": image_tensor}
+        else:
+            if agent_stack.ndim == 4:
+                agent_stack = agent_stack.unsqueeze(1)
+            if wrist_stack.ndim == 4:
+                wrist_stack = wrist_stack.unsqueeze(1)
+            assert agent_stack.ndim == 5 and wrist_stack.ndim == 5
+            images = {"agent": agent_stack, "wrist": wrist_stack}
         processed_obs = processor(
             text=task_descriptions,
             images=images,

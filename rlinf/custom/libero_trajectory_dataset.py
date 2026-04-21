@@ -70,11 +70,27 @@ def make_collate_fn(cfg, input_processor, precision):
         # List of [H,W,C] uint8 numpy -> list of float tensors
         images = [torch.from_numpy(s["obs_rgb"]).float() for s in samples]
         task_descs = [s["task_desc"] for s in samples]
+        images_wrist = None
+        if samples[0].get("obs_wrist_rgb", None) is not None:
+            images_wrist = [torch.from_numpy(s["obs_wrist_rgb"]).float() for s in samples]
+
+        num_img = int(cfg.actor.model.get("num_images_in_input", 1))
+        if num_img > 1 and images_wrist is None:
+            raise ValueError(
+                "SFT/BC batching: actor.model.num_images_in_input > 1 but LiberoSFTDataset samples "
+                "do not include `obs_wrist_rgb` (missing `obs/eye_in_hand_rgb` in HDF5, or "
+                "sft_include_wrist_camera / env num_images not aligned). "
+                "Either convert datasets to include wrist (`eye_in_hand_rgb`) or set "
+                "actor.model.num_images_in_input=1 and env.train.num_images_in_input=1 for single-camera BC."
+            )
 
         # Build the raw_obs batch the same way the env would
+        images_and_states = {"full_image": images}
+        if images_wrist is not None:
+            images_and_states["wrist_image"] = images_wrist
         raw_obs_batch = {
             "task_descriptions": task_descs,
-            "images_and_states": {"full_image": images},
+            "images_and_states": images_and_states,
         }
 
         # Run processor ONCE for the entire batch
@@ -156,6 +172,13 @@ class LiberoSFTDataset(Dataset):
         init_params = cfg.env.train.get("init_params", {})
         self._target_h = int(init_params.get("camera_heights", 256))
         self._target_w = int(init_params.get("camera_widths", 256))
+        self._include_wrist = bool(
+            cfg.algorithm.get(
+                "sft_include_wrist_camera",
+                int(cfg.actor.model.get("num_images_in_input", 1)) > 1
+                or int(cfg.env.train.get("num_images_in_input", 1)) > 1,
+            )
+        )
         if use_cached_logits:
             task_suite_name = f"{suite}_simplevla"
             dataset_dir = "datasets_with_logits"
@@ -266,6 +289,21 @@ class LiberoSFTDataset(Dataset):
 
         print(f"LiberoSFTDataset: {len(self.sample_indices)} samples (rank {rank}/{world_size})")
 
+    def _maybe_resize_obs(self, obs: np.ndarray) -> np.ndarray:
+        if (
+            self._sft_resize_to_env_resolution
+            and obs.ndim == 3
+            and (obs.shape[0] != self._target_h or obs.shape[1] != self._target_w)
+        ):
+            obs = np.array(
+                Image.fromarray(obs.astype(np.uint8)).resize(
+                    (self._target_w, self._target_h),
+                    resample=Image.BILINEAR,
+                )
+            )
+            obs = np.ascontiguousarray(obs)
+        return obs
+
     def _extract_task_description(self, filename):
         name = filename.replace(".hdf5", "")
         parts = name.split("_")
@@ -299,18 +337,15 @@ class LiberoSFTDataset(Dataset):
         obs = np.array(demo["obs"]["agentview_rgb"][obs_idx])
         if self._match_rollout_image_rotation:
             obs = np.ascontiguousarray(obs[::-1, ::-1])
-        if (
-            self._sft_resize_to_env_resolution
-            and obs.ndim == 3
-            and (obs.shape[0] != self._target_h or obs.shape[1] != self._target_w)
-        ):
-            obs = np.array(
-                Image.fromarray(obs.astype(np.uint8)).resize(
-                    (self._target_w, self._target_h),
-                    resample=Image.BILINEAR,
-                )
-            )
-            obs = np.ascontiguousarray(obs)
+        obs = self._maybe_resize_obs(obs)
+
+        obs_wrist = None
+        obs_group = demo["obs"]
+        if self._include_wrist and "eye_in_hand_rgb" in obs_group:
+            obs_wrist = np.array(obs_group["eye_in_hand_rgb"][obs_idx])
+            if self._match_rollout_image_rotation:
+                obs_wrist = np.ascontiguousarray(obs_wrist[::-1, ::-1])
+            obs_wrist = self._maybe_resize_obs(obs_wrist)
         actions = np.array(
             demo["actions"][timestep : timestep + self.num_action_chunks]
         )
@@ -324,6 +359,8 @@ class LiberoSFTDataset(Dataset):
             "task_desc": task_desc,  # str
             "actions": actions,      # [C, D] float numpy
         }
+        if obs_wrist is not None:
+            output["obs_wrist_rgb"] = obs_wrist
 
         # Optional logits (still raw numpy)
         if self.logits_type == "raw" and "raw_action_logits" in demo.keys():

@@ -20,6 +20,8 @@
 ###           SWEEP_GLOBAL_BATCH_SIZE — appended as Hydra overrides for GRPO / actor batch sizing.
 ### Optional (OPD Slurm sweep): SWEEP_OPD_BC_GLOBAL_BATCH_SIZE, SWEEP_OPD_BC_BATCH_SIZE,
 ###           SWEEP_OPD_BC_STEPS, SWEEP_OPD_TEACHER_LR — BC warmup overrides (see jobs/embodiment_slurm_opd_sweep.sh).
+###           SWEEP_OPD_NORMALIZE_ADVANTAGES — override algorithm.normalize_advantages.
+###           SWEEP_OPD_RL_TEACHER — override algorithm.rl_teacher (0/1).
 ### Eval after each task: passes global_step (= MAX_EPOCH or get_default_global_step), seed,
 ###           env.fixed_task_ids=null (all suite tasks, e.g. 10 for LIBERO spatial), same SWEEP_* as training,
 ###           and runner.logger.experiment_name=eval_<train_name>_step_<N>. Training still uses one task per stage.
@@ -299,6 +301,12 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     if [ -n "${SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT:-}" ]; then
         OVERRIDES="$OVERRIDES +algorithm.sft_match_rollout_obs_action_alignment=${SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT}"
+    fi
+    if [ -n "${SWEEP_OPD_NORMALIZE_ADVANTAGES:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.normalize_advantages=${SWEEP_OPD_NORMALIZE_ADVANTAGES}"
+    fi
+    if [ -n "${SWEEP_OPD_RL_TEACHER:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.rl_teacher=${SWEEP_OPD_RL_TEACHER}"
     fi
 
     echo "Running with Hydra overrides:"

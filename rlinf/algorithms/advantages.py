@@ -176,15 +176,56 @@ def compute_embodied_opd_advantages(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """OPD reward r_t = log pi_teacher(a|s) - log pi_student(a|s) at rollout student logprobs.
 
-    No normalization. `advantages` uses the same tensor layout as `prev_logprobs`.
+    By default (when ``normalize_advantages`` is True, from algorithm config), advantages
+    are **group-relative** like embodied GRPO: we sum the per-token margins over valid
+    tokens for each parallel env trajectory, subtract the group mean and divide by group
+    std (size ``algorithm.group_size``), then broadcast that scalar back to every token.
+
+    When ``normalize_advantages`` is False, raw per-token margins are returned.
+
+    ``advantages`` / ``returns`` use the same tensor layout as ``prev_logprobs``.
     """
     teacher_logprobs = kwargs["teacher_logprobs"]
     student_logprobs = kwargs["student_logprobs"]
     loss_mask = kwargs.get("loss_mask", None)
+    normalize_advantages = kwargs.get("normalize_advantages", True)
+    group_size = kwargs.get("group_size", 1)
+    epsilon = kwargs.get("epsilon", 1e-6)
+
+    # Advantages are computed as VLA-OPD reward initially 
     advantages = teacher_logprobs - student_logprobs
     if loss_mask is not None:
         advantages = advantages * loss_mask
-    return advantages, advantages
+
+    if not normalize_advantages:
+        return advantages, advantages
+
+    # Scalar trajectory score = sum of valid token margins per env slot (flatten time×tokens).
+    n_chunk, bsz, _token_flat = advantages.shape
+    flat = advantages.reshape(n_chunk * bsz, -1)
+    if loss_mask is not None:
+        m = loss_mask.reshape(n_chunk * bsz, -1).float()
+        scores = (flat * m).sum(dim=-1)
+        denom = m.sum(dim=-1).clamp(min=1.0)
+        scores = scores / denom
+    else:
+        scores = flat.mean(dim=-1)
+
+    if bsz % group_size != 0:
+        raise ValueError(
+            f"embodied_opd group norm: batch {bsz} not divisible by group_size {group_size}"
+        )
+    n_groups = bsz // group_size
+    scores_g = scores.reshape(n_chunk, n_groups, group_size)
+    mean = scores_g.mean(dim=-1, keepdim=True)
+    std = scores_g.std(dim=-1, keepdim=True)
+    scores_norm = (scores_g - mean) / (std + epsilon)
+    scores_norm = scores_norm.reshape(n_chunk, bsz)
+
+    adv_out = scores_norm.unsqueeze(-1).expand_as(advantages)
+    if loss_mask is not None:
+        adv_out = adv_out * loss_mask
+    return adv_out, adv_out
 
 
 @register_advantage("math_grpo")

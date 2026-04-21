@@ -553,6 +553,10 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 "teacher_logprobs": teacher_lp,
                 "student_logprobs": self.rollout_batch["prev_logprobs"],
                 "loss_mask": loss_mask,
+                "normalize_advantages": self.cfg.algorithm.get(
+                    "normalize_advantages", True
+                ),
+                "group_size": self.cfg.algorithm.get("group_size", 8),
                 "reward_type": self.cfg.algorithm.reward_type,
             }
         else:
@@ -1275,6 +1279,19 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             print(f"[OPD] Actor cfg opd_teacher_model_path set to {path}", flush=True)
         return {}
 
+    def set_algorithm_mode(self, adv_type: str, loss_type: str):
+        """Switch advantage/loss mode at runtime (used by OPD teacher warmup modes)."""
+        with open_dict(self.cfg.algorithm):
+            self.cfg.algorithm.adv_type = adv_type
+            self.cfg.algorithm.loss_type = loss_type
+        self._opd_teacher_model = None
+        if self._rank == 0:
+            print(
+                f"[OPD] Actor algorithm mode set: adv_type={adv_type}, loss_type={loss_type}",
+                flush=True,
+            )
+        return {}
+
     def restore_student_from_checkpoint(self, path: str):
         """
         Restore actor (student) weights from a saved checkpoint path.
@@ -1331,6 +1348,22 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
         if self._rank == 0:
             print(
                 f"[OPD] Restored student actor weights from {path} and reset optimizer state.",
+                flush=True,
+            )
+        return {}
+
+    def restore_student_to_base_model(self):
+        """
+        Restore actor (student) to base model initialization from config.
+        For LoRA runs, this rebuilds model/optimizer from actor.checkpoint_load_path
+        and resumes RL from fresh trainable adapters.
+        """
+        self.setup_model_and_optimizer()
+        self._opd_teacher_model = None
+        if self._rank == 0:
+            print(
+                "[OPD] Restored student actor to base model initialization "
+                f"from actor.checkpoint_load_path={self.cfg.actor.checkpoint_load_path}",
                 flush=True,
             )
         return {}

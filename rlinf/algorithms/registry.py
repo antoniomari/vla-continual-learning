@@ -69,8 +69,8 @@ def calculate_adv_and_returns(**kwargs) -> Tuple[torch.Tensor, Optional[torch.Te
 
     Caller (`EmbodiedFSDPActor.compute_advantages_and_returns`) passes tensors on the
     actor device; `adv_type` selects **GRPO** (group-normalized trajectory scores),
-    **embodied_opd** (teacher minus student logprobs, no normalization), vs
-    **GAE** (value bootstrapping). Preprocessing of rewards is done in
+    **embodied_opd** (teacher minus student logprobs; optional group normalization like GRPO),
+    vs **GAE** (value bootstrapping). Preprocessing of rewards is done in
     `preprocess_advantages_inputs` before this is called.
     """
     adv_type = kwargs["adv_type"]

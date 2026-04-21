@@ -170,9 +170,22 @@ def compute_rollout_metrics(data_buffer: Dict) -> Dict:
     if keys_to_process.get("advantages", False):
         if "advantages" in data_buffer:
             advantages = data_buffer["advantages"]
-            mean_adv = torch.mean(advantages).to(torch.cuda.current_device())
-            max_adv = torch.max(advantages).detach().item()
-            min_adv = torch.min(advantages).detach().item()
+            loss_mask = data_buffer.get("loss_mask", None)
+            if loss_mask is not None and loss_mask.shape == advantages.shape:
+                valid = loss_mask.bool()
+                n = valid.sum().to(torch.float32).clamp(min=1.0)
+                masked = torch.where(valid, advantages, torch.zeros_like(advantages))
+                mean_adv = (masked.sum() / n).to(torch.cuda.current_device())
+                if valid.any():
+                    max_adv = advantages[valid].max().detach().item()
+                    min_adv = advantages[valid].min().detach().item()
+                else:
+                    max_adv = float("-inf")
+                    min_adv = float("inf")
+            else:
+                mean_adv = torch.mean(advantages).to(torch.cuda.current_device())
+                max_adv = torch.max(advantages).detach().item()
+                min_adv = torch.min(advantages).detach().item()
         else:
             # Rank without advantages still participates in all_reduce
             mean_adv = torch.tensor(
@@ -205,9 +218,22 @@ def compute_rollout_metrics(data_buffer: Dict) -> Dict:
     if keys_to_process.get("returns", False):
         if "returns" in data_buffer:
             returns = data_buffer["returns"]
-            mean_ret = torch.mean(returns).to(torch.cuda.current_device())
-            max_ret = torch.max(returns).detach().item()
-            min_ret = torch.min(returns).detach().item()
+            loss_mask = data_buffer.get("loss_mask", None)
+            if loss_mask is not None and loss_mask.shape == returns.shape:
+                valid = loss_mask.bool()
+                n = valid.sum().to(torch.float32).clamp(min=1.0)
+                masked = torch.where(valid, returns, torch.zeros_like(returns))
+                mean_ret = (masked.sum() / n).to(torch.cuda.current_device())
+                if valid.any():
+                    max_ret = returns[valid].max().detach().item()
+                    min_ret = returns[valid].min().detach().item()
+                else:
+                    max_ret = float("-inf")
+                    min_ret = float("inf")
+            else:
+                mean_ret = torch.mean(returns).to(torch.cuda.current_device())
+                max_ret = torch.max(returns).detach().item()
+                min_ret = torch.min(returns).detach().item()
         else:
             mean_ret = torch.tensor(
                 0.0, device=torch.cuda.current_device(), dtype=torch.float32

@@ -1,7 +1,7 @@
 # On-policy distillation (OPD): BC warmup on full expert data, then RL with frozen teacher.
 # Runner saves the post-BC adapter to `logger.log_path/opd_bc_teacher/actor` (frozen teacher)
-# and a copy to `logger.log_path/opd_bc_student/actor` (student snapshot at BC end); sets
-# `algorithm.opd_teacher_model_path` to the teacher path before the main loop.
+# and sets `algorithm.opd_teacher_model_path` to that path before the main loop.
+# Before RL, the student is re-initialized from `actor.checkpoint_load_path` (see EmbodiedRunner).
 #
 # Batch sizing:
 #   RL: tune rollout env batch (group_size × num_group_envs × rollout_epoch × …) vs
@@ -58,7 +58,8 @@ algorithm:
   use_fixed_reset_state_ids: True
   require_values: False
   shuffle_samples: True
-  # OPD uses raw logprob margin as reward; do not normalize.
+  # OPD: per-token margin (teacher_lp - student_lp); with True, GRPO-style group norm
+  # over trajectory scores (sum of masked margins per env, then mean/std within group).
   normalize_advantages: False
   kl_penalty: kl
   group_size: 4
@@ -92,8 +93,10 @@ algorithm:
   # --- OPD ---
   # BC warmup runs after the actor inits, before rollout/env (Libero). RL rollouts start only in run().
   # BC warmup uses actor.optim.opd_teacher_lr / opd_teacher_value_lr; RL uses lr / value_lr (restored after BC).
-  # Checkpoints after BC: teacher log_path/opd_bc_teacher/actor; same weights copied to
-  # log_path/opd_bc_student/actor. If MuJoCo/EGL segfaults on env init, try
+  # If rl_teacher=True, teacher warmup is done with pure GRPO rollout training (same training hyperparameters
+  # as student), and opd_bc_* controls are ignored.
+  rl_teacher: false
+  # Checkpoint after BC: teacher log_path/opd_bc_teacher/actor. If MuJoCo/EGL segfaults on env init, try
   # RLINF_LIBERO_USE_OSMESA=1 (see examples/embodiment/run_embodiment.sh).
   opd_bc_steps: 600
   # <=0 uses all demos per task in LiberoSFTDataset (full data per task).

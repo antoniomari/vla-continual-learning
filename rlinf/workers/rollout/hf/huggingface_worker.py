@@ -19,7 +19,7 @@ from collections import defaultdict
 
 import numpy as np
 import torch
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 from tqdm import tqdm
 
 from rlinf.config import torch_dtype_from_precision
@@ -178,8 +178,6 @@ class MultiStepRolloutWorker(Worker):
 
     def set_opd_teacher_model_path(self, path: str):
         """Mirror actor: BC writes teacher path so rollout can load the same checkpoint."""
-        from omegaconf import open_dict
-
         with open_dict(self.cfg.algorithm):
             self.cfg.algorithm.opd_teacher_model_path = path
         self._opd_teacher_model = None
@@ -188,6 +186,16 @@ class MultiStepRolloutWorker(Worker):
                 f"[OPD] Rollout opd_teacher_model_path set to {path}",
                 flush=True,
             )
+        return {}
+
+    def set_algorithm_adv_type(self, adv_type: str):
+        """Switch rollout-side algorithm mode (controls OPD teacher precompute path)."""
+        with open_dict(self.cfg.algorithm):
+            self.cfg.algorithm.adv_type = adv_type
+        if adv_type != "embodied_opd":
+            self._opd_teacher_model = None
+        if self._rank == 0:
+            print(f"[OPD] Rollout algorithm adv_type set to {adv_type}", flush=True)
         return {}
 
     def setup_sample_params(self):
@@ -553,6 +561,11 @@ class MultiStepRolloutWorker(Worker):
             )
 
         gc.collect()
+        try:
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+        except Exception:
+            pass
 
         if self.cfg.rollout.get("enable_offload", False):
             self.offload_model()
