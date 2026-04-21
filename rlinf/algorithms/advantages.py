@@ -185,6 +185,10 @@ def compute_embodied_opd_advantages(
 
     ``advantages`` / ``returns`` use the same tensor layout as ``prev_logprobs``.
     """
+
+    # shape: (n_chunk, bsz, num_action_tokens) = (64, 32, 7x8) -> 7x8 is cause action_dim=7 and num_action_chunk=8
+    # (assuming to use token_level option)
+    # so in total the batch will use 64x32x7x8 = 114k logprobs 
     teacher_logprobs = kwargs["teacher_logprobs"]
     student_logprobs = kwargs["student_logprobs"]
     loss_mask = kwargs.get("loss_mask", None)
@@ -192,7 +196,7 @@ def compute_embodied_opd_advantages(
     group_size = kwargs.get("group_size", 1)
     epsilon = kwargs.get("epsilon", 1e-6)
 
-    # Advantages are computed as VLA-OPD reward initially 
+    # Advantages are computed as VLA-OPD reward initially
     advantages = teacher_logprobs - student_logprobs
     if loss_mask is not None:
         advantages = advantages * loss_mask
@@ -201,6 +205,7 @@ def compute_embodied_opd_advantages(
         return advantages, advantages
 
     # Scalar trajectory score = sum of valid token margins per env slot (flatten time×tokens).
+    # n_chunk: 512/8 = 64, bsz: (group_size * num_group_envs * rollout_epoch) = 32 in the latest runs,
     n_chunk, bsz, _token_flat = advantages.shape
     flat = advantages.reshape(n_chunk * bsz, -1)
     if loss_mask is not None:

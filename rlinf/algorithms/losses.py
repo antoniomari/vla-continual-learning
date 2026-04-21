@@ -425,6 +425,44 @@ def compute_embodied_opd_actor_loss_fn(**kwargs) -> Tuple[torch.Tensor, Dict]:
     return compute_embodied_grpo_actor_loss_fn(**kwargs)
 
 
+@register_policy_loss("embodied_opd_reinforce")
+def compute_embodied_opd_reinforce_actor_loss_fn(**kwargs) -> Tuple[torch.Tensor, Dict]:
+    """
+    Plain REINFORCE-style OPD objective (no PPO ratio clipping).
+
+    Objective:
+        L = -E[ log pi(a|s) * A_opd ]
+    where A_opd is typically teacher_logprob - student_logprob (optionally normalized
+    upstream in advantage computation).
+    """
+    logprobs = kwargs["logprobs"]
+    advantages = kwargs["advantages"]
+    loss_mask = kwargs.get("loss_mask", None)
+    entropy = kwargs.get("entropy", None)
+    entropy_bonus = kwargs.get("entropy_bonus", 0.0)
+
+    reinforce_term = logprobs * advantages.detach()
+    if loss_mask is not None:
+        policy_loss = -masked_mean(reinforce_term, loss_mask)
+    else:
+        policy_loss = -reinforce_term.mean()
+
+    entropy_loss = torch.tensor(0.0, device=logprobs.device, dtype=logprobs.dtype)
+    if entropy is not None and entropy_bonus > 0:
+        if loss_mask is not None:
+            entropy_loss = masked_mean(entropy, loss_mask)
+        else:
+            entropy_loss = entropy.mean()
+
+    total_loss = policy_loss - entropy_bonus * entropy_loss
+    metrics_data = {
+        "actor/raw_loss": total_loss.detach().item(),
+        "actor/policy_loss": policy_loss.detach().item(),
+        "actor/entropy_loss": entropy_loss.detach().item(),
+    }
+    return total_loss, metrics_data
+
+
 @register_policy_loss("math_ppo_actor")
 def compute_math_ppo_actor_loss(**kwargs):
     """

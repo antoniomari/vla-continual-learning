@@ -22,6 +22,7 @@
 ###           SWEEP_OPD_BC_STEPS, SWEEP_OPD_TEACHER_LR — BC warmup overrides (see jobs/embodiment_slurm_opd_sweep.sh).
 ###           SWEEP_OPD_NORMALIZE_ADVANTAGES — override algorithm.normalize_advantages.
 ###           SWEEP_OPD_RL_TEACHER — override algorithm.rl_teacher (0/1).
+###           SWEEP_OPD_LOSS_TYPE — override algorithm.loss_type (e.g., embodied_opd_reinforce).
 ### Eval after each task: passes global_step (= MAX_EPOCH or get_default_global_step), seed,
 ###           env.fixed_task_ids=null (all suite tasks, e.g. 10 for LIBERO spatial), same SWEEP_* as training,
 ###           and runner.logger.experiment_name=eval_<train_name>_step_<N>. Training still uses one task per stage.
@@ -307,6 +308,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     if [ -n "${SWEEP_OPD_RL_TEACHER:-}" ]; then
         OVERRIDES="$OVERRIDES algorithm.rl_teacher=${SWEEP_OPD_RL_TEACHER}"
+    fi
+    if [ -n "${SWEEP_OPD_LOSS_TYPE:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.loss_type=${SWEEP_OPD_LOSS_TYPE}"
     fi
 
     echo "Running with Hydra overrides:"
