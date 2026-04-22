@@ -97,6 +97,44 @@ class EmbodiedRunner:
         self._opd_bc_wandb_step_cursor = 0
         # Added to RL step index for W&B after OPD BC (+1 if teacher eval logged at cursor).
         self._wandb_rl_step_offset = 0
+        # True when we resumed teacher from existing checkpoint without mutating actor weights.
+        self._opd_resumed_teacher_from_checkpoint = False
+
+    def _has_valid_teacher_checkpoint(self, teacher_actor_path: str) -> bool:
+        """Check whether an OPD teacher checkpoint directory looks loadable."""
+        if not os.path.isdir(teacher_actor_path):
+            return False
+        return os.path.isfile(os.path.join(teacher_actor_path, "adapter_model.bin")) or os.path.isfile(
+            os.path.join(teacher_actor_path, "model.pt")
+        )
+
+    def _maybe_resume_existing_opd_teacher(self) -> bool:
+        """
+        If an OPD teacher checkpoint already exists in the run log dir, reuse it and
+        skip warmup. Returns True when resume path is used.
+        """
+        teacher_actor_path = os.path.join(
+            self.cfg.runner.logger.log_path,
+            "opd_bc_teacher",
+            "actor",
+        )
+        if not self._has_valid_teacher_checkpoint(teacher_actor_path):
+            return False
+
+        print(
+            f"[OPD] Found existing teacher checkpoint at {teacher_actor_path}. "
+            "Skipping teacher warmup and resuming directly into OPD student flow.",
+            flush=True,
+        )
+        self.actor.set_opd_teacher_model_path(teacher_actor_path).wait()
+        self.rollout.set_opd_teacher_model_path(teacher_actor_path).wait()
+        with open_dict(self.cfg.algorithm):
+            self.cfg.algorithm.opd_teacher_model_path = teacher_actor_path
+        self._opd_bc_warmup_completed = True
+        self._opd_resumed_teacher_from_checkpoint = True
+        # We did not run warmup in this process; keep logger cursor at 0.
+        self._opd_bc_wandb_step_cursor = 0
+        return True
 
     def _run_teacher_like_training_steps(self, num_steps: int, metric_prefix: str) -> None:
         """Run rollout->advantage->actor update loop for teacher warmup."""
@@ -158,10 +196,14 @@ class EmbodiedRunner:
                 self.cfg.algorithm.adv_type = "embodied_grpo"
                 self.cfg.algorithm.loss_type = "embodied_grpo"
 
-            with self.timer("opd_teacher_rl_warmup"):
-                self._run_teacher_like_training_steps(
-                    num_steps=teacher_steps, metric_prefix="opd_teacher_rl"
-                )
+            t0 = time.perf_counter()
+            self._run_teacher_like_training_steps(
+                num_steps=teacher_steps, metric_prefix="opd_teacher_rl"
+            )
+            print(
+                f"[OPD] rl_teacher warmup finished in {time.perf_counter() - t0:.2f}s",
+                flush=True,
+            )
             self._opd_bc_wandb_step_cursor = teacher_steps
         finally:
             self.actor.set_algorithm_mode(orig_adv, orig_loss).wait()
@@ -181,6 +223,10 @@ class EmbodiedRunner:
         self.rollout.set_opd_teacher_model_path(teacher_actor_path).wait()
         with open_dict(self.cfg.algorithm):
             self.cfg.algorithm.opd_teacher_model_path = teacher_actor_path
+        # RL-teacher warmup performs many actor<->rollout CUDA IPC syncs. Before switching to
+        # student OPD, aggressively clear worker CUDA runtime state and keep only checkpoint path.
+        self.actor.clear_cuda_runtime_state().wait()
+        self.rollout.clear_cuda_runtime_state(keep_teacher_path=True).wait()
         self._opd_bc_warmup_completed = True
 
     def _refresh_wandb_rl_step_offset(self) -> None:
@@ -198,41 +244,48 @@ class EmbodiedRunner:
         self.actor.init_worker().wait()
         self.rollout.init_worker().wait()
         self.env.init_worker().wait()
+        resumed_teacher = self._maybe_resume_existing_opd_teacher()
         opd_bc_steps = self.cfg.algorithm.get("opd_bc_steps", 0)
         rl_teacher = bool(self.cfg.algorithm.get("rl_teacher", False))
-        if rl_teacher:
+        if not resumed_teacher and rl_teacher:
             if opd_bc_steps > 0:
                 print(
                     "[OPD] rl_teacher=True: ignoring opd_bc_steps and using GRPO teacher warmup.",
                     flush=True,
                 )
             self._run_opd_rl_teacher_warmup_and_save_teacher()
-        elif opd_bc_steps > 0:
+        elif not resumed_teacher and opd_bc_steps > 0:
             self._run_opd_bc_warmup_and_save_teacher(opd_bc_steps)
-        if self._opd_bc_warmup_completed and self.cfg.algorithm.get(
-            "opd_eval_teacher_after_bc", True
-        ):
-            with self.timer("opd_teacher_eval"):
-                print(
-                    "[OPD] Teacher eval: pushing post-BC teacher weights to rollout "
-                    "(student restored to pre-BC base right after eval), then Libero eval.",
-                    flush=True,
-                )
-                self.update_rollout_weights()
-                teacher_eval_metrics = self.evaluate()
-                te_line = _format_eval_success(teacher_eval_metrics)
-                if te_line:
-                    print(f"[OPD] Teacher eval (sim success): {te_line}", flush=True)
-                teacher_eval_metrics = {
-                    f"eval_teacher/{k}": v for k, v in teacher_eval_metrics.items()
-                }
-                te_step = self._opd_bc_wandb_step_cursor
-                print(
-                    f"[OPD] Logging eval_teacher to metrics ({len(teacher_eval_metrics)} keys) "
-                    f"at wandb step={te_step} (after opd_bc steps 0..{te_step - 1}).",
-                    flush=True,
-                )
-                self.metric_logger.log(data=teacher_eval_metrics, step=te_step)
+        if self._opd_bc_warmup_completed:
+            if self.cfg.algorithm.get("opd_eval_teacher_after_bc", True):
+                if self._opd_resumed_teacher_from_checkpoint:
+                    print(
+                        "[OPD] Skipping teacher eval after checkpoint resume: "
+                        "resume path does not overwrite actor weights with teacher adapter.",
+                        flush=True,
+                    )
+                else:
+                    with self.timer("opd_teacher_eval"):
+                        print(
+                            "[OPD] Teacher eval: pushing post-BC teacher weights to rollout "
+                            "(student restored to pre-BC base right after eval), then Libero eval.",
+                            flush=True,
+                        )
+                        self.update_rollout_weights()
+                        teacher_eval_metrics = self.evaluate()
+                        te_line = _format_eval_success(teacher_eval_metrics)
+                        if te_line:
+                            print(f"[OPD] Teacher eval (sim success): {te_line}", flush=True)
+                        teacher_eval_metrics = {
+                            f"eval_teacher/{k}": v for k, v in teacher_eval_metrics.items()
+                        }
+                        te_step = self._opd_bc_wandb_step_cursor
+                        print(
+                            f"[OPD] Logging eval_teacher to metrics ({len(teacher_eval_metrics)} keys) "
+                            f"at wandb step={te_step} (after opd_bc steps 0..{te_step - 1}).",
+                            flush=True,
+                        )
+                        self.metric_logger.log(data=teacher_eval_metrics, step=te_step)
             self._restore_student_after_bc()
         log_embodied_driver_inventory(self.cfg)
 
@@ -362,35 +415,44 @@ class EmbodiedRunner:
     def run(self):
         opd_bc_steps = self.cfg.algorithm.get("opd_bc_steps", 0)
         rl_teacher = bool(self.cfg.algorithm.get("rl_teacher", False))
+        resumed_teacher = False
         # OPD BC normally finishes in init_workers (before env). Fallback if run() is entered alone.
         if not self._opd_bc_warmup_completed and (opd_bc_steps > 0 or rl_teacher):
-            if rl_teacher:
+            resumed_teacher = self._maybe_resume_existing_opd_teacher()
+            if not resumed_teacher and rl_teacher:
                 self._run_opd_rl_teacher_warmup_and_save_teacher()
-            else:
+            elif not resumed_teacher:
                 self._run_opd_bc_warmup_and_save_teacher(opd_bc_steps)
             if self.cfg.algorithm.get("opd_eval_teacher_after_bc", True):
-                with self.timer("opd_teacher_eval"):
+                if self._opd_resumed_teacher_from_checkpoint:
                     print(
-                        "[OPD] Teacher eval: pushing post-BC teacher weights to rollout "
-                        "(student restored to pre-BC base right after eval), then Libero eval.",
+                        "[OPD] Skipping teacher eval after checkpoint resume: "
+                        "resume path does not overwrite actor weights with teacher adapter.",
                         flush=True,
                     )
-                    self.update_rollout_weights()
-                    teacher_eval_metrics = self.evaluate()
-                    te_line = _format_eval_success(teacher_eval_metrics)
-                    if te_line:
-                        print(f"[OPD] Teacher eval (sim success): {te_line}", flush=True)
-                    teacher_eval_metrics = {
-                        f"eval_teacher/{k}": v
-                        for k, v in teacher_eval_metrics.items()
-                    }
-                    te_step = self._opd_bc_wandb_step_cursor
-                    print(
-                        f"[OPD] Logging eval_teacher to metrics ({len(teacher_eval_metrics)} keys) "
-                        f"at wandb step={te_step} (after opd_bc steps 0..{te_step - 1}).",
-                        flush=True,
-                    )
-                    self.metric_logger.log(data=teacher_eval_metrics, step=te_step)
+                else:
+                    with self.timer("opd_teacher_eval"):
+                        print(
+                            "[OPD] Teacher eval: pushing post-BC teacher weights to rollout "
+                            "(student restored to pre-BC base right after eval), then Libero eval.",
+                            flush=True,
+                        )
+                        self.update_rollout_weights()
+                        teacher_eval_metrics = self.evaluate()
+                        te_line = _format_eval_success(teacher_eval_metrics)
+                        if te_line:
+                            print(f"[OPD] Teacher eval (sim success): {te_line}", flush=True)
+                        teacher_eval_metrics = {
+                            f"eval_teacher/{k}": v
+                            for k, v in teacher_eval_metrics.items()
+                        }
+                        te_step = self._opd_bc_wandb_step_cursor
+                        print(
+                            f"[OPD] Logging eval_teacher to metrics ({len(teacher_eval_metrics)} keys) "
+                            f"at wandb step={te_step} (after opd_bc steps 0..{te_step - 1}).",
+                            flush=True,
+                        )
+                        self.metric_logger.log(data=teacher_eval_metrics, step=te_step)
             self._restore_student_after_bc()
 
         self._refresh_wandb_rl_step_offset()

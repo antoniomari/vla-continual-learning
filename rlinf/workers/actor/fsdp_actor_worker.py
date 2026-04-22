@@ -1368,6 +1368,17 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             )
         return {}
 
+    def clear_cuda_runtime_state(self):
+        """Best-effort CUDA/IPC cleanup barrier between training phases."""
+        gc.collect()
+        try:
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+            torch.cuda.synchronize()
+        except Exception:
+            pass
+        return {}
+
     def save_checkpoint(self, save_base_path, step):
         torch.distributed.barrier()
         is_lora = self.cfg.actor.model.get("is_lora", False)

@@ -76,14 +76,14 @@ LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-}"
 
 # ============== TRAIN SWEEP (run_embodiment_opd_sequential.sh → run_embodiment_sequential.sh) ==============
 # Args: TASK_ID_OR_RANGE [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
-TRAIN_TASK_INPUTS=("0" "1" "2" "3" "4")
+TRAIN_TASK_INPUTS=("0" "2" "3" "4")
 TRAIN_MANUAL_CHECKPOINT=("")
 # Passed as MAX_EPOCH (runner.max_epochs + checkpoint index). Empty = yaml max_epochs; post-train eval
 # step still uses get_default_global_step for checkpoint folder unless you align EVAL_STEPS.
 TRAIN_MAX_EPOCHS=(50)
 # LiberoSFT / opd_bc_steps / teacher paths — tune in libero_spatial_opd_openvlaoft_spatial.yaml or Hydra.
 TRAIN_CONFIG_NAMES=("crl_experiment/libero_spatial_opd_openvlaoft_spatial")
-TRAIN_SEEDS=(189)
+TRAIN_SEEDS=(187)
 BASE_MODEL="${BASE_MODEL:-1}"
 if [[ "${BASE_MODEL}" == "1" ]]; then
   TRAIN_MANUAL_CHECKPOINT=("base")
@@ -110,6 +110,8 @@ fi
 # 191 -> 1000 training steps teacher (lr 1e-04), 50 training steps student
 # 190 -> same as 191 but with advantage normalization
 # 189 -> REINFORCE-style OPD objective (no ratio clipping), lr 1e-04 teacher, 50 training steps student
+# 188 -> same as 189 but with no advantage normalization
+# 187 -> same as 188 but with RL teacher
 
 # 200 -> with fixed preprocessing, lr 2e-05 batch size 32
 
@@ -134,8 +136,8 @@ TRAIN_OPD_TEACHER_LRS=('1e-04')
 TRAIN_OPD_SFT_FILTER_FIXED_TASK_IDS=(1)
 TRAIN_OPD_SFT_MATCH_TASK_LANGUAGE=(1)
 TRAIN_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT=(0)
-TRAIN_OPD_NORMALIZE_ADVANTAGES=(1)
-TRAIN_OPD_RL_TEACHER="${TRAIN_OPD_RL_TEACHER:-0}"
+TRAIN_OPD_NORMALIZE_ADVANTAGES=(0)
+TRAIN_OPD_RL_TEACHER="${TRAIN_OPD_RL_TEACHER:-1}"
 # OPD actor loss type:
 #   - embodied_opd                  : full GRPO-style clipped objective
 #   - embodied_opd_reinforce        : plain REINFORCE-style objective (no ratio clipping)

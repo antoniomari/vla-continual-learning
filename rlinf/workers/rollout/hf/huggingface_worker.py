@@ -649,6 +649,29 @@ class MultiStepRolloutWorker(Worker):
         gc.collect()
         torch.cuda.empty_cache()
 
+    def clear_cuda_runtime_state(self, keep_teacher_path: bool = True):
+        """
+        Aggressively clear rollout-side CUDA/IPC state between phases.
+        Keep only checkpoint paths in config; force lazy reload later.
+        """
+        try:
+            self.offload_model()
+        except Exception:
+            pass
+
+        # Keep the saved teacher checkpoint path, but drop in-memory teacher module.
+        if keep_teacher_path:
+            self._opd_teacher_model = None
+
+        gc.collect()
+        try:
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+            torch.cuda.synchronize()
+        except Exception:
+            pass
+        return {}
+
     async def recv_env_batch(self):
         env_batch = await self.channel.get(
             queue_name=f"{self._obs_queue_name}_{self._rank}", async_op=True
