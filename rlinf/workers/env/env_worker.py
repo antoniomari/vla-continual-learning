@@ -83,9 +83,10 @@ class EnvWorker(Worker):
         # stage_num: default to 2, use for pipeline rollout process
         self.stage_num = self.cfg.rollout.pipeline_stage_num
         self.batch_size = self.cfg.env.train.num_group * self.cfg.env.train.group_size
-        self.eval_batch_size = (
-            self.cfg.env.eval.num_group * self.cfg.env.eval.group_size
-        )
+        # `validate_embodied_cfg` shards `env.eval.num_envs` across env GPUs and pipeline
+        # stages; it does not scale `env.eval.group_size`. List/tensor batch width for eval
+        # must match the per-rank simulator count, not `num_group * group_size`.
+        self.eval_batch_size = self.cfg.env.eval.num_envs
 
         # only need rank0 to create channel
         if self._rank == 0:
@@ -103,9 +104,11 @@ class EnvWorker(Worker):
         only_eval = getattr(self.cfg.runner, "only_eval", False)
         # Periodic eval, eval-only runs, or OPD post-BC teacher eval all call EnvWorker.evaluate(),
         # which requires eval_simulator_list. OPD configs often set val_check_interval: -1.
-        opd_teacher_eval_after_bc = (
+        opd_teacher_eval_after_bc = self.cfg.algorithm.get(
+            "opd_eval_teacher_after_bc", True
+        ) and (
             self.cfg.algorithm.get("opd_bc_steps", 0) > 0
-            and self.cfg.algorithm.get("opd_eval_teacher_after_bc", True)
+            or bool(self.cfg.algorithm.get("rl_teacher", False))
         )
         needs_eval_simulators = (
             self.cfg.runner.val_check_interval > 0
@@ -432,5 +435,6 @@ class EnvWorker(Worker):
                 await self.send_env_batch(env_batch, mode="eval")
 
         self.finish_rollout(mode="eval")
+
         for i in range(self.stage_num):
             self.eval_simulator_list[i].stop_simulator()

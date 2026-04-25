@@ -102,6 +102,9 @@ echo ""
 # Create a wrapper script that modifies the log path to include step number
 # and a short config tag. We'll pass environment variables to the eval script.
 export EVAL_STEP_NUMBER="${STEP_NUMBER}"
+export RLINF_EVAL_CHECKPOINT_REL="${CHECKPOINT_LOCATION}"
+export RLINF_EVAL_CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION}"
+export RLINF_EVAL_CONFIG_NAME="${CONFIG_NAME}"
 
 
 if [ "$IS_BASE_EVAL" = true ]; then

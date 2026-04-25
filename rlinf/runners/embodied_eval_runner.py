@@ -17,6 +17,7 @@ from omegaconf.dictconfig import DictConfig
 from rlinf.scheduler import Worker
 from rlinf.utils.distributed import ScopedTimer
 from rlinf.utils.metric_logger import MetricLogger
+from rlinf.utils.eval_results_csv import append_eval_results_row
 from rlinf.utils.metric_utils import compute_evaluate_metrics
 
 
@@ -75,6 +76,13 @@ class EmbodiedEvalRunner:
 
     def run(self):
         eval_metrics = self.evaluate()
+        try:
+            append_eval_results_row(eval_metrics, self.cfg)
+        except Exception as e:  # noqa: BLE001
+            print(
+                f"[Eval] append_eval_results_row failed (continuing without CSV): {e}",
+                flush=True,
+            )
         eval_metrics = {f"eval/{k}": v for k, v in eval_metrics.items()}
         self.metric_loger.log(step=0, data=eval_metrics)
         print(f"{eval_metrics=}")

@@ -190,6 +190,7 @@ class OpenVLAOFTForRLActionPrediction(OpenVLAOFTForActionPrediction):
         attention_mask: torch.Tensor,
         pixel_values: torch.FloatTensor,
         do_sample: bool = True,
+        return_hidden_states: bool = False,
         **kwargs,
     ) -> Tuple[np.ndarray, torch.Tensor, torch.Tensor, torch.Tensor]:
         # assert first token is 1
@@ -231,13 +232,15 @@ class OpenVLAOFTForRLActionPrediction(OpenVLAOFTForActionPrediction):
             labels=None,
             use_cache=None,
             output_attentions=False,
-            output_hidden_states=True,
+            output_hidden_states=return_hidden_states,
             return_dict=True,
         )
 
-        # Extract hidden states for action tokens
-        last_hidden_states = outputs.hidden_states[-1]  # (B, seq_len, D)
-        assert last_hidden_states.shape[1] == mm_embeddings.shape[1]
+        last_hidden_states = None
+        if return_hidden_states:
+            # Extract hidden states for action tokens
+            last_hidden_states = outputs.hidden_states[-1]  # (B, seq_len, D)
+            assert last_hidden_states.shape[1] == mm_embeddings.shape[1]
 
         logits_tensor = outputs.logits[
             :,
@@ -247,9 +250,10 @@ class OpenVLAOFTForRLActionPrediction(OpenVLAOFTForActionPrediction):
             :,
         ]  # [B, act, vocab_size + 64]
 
-        last_hidden_states = last_hidden_states[
-            :, -self.action_dim * self.num_action_chunks - 1 : -1
-        ]
+        if return_hidden_states:
+            last_hidden_states = last_hidden_states[
+                :, -self.action_dim * self.num_action_chunks - 1 : -1
+            ]
 
         logits_tensor[..., : self.vocab_size - self.config.n_action_bins] = -torch.inf
         logits_tensor[..., self.vocab_size :] = -torch.inf

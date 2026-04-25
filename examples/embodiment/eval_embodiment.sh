@@ -219,6 +219,8 @@ fi
 
 MEGA_LOG_FILE="${LOG_DIR}/eval_embodiment.log"
 mkdir -p "${LOG_DIR}"
+# For results/eval_results.csv (rlinf.utils.eval_results_csv)
+export RLINF_EVAL_HYDRA_CONFIG_NAME="${CONFIG_NAME}"
 CMD="python -u ${SRC_FILE} --config-path ${CONFIG_PATH} --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR} ${HYDRA_OVERRIDES}"
 echo ${CMD}
 ${CMD} 2>&1 | tee ${MEGA_LOG_FILE}

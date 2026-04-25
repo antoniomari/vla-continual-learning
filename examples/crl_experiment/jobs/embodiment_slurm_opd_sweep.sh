@@ -36,6 +36,7 @@
 #   OPD teacher warmup mode toggle: TRAIN_OPD_RL_TEACHER (0/1), wired to algorithm.rl_teacher.
 #   PROJECT_ROOT, VENV_PATH, SLURM_LOG_DIR — overrides (default logs: logs/slurm_embodiment_opd)
 #   SLURM_PARTITION, SLURM_ACCOUNT, SBATCH_EXTRA
+#   PYTORCH_CUDA_ALLOC_CONF — CUDA allocator tuning (default: expandable_segments:True)
 #
 # Libero: training/eval scripts default to ${REPO_PATH}/LIBERO. If your clone lives elsewhere,
 #   export LIBERO_REPO_PATH=/absolute/path/to/LIBERO
@@ -63,6 +64,7 @@ GPU="${GPU:-pro_6000:1}"
 SLURM_PARTITION="${SLURM_PARTITION:-}"
 SLURM_ACCOUNT="${SLURM_ACCOUNT:-}"
 SBATCH_EXTRA="${SBATCH_EXTRA:-}"
+PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 if [[ "${HOME}" == "/users/anmari" ]]; then
   NEW_CLUSTER_ACCOUNT="${SLURM_ACCOUNT:-a143}"
@@ -76,14 +78,14 @@ LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-}"
 
 # ============== TRAIN SWEEP (run_embodiment_opd_sequential.sh → run_embodiment_sequential.sh) ==============
 # Args: TASK_ID_OR_RANGE [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
-TRAIN_TASK_INPUTS=("0" "2" "3" "4")
+TRAIN_TASK_INPUTS=("1" "4")
 TRAIN_MANUAL_CHECKPOINT=("")
 # Passed as MAX_EPOCH (runner.max_epochs + checkpoint index). Empty = yaml max_epochs; post-train eval
 # step still uses get_default_global_step for checkpoint folder unless you align EVAL_STEPS.
 TRAIN_MAX_EPOCHS=(50)
 # LiberoSFT / opd_bc_steps / teacher paths — tune in libero_spatial_opd_openvlaoft_spatial.yaml or Hydra.
 TRAIN_CONFIG_NAMES=("crl_experiment/libero_spatial_opd_openvlaoft_spatial")
-TRAIN_SEEDS=(187)
+TRAIN_SEEDS=(184)
 BASE_MODEL="${BASE_MODEL:-1}"
 if [[ "${BASE_MODEL}" == "1" ]]; then
   TRAIN_MANUAL_CHECKPOINT=("base")
@@ -112,6 +114,9 @@ fi
 # 189 -> REINFORCE-style OPD objective (no ratio clipping), lr 1e-04 teacher, 50 training steps student
 # 188 -> same as 189 but with no advantage normalization
 # 187 -> same as 188 but with RL teacher
+# 186 -> same but with RL teacher and 128 rollouts per step
+# 185 -> SFT teacher (1000 steps, lr 1e-04), 128 rollouts per step
+# 184 -> same as 185 but with advantage normalization
 
 # 200 -> with fixed preprocessing, lr 2e-05 batch size 32
 
@@ -125,7 +130,7 @@ fi
 GRPO_HP_FROM_SWEEP="${GRPO_HP_FROM_SWEEP:-1}"
 TRAIN_GROUP_SIZES=(8)
 TRAIN_NUM_GROUP_ENVS=(4)
-TRAIN_ROLLOUT_EPOCHS=(1)
+TRAIN_ROLLOUT_EPOCHS=(4)
 
 # OPD teacher BC warmup (libero_spatial_opd_openvlaoft_spatial.yaml defaults). Expand any list to sweep.
 TRAIN_OPD_BC_GLOBAL_BATCH_SIZES=(32)
@@ -136,8 +141,8 @@ TRAIN_OPD_TEACHER_LRS=('1e-04')
 TRAIN_OPD_SFT_FILTER_FIXED_TASK_IDS=(1)
 TRAIN_OPD_SFT_MATCH_TASK_LANGUAGE=(1)
 TRAIN_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT=(0)
-TRAIN_OPD_NORMALIZE_ADVANTAGES=(0)
-TRAIN_OPD_RL_TEACHER="${TRAIN_OPD_RL_TEACHER:-1}"
+TRAIN_OPD_NORMALIZE_ADVANTAGES=(1)
+TRAIN_OPD_RL_TEACHER="${TRAIN_OPD_RL_TEACHER:-0}"
 # OPD actor loss type:
 #   - embodied_opd                  : full GRPO-style clipped objective
 #   - embodied_opd_reinforce        : plain REINFORCE-style objective (no ratio clipping)
@@ -185,6 +190,7 @@ submit_job() {
     echo "if [[ \"\${RLINF_ALLOW_CORE_DUMPS:-0}\" != \"1\" ]]; then ulimit -c 0 2>/dev/null || true; fi"
     echo "cd \"${PROJECT_ROOT}\""
     echo "source \"${VENV_PATH}/bin/activate\""
+    echo "export PYTORCH_CUDA_ALLOC_CONF=$(printf '%q' "${PYTORCH_CUDA_ALLOC_CONF}")"
     if [[ -n "${LIBERO_REPO_PATH}" ]]; then
       echo "export LIBERO_REPO_PATH=$(printf '%q' "${LIBERO_REPO_PATH}")"
       echo "export LIBERO_CONFIG_PATH=$(printf '%q' "${LIBERO_CONFIG_PATH:-${LIBERO_REPO_PATH}}")"
@@ -216,6 +222,7 @@ echo "BASE_MODEL=${BASE_MODEL} (1 = force first task in each job to use base SFT
 echo "GRPO_HP_FROM_SWEEP=${GRPO_HP_FROM_SWEEP} (1 = override group_size, num_group_envs, rollout_epoch, global_batch_size)"
 echo "PROJECT_ROOT=${PROJECT_ROOT}"
 echo "SLURM_LOG_DIR=${SLURM_LOG_DIR}"
+echo "PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF}"
 if [[ -n "${LIBERO_REPO_PATH}" ]]; then
   echo "LIBERO_REPO_PATH (in jobs)=${LIBERO_REPO_PATH}"
 else

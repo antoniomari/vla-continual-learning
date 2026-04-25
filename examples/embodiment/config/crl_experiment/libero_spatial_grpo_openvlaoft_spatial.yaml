@@ -101,7 +101,7 @@ env:
     queue_name: "obs_buffer"
     queue_size: 0
   eval:
-    num_envs: 16  # was 80
+    num_envs: 16
     eval_per_task: ${int_div:${env.eval.num_envs}, 10}
   enable_offload: False
   fixed_task_ids: null

@@ -294,6 +294,7 @@ class MultiStepRolloutWorker(Worker):
                     input_ids=processed_obs["input_ids"],
                     attention_mask=processed_obs["attention_mask"],
                     pixel_values=processed_obs["pixel_values"],
+                    return_hidden_states=self.cfg.algorithm.require_values,
                     **sample_kwargs,
                 )
             )
@@ -458,7 +459,8 @@ class MultiStepRolloutWorker(Worker):
             for step in tqdm(
                 range(self.cfg.algorithm.n_chunk_steps),
                 desc=f"Rollout ID {self._rank} Epoch {rollout_epoch} in Generate Step",
-                disable=not cfg_show_progress_bar(self.cfg),
+                # Keep logs compact on multi-worker runs; emit end-of-phase timings instead.
+                disable=True,
             ):
                 # Stage_num is number of parallel pipeline stages in one rollout collection
                 # there are stage_num simulators

@@ -424,20 +424,23 @@ class CNNRolloutWorker(Worker):
 
         eval_info = defaultdict(list)
 
-        for step in tqdm(
-            range(self.cfg.algorithm.n_eval_chunk_steps),
-            desc=f"CNN Rollout {self._rank} Eval",
-            disable=not cfg_show_progress_bar(self.cfg),
-        ):
-            for i in range(self.stage_num):
-                env_batch = await self.recv_env_batch()
-                chunk_actions, _, _, _, _, _ = self.predict(env_batch["obs"], mode="eval")
-                chunk_actions_np = chunk_actions.float().cpu().numpy()
-                await self.send_chunk_actions(chunk_actions_np)
+        for _rollout_epoch in range(self.cfg.algorithm.rollout_epoch):
+            for step in tqdm(
+                range(self.cfg.algorithm.n_eval_chunk_steps),
+                desc=f"CNN Rollout {self._rank} Eval",
+                disable=not cfg_show_progress_bar(self.cfg),
+            ):
+                for i in range(self.stage_num):
+                    env_batch = await self.recv_env_batch()
+                    chunk_actions, _, _, _, _, _ = self.predict(
+                        env_batch["obs"], mode="eval"
+                    )
+                    chunk_actions_np = chunk_actions.float().cpu().numpy()
+                    await self.send_chunk_actions(chunk_actions_np)
 
-                if "meta" in env_batch:
-                    for key, value in env_batch["meta"].items():
-                        eval_info[f"env_info/{key}"].append(value)
+                    if "meta" in env_batch:
+                        for key, value in env_batch["meta"].items():
+                            eval_info[f"env_info/{key}"].append(value)
 
         # Final step
         env_batch = await self.recv_env_batch()
