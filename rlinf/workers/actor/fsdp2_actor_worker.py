@@ -18,7 +18,6 @@ import math
 import os
 import time
 from contextlib import nullcontext
-from itertools import cycle
 
 import numpy as np
 import torch
@@ -71,6 +70,13 @@ from rlinf.utils.runner_utils import cfg_show_progress_bar
 
 
 class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
+    @staticmethod
+    def _infinite_dataloader(loader):
+        """Yield batches forever without caching past batches in memory."""
+        while True:
+            for batch in loader:
+                yield batch
+
     def __init__(self, cfg: DictConfig):
         Worker.__init__(self)
         super().__init__(cfg.actor)
@@ -156,18 +162,16 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
             else int(self.cfg.actor.micro_batch_size)
         )
 
-        self.sft_dataloader = cycle(
-            DataLoader(
-                self.sft_dataset,
-                batch_size=sft_batch,
-                shuffle=True,
-                num_workers=0,
-                pin_memory=False,
-                drop_last=True,
-            )
+        self.sft_dataloader = DataLoader(
+            self.sft_dataset,
+            batch_size=sft_batch,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=False,
+            drop_last=True,
         )
 
-        self.sft_iterator = iter(self.sft_dataloader)
+        self.sft_iterator = self._infinite_dataloader(self.sft_dataloader)
         if self._rank == 0:
             print(f"SFT dataset initialized: {len(self.sft_dataset)} samples")
 
@@ -493,6 +497,16 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
                 ),
                 "group_size": self.cfg.algorithm.get("group_size", 8),
                 "reward_type": self.cfg.algorithm.reward_type,
+                "loss_type": self.cfg.algorithm.get("loss_type", "embodied_opd"),
+                "opd_reward_normalization": self.cfg.algorithm.get(
+                    "opd_reward_normalization", "group_zscore"
+                ),
+                "opd_reward_tanh_tau": self.cfg.algorithm.get(
+                    "opd_reward_tanh_tau", 5.0
+                ),
+                "opd_reward_clip_c": self.cfg.algorithm.get(
+                    "opd_reward_clip_c", 1.0
+                ),
             }
         else:
             kwargs = {

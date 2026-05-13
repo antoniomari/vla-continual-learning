@@ -21,6 +21,9 @@
 ### Optional (OPD Slurm sweep): SWEEP_OPD_BC_GLOBAL_BATCH_SIZE, SWEEP_OPD_BC_BATCH_SIZE,
 ###           SWEEP_OPD_BC_STEPS, SWEEP_OPD_TEACHER_LR — BC warmup overrides (see jobs/embodiment_slurm_opd_sweep.sh).
 ###           SWEEP_OPD_NORMALIZE_ADVANTAGES — override algorithm.normalize_advantages.
+###           SWEEP_OPD_REWARD_NORMALIZATION — override algorithm.opd_reward_normalization.
+###           SWEEP_OPD_REWARD_TANH_TAU — override algorithm.opd_reward_tanh_tau.
+###           SWEEP_OPD_REWARD_CLIP_C — override algorithm.opd_reward_clip_c.
 ###           SWEEP_OPD_RL_TEACHER — override algorithm.rl_teacher (0/1).
 ###           SWEEP_OPD_LOSS_TYPE — override algorithm.loss_type (e.g., embodied_opd_reinforce).
 ### Eval after each task: passes global_step (= MAX_EPOCH or get_default_global_step), seed,
@@ -205,6 +208,10 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ -n "$CONFIG_TAG" ]; then
         EXPERIMENT_NAME="${EXPERIMENT_NAME}_${CONFIG_TAG}"
     fi
+    if [ -n "${SWEEP_OPD_REWARD_NORMALIZATION:-}" ]; then
+        NORM_TAG="${SWEEP_OPD_REWARD_NORMALIZATION//[^a-zA-Z0-9._-]/_}"
+        EXPERIMENT_NAME="${EXPERIMENT_NAME}_norm_${NORM_TAG}"
+    fi
     if [ -n "${EXPERIMENT_NAME_PREFIX:-}" ]; then
         EXPERIMENT_NAME="${EXPERIMENT_NAME_PREFIX}${EXPERIMENT_NAME}"
     fi
@@ -305,6 +312,15 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     if [ -n "${SWEEP_OPD_NORMALIZE_ADVANTAGES:-}" ]; then
         OVERRIDES="$OVERRIDES algorithm.normalize_advantages=${SWEEP_OPD_NORMALIZE_ADVANTAGES}"
+    fi
+    if [ -n "${SWEEP_OPD_REWARD_NORMALIZATION:-}" ]; then
+        OVERRIDES="$OVERRIDES +algorithm.opd_reward_normalization=${SWEEP_OPD_REWARD_NORMALIZATION}"
+    fi
+    if [ -n "${SWEEP_OPD_REWARD_TANH_TAU:-}" ]; then
+        OVERRIDES="$OVERRIDES +algorithm.opd_reward_tanh_tau=${SWEEP_OPD_REWARD_TANH_TAU}"
+    fi
+    if [ -n "${SWEEP_OPD_REWARD_CLIP_C:-}" ]; then
+        OVERRIDES="$OVERRIDES +algorithm.opd_reward_clip_c=${SWEEP_OPD_REWARD_CLIP_C}"
     fi
     if [ -n "${SWEEP_OPD_RL_TEACHER:-}" ]; then
         OVERRIDES="$OVERRIDES algorithm.rl_teacher=${SWEEP_OPD_RL_TEACHER}"

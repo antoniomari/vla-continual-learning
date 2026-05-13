@@ -193,6 +193,9 @@ def compute_embodied_opd_advantages(
     student_logprobs = kwargs["student_logprobs"]
     loss_mask = kwargs.get("loss_mask", None)
     normalize_advantages = kwargs.get("normalize_advantages", True)
+    norm_mode = kwargs.get("opd_reward_normalization", "group_zscore")
+    tanh_tau = float(kwargs.get("opd_reward_tanh_tau", 5.0))
+    clip_c = float(kwargs.get("opd_reward_clip_c", 1.0))
     group_size = kwargs.get("group_size", 1)
     epsilon = kwargs.get("epsilon", 1e-6)
 
@@ -203,6 +206,72 @@ def compute_embodied_opd_advantages(
 
     if not normalize_advantages:
         return advantages, advantages
+
+    if norm_mode not in (
+        "group_zscore",
+        "mad_abs",
+        "batch_zscore",
+        "tanh_squash",
+        "clip",
+    ):
+        raise ValueError(
+            f"Unsupported OPD reward normalization mode: {norm_mode}. "
+            "Use 'group_zscore', 'mad_abs', 'batch_zscore', 'tanh_squash', or 'clip'."
+        )
+
+    # Sign-preserving global scaling for REINFORCE-like OPD:
+    # R_scaled = R_raw / (mean(|R_raw|) + eps), computed on current device rollout batch.
+    # No mean subtraction, so positive/negative signs are preserved.
+    if norm_mode == "mad_abs":
+        if loss_mask is not None:
+            m = loss_mask.float()
+            denom = m.sum().clamp(min=1.0)
+            scale = (advantages.abs() * m).sum() / denom
+        else:
+            scale = advantages.abs().mean()
+        adv_out = advantages / (scale + epsilon)
+        if loss_mask is not None:
+            adv_out = adv_out * loss_mask
+        return adv_out, adv_out
+
+    # Whole-batch z-score on the local rollout tensor (mask-aware when provided).
+    # This centers rewards and normalizes by std over all valid entries.
+    if norm_mode == "batch_zscore":
+        if loss_mask is not None:
+            m = loss_mask.float()
+            denom = m.sum().clamp(min=1.0)
+            mean = (advantages * m).sum() / denom
+            var = (((advantages - mean) * m) ** 2).sum() / denom
+        else:
+            mean = advantages.mean()
+            var = ((advantages - mean) ** 2).mean()
+        std = torch.sqrt(var + epsilon)
+        adv_out = (advantages - mean) / std
+        if loss_mask is not None:
+            adv_out = adv_out * loss_mask
+        return adv_out, adv_out
+
+    # Sign-preserving squashing to cap outlier rewards in (-1, 1).
+    if norm_mode == "tanh_squash":
+        if tanh_tau <= 0:
+            raise ValueError(
+                f"opd_reward_tanh_tau must be > 0 for tanh_squash, got {tanh_tau}"
+            )
+        adv_out = torch.tanh(advantages / tanh_tau)
+        if loss_mask is not None:
+            adv_out = adv_out * loss_mask
+        return adv_out, adv_out
+
+    # Hard-clip rewards to [-c, c] to bound gradient contributions.
+    if norm_mode == "clip":
+        if clip_c <= 0:
+            raise ValueError(
+                f"opd_reward_clip_c must be > 0 for clip mode, got {clip_c}"
+            )
+        adv_out = torch.clamp(advantages, min=-clip_c, max=clip_c)
+        if loss_mask is not None:
+            adv_out = adv_out * loss_mask
+        return adv_out, adv_out
 
     # Scalar trajectory score = sum of valid token margins per env slot (flatten time×tokens).
     # n_chunk: 512/8 = 64, bsz: (group_size * num_group_envs * rollout_epoch) = 32 in the latest runs,

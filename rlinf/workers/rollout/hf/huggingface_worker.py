@@ -329,6 +329,46 @@ class MultiStepRolloutWorker(Worker):
 
         return chunk_actions, chunk_action_tokens, chunk_logprobs, chunk_values
 
+    def _compute_teacher_logprobs_with_microbatch(
+        self, processed_obs: dict, chunk_action_token: torch.Tensor
+    ) -> torch.Tensor:
+        """Compute OPD teacher logprobs in smaller slices to reduce peak VRAM."""
+        bsz = int(chunk_action_token.shape[0])
+        micro_bsz = int(
+            self.cfg.algorithm.get(
+                "opd_teacher_micro_batch_size", self.cfg.actor.micro_batch_size
+            )
+        )
+        if micro_bsz <= 0:
+            micro_bsz = bsz
+        micro_bsz = min(micro_bsz, bsz)
+
+        if micro_bsz >= bsz:
+            return compute_teacher_logprobs_one_batch(
+                self._opd_teacher_model,
+                self.hf_model,
+                processed_obs["input_ids"],
+                processed_obs["attention_mask"],
+                processed_obs["pixel_values"],
+                chunk_action_token.reshape(chunk_action_token.shape[0], -1),
+                self.cfg,
+            )
+
+        chunks = []
+        for start in range(0, bsz, micro_bsz):
+            end = min(start + micro_bsz, bsz)
+            t_lp = compute_teacher_logprobs_one_batch(
+                self._opd_teacher_model,
+                self.hf_model,
+                processed_obs["input_ids"][start:end],
+                processed_obs["attention_mask"][start:end],
+                processed_obs["pixel_values"][start:end],
+                chunk_action_token[start:end].reshape(end - start, -1),
+                self.cfg,
+            )
+            chunks.append(t_lp)
+        return torch.cat(chunks, dim=0)
+
     def log_actions_and_tokens(
         self, chunk_actions, chunk_action_tokens, step, stage_id, rollout_epoch
     ):
@@ -502,16 +542,8 @@ class MultiStepRolloutWorker(Worker):
                         chunk_logprobs.cpu().contiguous()
                     )
                     if self._should_precompute_teacher_in_rollout():
-                        t_lp = compute_teacher_logprobs_one_batch(
-                            self._opd_teacher_model,
-                            self.hf_model,
-                            processed_obs["input_ids"],
-                            processed_obs["attention_mask"],
-                            processed_obs["pixel_values"],
-                            chunk_action_token.reshape(
-                                chunk_action_token.shape[0], -1
-                            ),
-                            self.cfg,
+                        t_lp = self._compute_teacher_logprobs_with_microbatch(
+                            processed_obs, chunk_action_token
                         )
                         self.buffer_list[i]["teacher_logprobs"].append(
                             t_lp.cpu().contiguous()
