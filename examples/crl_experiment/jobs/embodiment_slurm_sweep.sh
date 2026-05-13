@@ -73,7 +73,7 @@ TRAIN_TASK_INPUTS=("0,1")
 TRAIN_MANUAL_CHECKPOINT=("") # e.g. ("" "/abs/path") — usually ""
 # Passed as MAX_EPOCH to run_embodiment_sequential (sets runner.max_epochs and checkpoint global_step).
 # Empty = training uses yaml max_epochs but inter-task / post-train eval still use get_default_global_step (50 for spatial).
-TRAIN_MAX_EPOCHS=(50)
+TRAIN_MAX_EPOCHS=(60)
 # GRPO: no LiberoSFT replay buffer. For OPD (`libero_spatial_opd_*`) set opd_bc_steps>0 and
 # LIBERO_REPO_PATH + datasets_with_logits/... or use_experience_replay needs the same data.
 TRAIN_CONFIG_NAMES=("crl_experiment/libero_spatial_grpo_openvlaoft_spatial")
@@ -186,7 +186,8 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                     [[ -n "${CKPT}" ]] && ARGS+=("${CKPT}") || ARGS+=("")
                     [[ -n "${MAX_EP}" ]] && ARGS+=("${MAX_EP}") || ARGS+=("")
                     ARGS+=("${CFG}" "${SEED}")
-                    CMD="SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} $(printf '%q ' "${ARGS[@]}")"
+                    SAVE_INTERVAL_OVERRIDE="${SWEEP_SAVE_INTERVAL:-20}"
+                    CMD="SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
                     echo "Submit train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH}"
 
                     submit_job "${JOB_NAME}" "${CMD}"
@@ -208,7 +209,8 @@ if [[ "${RUN_MODE}" == "train" ]]; then
               [[ -n "${MAX_EP}" ]] && ARGS+=("${MAX_EP}") || ARGS+=("")
               ARGS+=("${CFG}" "${SEED}")
 
-              CMD=$(printf '%q ' "${ARGS[@]}")
+              SAVE_INTERVAL_OVERRIDE="${MAX_EP}"
+              CMD="SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
               echo "Submit train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none}"
 
               submit_job "${JOB_NAME}" "${CMD}"

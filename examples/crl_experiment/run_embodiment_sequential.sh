@@ -18,6 +18,7 @@
 ###           run_embodiment_opd_sequential.sh sets this by default.
 ### Optional (Slurm sweep): SWEEP_GROUP_SIZE, SWEEP_NUM_GROUP_ENVS, SWEEP_ROLLOUT_EPOCH,
 ###           SWEEP_GLOBAL_BATCH_SIZE — appended as Hydra overrides for GRPO / actor batch sizing.
+###           SWEEP_SAVE_INTERVAL — optional override for runner.save_interval.
 ### Optional (OPD Slurm sweep): SWEEP_OPD_BC_GLOBAL_BATCH_SIZE, SWEEP_OPD_BC_BATCH_SIZE,
 ###           SWEEP_OPD_BC_STEPS, SWEEP_OPD_TEACHER_LR — BC warmup overrides (see jobs/embodiment_slurm_opd_sweep.sh).
 ###           SWEEP_OPD_NORMALIZE_ADVANTAGES — override algorithm.normalize_advantages.
@@ -270,6 +271,10 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
 
     if [ -n "$MAX_EPOCH" ]; then
         OVERRIDES="$OVERRIDES runner.max_epochs=${MAX_EPOCH}"
+    fi
+
+    if [ -n "${SWEEP_SAVE_INTERVAL:-}" ]; then
+        OVERRIDES="$OVERRIDES runner.save_interval=${SWEEP_SAVE_INTERVAL}"
     fi
 
     # Optional: Slurm sweep (examples/crl_experiment/jobs/embodiment_slurm_sweep.sh) exports these
