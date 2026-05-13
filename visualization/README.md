@@ -18,11 +18,10 @@ Current notebooks are wired to:
 From repository root:
 
 ```bash
+python3 -m venv .venv-viz
+source .venv-viz/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r visualization/requirements.txt
+python -m ipykernel install --user --name vla-viz --display-name "Python (vla-viz)"
 jupyter lab visualization/
-```
-
-If plotting dependencies are missing in your environment:
-
-```bash
-uv pip install matplotlib pandas seaborn jupyter
 ```
