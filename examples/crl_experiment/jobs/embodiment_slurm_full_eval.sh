@@ -8,11 +8,14 @@
 #   examples/crl_experiment/eval_embodiment.sh
 #
 # Usage:
-#   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh [TARGET] [STEP] [CONFIG_NAME]
+#   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh [TARGET] [STEP] [CONFIG_NAME] [SEED]
 #
 # Examples:
 #   # Base model, default config, 320 rollouts/task
 #   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh base 0
+#
+#   # Base model with explicit eval seed
+#   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh base 0 crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial 2
 #
 #   # Specific checkpoint (relative path), global_step_50
 #   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh logs/sequential/task_4_seed184 50
@@ -57,9 +60,14 @@ LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-}"
 TARGET="${1:-${EVAL_TARGET:-base}}"
 STEP="${2:-${EVAL_STEP:-0}}"
 CONFIG_NAME="${3:-${EVAL_CONFIG_NAME:-crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial}}"
+SEED="${4:-${EVAL_SEED:-1234}}"
 
 if ! [[ "${STEP}" =~ ^[0-9]+$ ]]; then
   echo "ERROR: STEP must be a non-negative integer, got: ${STEP}"
+  exit 1
+fi
+if ! [[ "${SEED}" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: SEED must be a non-negative integer, got: ${SEED}"
   exit 1
 fi
 
@@ -133,7 +141,7 @@ submit_job() {
 }
 
 TARGET_STEM="$(basename "${TARGET%/}")"
-W_NAME="eval_full_${TARGET_STEM}_step_${STEP}_rpt_${ACTUAL_ROLLOUTS_PER_TASK}"
+W_NAME="eval_full_${TARGET_STEM}_step_${STEP}_seed_${SEED}_rpt_${ACTUAL_ROLLOUTS_PER_TASK}"
 W_NAME="${W_NAME//[^a-zA-Z0-9._-]/_}"
 JOB_NAME="${W_NAME}"
 if ((${#JOB_NAME} > 40)); then
@@ -141,13 +149,14 @@ if ((${#JOB_NAME} > 40)); then
 fi
 
 # Keep eval env count aligned with OPD sweep/config; only override eval_rollout_epoch.
-EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${W_NAME} algorithm.eval_rollout_epoch=${EVAL_ROLLOUT_EPOCH}"
-CMD=$(printf '%q ' env EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES}" bash examples/crl_experiment/eval_embodiment.sh "${TARGET}" "${STEP}" "${CONFIG_NAME}")
+EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${W_NAME} actor.seed=${SEED} algorithm.eval_rollout_epoch=${EVAL_ROLLOUT_EPOCH}"
+CMD=$(printf '%q ' env EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES}" bash examples/crl_experiment/eval_embodiment.sh "${TARGET}" "${STEP}" "${CONFIG_NAME}" "${SEED}")
 
 echo "Full eval submit helper"
 echo "PROJECT_ROOT=${PROJECT_ROOT}"
 echo "TARGET=${TARGET}"
 echo "STEP=${STEP}"
+echo "SEED=${SEED}"
 echo "CONFIG=${CONFIG_NAME}"
 echo "EVAL_NUM_ENVS_TOTAL(assumed from OPD eval config)=${EVAL_NUM_ENVS_TOTAL}"
 echo "EVAL_TASK_COUNT=${EVAL_TASK_COUNT}"

@@ -3,7 +3,7 @@
 # Direct evaluation script for embodied agent
 # This script can be run directly on the terminal
 #
-# Usage: ./examples/crl_experiment/eval_embodiment.sh CHECKPOINT_LOCATION [STEP_NUMBER] [CONFIG_NAME]
+# Usage: ./examples/crl_experiment/eval_embodiment.sh CHECKPOINT_LOCATION [STEP_NUMBER] [CONFIG_NAME] [SEED]
 # Example (LoRA): ./examples/crl_experiment/eval_embodiment.sh logs/bcrl_logit/0.3/task_0
 # Example (LoRA): ./examples/crl_experiment/eval_embodiment.sh logs/bcrl_logit/0.3/task_0 20
 # Example (simple_cnn): ./examples/crl_experiment/eval_embodiment.sh logs/simple_cnn/task_0_seed1234 10 crl_experiment/libero_spatial_grpo_simple_cnn_eval
@@ -18,6 +18,7 @@
 CHECKPOINT_LOCATION=$1
 STEP_NUMBER=$2
 CONFIG_NAME=$3
+SEED=${4:-1234}
 
 # Default STEP_NUMBER to 10 if not provided
 if [ -z "$STEP_NUMBER" ]; then
@@ -41,6 +42,10 @@ fi
 # Validate STEP_NUMBER
 if ! [[ "$STEP_NUMBER" =~ ^[0-9]+$ ]]; then
     echo "ERROR: STEP_NUMBER must be a positive integer, got: $STEP_NUMBER"
+    exit 1
+fi
+if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: SEED must be a non-negative integer, got: $SEED"
     exit 1
 fi
 
@@ -95,6 +100,7 @@ else
     echo "Full Checkpoint Path: $CHECKPOINT_PATH"
 fi
 echo "Global Step Number: $STEP_NUMBER"
+echo "Seed: $SEED"
 echo "Config Name: $CONFIG_NAME"
 echo "Start Time: $(date)"
 echo ""
@@ -106,15 +112,37 @@ export RLINF_EVAL_CHECKPOINT_REL="${CHECKPOINT_LOCATION}"
 export RLINF_EVAL_CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION}"
 export RLINF_EVAL_CONFIG_NAME="${CONFIG_NAME}"
 
+EVAL_LOC_STEM="$(basename "${CHECKPOINT_LOCATION%/}")"
+if [ -z "${EVAL_LOC_STEM}" ]; then
+    EVAL_LOC_STEM="${CHECKPOINT_LOCATION}"
+fi
+DEFAULT_EVAL_WANDB_NAME="eval_${EVAL_LOC_STEM}_step_${STEP_NUMBER}_seed_${SEED}"
+DEFAULT_EVAL_WANDB_NAME="${DEFAULT_EVAL_WANDB_NAME//[^a-zA-Z0-9._-]/_}"
+
+FINAL_EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES:-}"
+if [[ "${FINAL_EVAL_HYDRA_OVERRIDES}" =~ runner\.logger\.experiment_name=([^[:space:]]+) ]]; then
+    EXISTING_WANDB_NAME="${BASH_REMATCH[1]}"
+    if [[ "${EXISTING_WANDB_NAME}" != *_seed_* ]]; then
+        UPDATED_WANDB_NAME="${EXISTING_WANDB_NAME}_seed_${SEED}"
+        FINAL_EVAL_HYDRA_OVERRIDES="${FINAL_EVAL_HYDRA_OVERRIDES/runner.logger.experiment_name=${EXISTING_WANDB_NAME}/runner.logger.experiment_name=${UPDATED_WANDB_NAME}}"
+    fi
+else
+    FINAL_EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${DEFAULT_EVAL_WANDB_NAME} ${FINAL_EVAL_HYDRA_OVERRIDES}"
+fi
+if [[ "${FINAL_EVAL_HYDRA_OVERRIDES}" != *"actor.seed="* ]]; then
+    FINAL_EVAL_HYDRA_OVERRIDES="actor.seed=${SEED} ${FINAL_EVAL_HYDRA_OVERRIDES}"
+fi
+echo "Eval Hydra overrides: ${FINAL_EVAL_HYDRA_OVERRIDES}"
+
 
 if [ "$IS_BASE_EVAL" = true ]; then
-    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} actor.model.is_lora=False ${EVAL_HYDRA_OVERRIDES:-}
+    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} actor.model.is_lora=False ${FINAL_EVAL_HYDRA_OVERRIDES}
 elif [ "$IS_SIMPLE_CNN" = true ]; then
     # For simple_cnn, use rollout.checkpoint_path (points to model.pt file)
-    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} rollout.checkpoint_path="${CHECKPOINT_PATH}" ${EVAL_HYDRA_OVERRIDES:-}
+    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} rollout.checkpoint_path="${CHECKPOINT_PATH}" ${FINAL_EVAL_HYDRA_OVERRIDES}
 else
     # For LoRA models, use actor.model.lora_path (points to directory)
-    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} +actor.model.lora_path="${CHECKPOINT_PATH}" ${EVAL_HYDRA_OVERRIDES:-}
+    bash examples/embodiment/eval_embodiment.sh ${CONFIG_NAME} +actor.model.lora_path="${CHECKPOINT_PATH}" ${FINAL_EVAL_HYDRA_OVERRIDES}
 fi
 
 EXIT_CODE=$?

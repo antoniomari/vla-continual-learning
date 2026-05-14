@@ -16,6 +16,9 @@
 #
 # Optional:
 #   DRY_RUN=1 bash ... # print jobs without sbatch
+#   BASE_MODEL=1 — force the first train task in each submitted job to start from base SFT
+#       (passes CHECKPOINT_PATH=base to run_embodiment_sequential.sh), even if TASK > first-task-id.
+#   SKIP_POST_TRAIN_EVAL=1 is always set for train jobs from this sweep; run eval separately.
 #   GRPO_HP_FROM_SWEEP=0 — do not override algorithm.group_size / num_group_envs / rollout_epoch /
 #       actor.global_batch_size (yaml only). Default1 uses TRAIN_GROUP_SIZES × TRAIN_NUM_GROUP_ENVS ×
 #       TRAIN_ROLLOUT_EPOCHS × TRAIN_SEEDS with global_batch_size = product of the first three.
@@ -69,7 +72,7 @@ LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-}"
 # ============== TRAIN SWEEP (run_embodiment_sequential.sh) ==============
 # Args to run_embodiment_sequential.sh:
 #   TASK_ID_OR_RANGE [CHECKPOINT_PATH] [MAX_EPOCH] [CONFIG_NAME] [SEED]
-TRAIN_TASK_INPUTS=("0,1")
+TRAIN_TASK_INPUTS=("1" "4")
 TRAIN_MANUAL_CHECKPOINT=("") # e.g. ("" "/abs/path") — usually ""
 # Passed as MAX_EPOCH to run_embodiment_sequential (sets runner.max_epochs and checkpoint global_step).
 # Empty = training uses yaml max_epochs but inter-task / post-train eval still use get_default_global_step (50 for spatial).
@@ -78,6 +81,10 @@ TRAIN_MAX_EPOCHS=(60)
 # LIBERO_REPO_PATH + datasets_with_logits/... or use_experience_replay needs the same data.
 TRAIN_CONFIG_NAMES=("crl_experiment/libero_spatial_grpo_openvlaoft_spatial")
 TRAIN_SEEDS=(4096)
+BASE_MODEL="${BASE_MODEL:-1}"
+if [[ "${BASE_MODEL}" == "1" ]]; then
+  TRAIN_MANUAL_CHECKPOINT=("base")
+fi
 
 # GRPO algorithm / batch overrides (Hydra), passed via env vars read by run_embodiment_sequential.sh.
 # Cartesian product of the three lists × TRAIN_SEEDS. For each combo:
@@ -86,7 +93,8 @@ TRAIN_SEEDS=(4096)
 GRPO_HP_FROM_SWEEP="${GRPO_HP_FROM_SWEEP:-1}"
 TRAIN_GROUP_SIZES=(8)
 TRAIN_NUM_GROUP_ENVS=(4)
-TRAIN_ROLLOUT_EPOCHS=(2)
+TRAIN_ROLLOUT_EPOCHS=(4)
+DEFAULT_ROLLOUTS_PER_STEP=$((TRAIN_GROUP_SIZES[0] * TRAIN_NUM_GROUP_ENVS[0] * TRAIN_ROLLOUT_EPOCHS[0]))
 
 # ============== EVAL SWEEP (eval_embodiment.sh) ==============
 # Usage of eval_embodiment.sh:
@@ -148,6 +156,7 @@ submit_job() {
 
 # ============== MAIN ==============
 echo "Embodied SLURM sweep — RUN_MODE=${RUN_MODE}"
+echo "BASE_MODEL=${BASE_MODEL} (1 = force first task in each job to use base SFT checkpoint)"
 echo "GRPO_HP_FROM_SWEEP=${GRPO_HP_FROM_SWEEP} (1 = override group_size, num_group_envs, rollout_epoch, global_batch_size)"
 echo "PROJECT_ROOT=${PROJECT_ROOT}"
 echo "SLURM_LOG_DIR=${SLURM_LOG_DIR}"
@@ -175,8 +184,9 @@ if [[ "${RUN_MODE}" == "train" ]]; then
               for NGE in "${TRAIN_NUM_GROUP_ENVS[@]}"; do
                 for RE in "${TRAIN_ROLLOUT_EPOCHS[@]}"; do
                   G_BATCH=$((GS * NGE * RE * 64))
+                  ROLLOUTS_PER_STEP=$((G_BATCH / 64))
                   for SEED in "${TRAIN_SEEDS[@]}"; do
-                    JOB_NAME="emb_g${GS}n${NGE}r${RE}s${SEED}"
+                    JOB_NAME="grpo_rps${ROLLOUTS_PER_STEP}_gb${G_BATCH}_gs${GS}_t${TASK}_s${SEED}"
                     JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
                     if ((${#JOB_NAME} > 40)); then
                       JOB_NAME="${JOB_NAME:0:40}"
@@ -187,8 +197,9 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                     [[ -n "${MAX_EP}" ]] && ARGS+=("${MAX_EP}") || ARGS+=("")
                     ARGS+=("${CFG}" "${SEED}")
                     SAVE_INTERVAL_OVERRIDE="${SWEEP_SAVE_INTERVAL:-20}"
-                    CMD="SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
-                    echo "Submit train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH}"
+                    WANDB_PREFIX="grpo_rps${ROLLOUTS_PER_STEP}_gb${G_BATCH}_gs${GS}_"
+                    CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
+                    echo "Submit train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH} rollouts_per_step=${ROLLOUTS_PER_STEP}"
 
                     submit_job "${JOB_NAME}" "${CMD}"
                     job_count=$((job_count + 1))
@@ -198,7 +209,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
             done
           else
             for SEED in "${TRAIN_SEEDS[@]}"; do
-              JOB_NAME="emb_t${TASK}_s${SEED}"
+              JOB_NAME="grpo_t${TASK}_s${SEED}"
               JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
               if ((${#JOB_NAME} > 40)); then
                 JOB_NAME="${JOB_NAME:0:40}"
@@ -210,7 +221,8 @@ if [[ "${RUN_MODE}" == "train" ]]; then
               ARGS+=("${CFG}" "${SEED}")
 
               SAVE_INTERVAL_OVERRIDE="${MAX_EP}"
-              CMD="SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
+              WANDB_PREFIX="grpo_rps${DEFAULT_ROLLOUTS_PER_STEP}_gbna_gsna_"
+              CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
               echo "Submit train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none}"
 
               submit_job "${JOB_NAME}" "${CMD}"

@@ -21,6 +21,7 @@
 #   DRY_RUN=1 bash ... # print jobs without sbatch
 #   BASE_MODEL=1 — force the first train task in each submitted job to start from base SFT
 #       (passes CHECKPOINT_PATH=base to run_embodiment_sequential.sh), even if TASK > first-task-id.
+#   SKIP_POST_TRAIN_EVAL=1 is always set for train jobs from this sweep; run eval separately.
 #   GRPO_HP_FROM_SWEEP=0 — do not override algorithm.group_size / num_group_envs / rollout_epoch /
 #       actor.global_batch_size (yaml only). Default 1 uses TRAIN_GROUP_SIZES × TRAIN_NUM_GROUP_ENVS ×
 #       TRAIN_ROLLOUT_EPOCHS × TRAIN_SEEDS with SWEEP_GLOBAL_BATCH_SIZE = group_size × num_group_envs × rollout_epoch × 64
@@ -138,6 +139,7 @@ GRPO_HP_FROM_SWEEP="${GRPO_HP_FROM_SWEEP:-1}"
 TRAIN_GROUP_SIZES=(8)
 TRAIN_NUM_GROUP_ENVS=(4)
 TRAIN_ROLLOUT_EPOCHS=(4)
+DEFAULT_ROLLOUTS_PER_STEP=$((TRAIN_GROUP_SIZES[0] * TRAIN_NUM_GROUP_ENVS[0] * TRAIN_ROLLOUT_EPOCHS[0]))
 
 # OPD teacher BC warmup (libero_spatial_opd_openvlaoft_spatial.yaml defaults). Expand any list to sweep.
 TRAIN_OPD_BC_GLOBAL_BATCH_SIZES=(32)
@@ -257,6 +259,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
               for NGE in "${TRAIN_NUM_GROUP_ENVS[@]}"; do
                 for RE in "${TRAIN_ROLLOUT_EPOCHS[@]}"; do
                   G_BATCH=$((GS * NGE * RE * 64))
+                  ROLLOUTS_PER_STEP=$((G_BATCH / 64))
                   for OPD_GBS in "${TRAIN_OPD_BC_GLOBAL_BATCH_SIZES[@]}"; do
                     for OPD_MBS in "${TRAIN_OPD_BC_BATCH_SIZES[@]}"; do
                       for OPD_STEPS in "${TRAIN_OPD_BC_STEPS[@]}"; do
@@ -268,7 +271,12 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                                   for OPD_REWARD_NORM in "${TRAIN_OPD_REWARD_NORMALIZATIONS[@]}"; do
                                     for OPD_LOSS in "${TRAIN_OPD_LOSS_TYPES[@]}"; do
                                       for SEED in "${TRAIN_SEEDS[@]}"; do
-                            JOB_NAME="opd_g${GS}n${NGE}r${RE}bc${OPD_STEPS}s${SEED}"
+                            if [[ "${TRAIN_OPD_RL_TEACHER}" == "1" ]]; then
+                              TEACHER_TAG="rlteacher"
+                            else
+                              TEACHER_TAG="sftteacher"
+                            fi
+                            JOB_NAME="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}_rps${ROLLOUTS_PER_STEP}_t${TASK}_s${SEED}"
                             JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
                             if ((${#JOB_NAME} > 40)); then
                               JOB_NAME="${JOB_NAME:0:40}"
@@ -280,8 +288,9 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                             ARGS+=("${CFG}" "${SEED}")
                             OPD_EX="$(build_opd_sweep_exports "${OPD_GBS}" "${OPD_MBS}" "${OPD_STEPS}" "${OPD_TLR}" "${OPD_SFT_FILTER}" "${OPD_SFT_LANG}" "${OPD_SFT_ALIGN}" "${OPD_NORM_ADV}" "${OPD_REWARD_NORM}" "${TRAIN_OPD_REWARD_TANH_TAU}" "${TRAIN_OPD_REWARD_CLIP_C}" "${TRAIN_OPD_RL_TEACHER}" "${TRAIN_OPD_MODE}" "${TRAIN_OPD_TEACHER_HF_REPO}" "${OPD_LOSS}")"
                             SAVE_INTERVAL_OVERRIDE="${SWEEP_SAVE_INTERVAL:-20}"
-                            CMD="${OPD_EX} SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
-                            echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_align=${OPD_SFT_ALIGN}"
+                            WANDB_PREFIX="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}_rps${ROLLOUTS_PER_STEP}_"
+                            CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 ${OPD_EX} SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
+                            echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH} rollouts_per_step=${ROLLOUTS_PER_STEP} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_align=${OPD_SFT_ALIGN}"
 
                             submit_job "${JOB_NAME}" "${CMD}"
                             job_count=$((job_count + 1))
@@ -311,7 +320,12 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                             for OPD_REWARD_NORM in "${TRAIN_OPD_REWARD_NORMALIZATIONS[@]}"; do
                               for OPD_LOSS in "${TRAIN_OPD_LOSS_TYPES[@]}"; do
                                 for SEED in "${TRAIN_SEEDS[@]}"; do
-                      JOB_NAME="opd_t${TASK}_bc${OPD_STEPS}_s${SEED}"
+                      if [[ "${TRAIN_OPD_RL_TEACHER}" == "1" ]]; then
+                        TEACHER_TAG="rlteacher"
+                      else
+                        TEACHER_TAG="sftteacher"
+                      fi
+                      JOB_NAME="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}_rps${DEFAULT_ROLLOUTS_PER_STEP}_t${TASK}_s${SEED}"
                       JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
                       if ((${#JOB_NAME} > 40)); then
                         JOB_NAME="${JOB_NAME:0:40}"
@@ -324,8 +338,9 @@ if [[ "${RUN_MODE}" == "train" ]]; then
 
                       OPD_EX="$(build_opd_sweep_exports "${OPD_GBS}" "${OPD_MBS}" "${OPD_STEPS}" "${OPD_TLR}" "${OPD_SFT_FILTER}" "${OPD_SFT_LANG}" "${OPD_SFT_ALIGN}" "${OPD_NORM_ADV}" "${OPD_REWARD_NORM}" "${TRAIN_OPD_REWARD_TANH_TAU}" "${TRAIN_OPD_REWARD_CLIP_C}" "${TRAIN_OPD_RL_TEACHER}" "${TRAIN_OPD_MODE}" "${TRAIN_OPD_TEACHER_HF_REPO}" "${OPD_LOSS}")"
                       SAVE_INTERVAL_OVERRIDE="${MAX_EP}"
-                      CMD="${OPD_EX} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
-                      echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_align=${OPD_SFT_ALIGN}"
+                      WANDB_PREFIX="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}_rps${DEFAULT_ROLLOUTS_PER_STEP}_"
+                      CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 ${OPD_EX} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
+                      echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} rollouts_per_step=${DEFAULT_ROLLOUTS_PER_STEP} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_align=${OPD_SFT_ALIGN}"
 
                       submit_job "${JOB_NAME}" "${CMD}"
                       job_count=$((job_count + 1))

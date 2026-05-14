@@ -31,12 +31,14 @@
 ###           env.fixed_task_ids=null (all suite tasks, e.g. 10 for LIBERO spatial), same SWEEP_* as training,
 ###           and runner.logger.experiment_name=eval_<train_name>_step_<N>. Training still uses one task per stage.
 ### Optional: EVAL_HYDRA_OVERRIDES is consumed by eval_embodiment.sh (do not set manually unless extending).
+### Optional: SKIP_POST_TRAIN_EVAL=1 skips automatic eval_embodiment.sh call after each successful task.
 
 TASK_INPUT=${1:-0}
 MANUAL_CHECKPOINT_PATH=$2
 MAX_EPOCH=$3
 CONFIG_NAME=${4:-crl_experiment/libero_spatial_grpo_openvlaoft_spatial}
 SEED=${5:-1234}
+SKIP_POST_TRAIN_EVAL="${SKIP_POST_TRAIN_EVAL:-0}"
 
 # Special token: if CHECKPOINT_PATH is literal "base", force first task to start
 # from base model (no previous-task checkpoint), even when TASK_ID > FIRST_TASK_ID.
@@ -347,29 +349,32 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         echo "Task $TASK_ID completed successfully"
         echo ""
         echo "Checkpoint saved to: ${LOG_DIR}"
-
-        CHECKPOINT_LOCATION=$(echo "$LOG_DIR" | sed 's|^\./||')
-        EVAL_GLOBAL_STEP="${GLOBAL_STEP}"
-        EVAL_EXPERIMENT_NAME="eval_${EXPERIMENT_NAME}_step_${EVAL_GLOBAL_STEP}"
-        EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${EVAL_EXPERIMENT_NAME} actor.seed=${SEED} env.fixed_task_ids=null"
-        if [ -n "${SWEEP_GROUP_SIZE:-}" ]; then
-            EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} algorithm.group_size=${SWEEP_GROUP_SIZE}"
+        if [[ "${SKIP_POST_TRAIN_EVAL}" == "1" ]]; then
+            echo "Skipping post-train evaluation (SKIP_POST_TRAIN_EVAL=1)."
+        else
+            CHECKPOINT_LOCATION=$(echo "$LOG_DIR" | sed 's|^\./||')
+            EVAL_GLOBAL_STEP="${GLOBAL_STEP}"
+            EVAL_EXPERIMENT_NAME="eval_${EXPERIMENT_NAME}_step_${EVAL_GLOBAL_STEP}"
+            EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${EVAL_EXPERIMENT_NAME} actor.seed=${SEED} env.fixed_task_ids=null"
+            if [ -n "${SWEEP_GROUP_SIZE:-}" ]; then
+                EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} algorithm.group_size=${SWEEP_GROUP_SIZE}"
+            fi
+            if [ -n "${SWEEP_NUM_GROUP_ENVS:-}" ]; then
+                EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} algorithm.num_group_envs=${SWEEP_NUM_GROUP_ENVS}"
+            fi
+            if [ -n "${SWEEP_ROLLOUT_EPOCH:-}" ]; then
+                EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} algorithm.rollout_epoch=${SWEEP_ROLLOUT_EPOCH}"
+            fi
+            if [ -n "${SWEEP_GLOBAL_BATCH_SIZE:-}" ]; then
+                EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} actor.global_batch_size=${SWEEP_GLOBAL_BATCH_SIZE}"
+            fi
+            export EVAL_HYDRA_OVERRIDES
+            echo ""
+            echo "Running evaluation (all suite tasks; env.fixed_task_ids=null) for: ${CHECKPOINT_LOCATION} global_step=${EVAL_GLOBAL_STEP}"
+            echo "  W&B eval run name (experiment_name): ${EVAL_EXPERIMENT_NAME}"
+            bash examples/crl_experiment/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "${EVAL_GLOBAL_STEP}" "${EVAL_CONFIG_NAME}"
+            unset EVAL_HYDRA_OVERRIDES
         fi
-        if [ -n "${SWEEP_NUM_GROUP_ENVS:-}" ]; then
-            EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} algorithm.num_group_envs=${SWEEP_NUM_GROUP_ENVS}"
-        fi
-        if [ -n "${SWEEP_ROLLOUT_EPOCH:-}" ]; then
-            EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} algorithm.rollout_epoch=${SWEEP_ROLLOUT_EPOCH}"
-        fi
-        if [ -n "${SWEEP_GLOBAL_BATCH_SIZE:-}" ]; then
-            EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES} actor.global_batch_size=${SWEEP_GLOBAL_BATCH_SIZE}"
-        fi
-        export EVAL_HYDRA_OVERRIDES
-        echo ""
-        echo "Running evaluation (all suite tasks; env.fixed_task_ids=null) for: ${CHECKPOINT_LOCATION} global_step=${EVAL_GLOBAL_STEP}"
-        echo "  W&B eval run name (experiment_name): ${EVAL_EXPERIMENT_NAME}"
-        bash examples/crl_experiment/eval_embodiment.sh "${CHECKPOINT_LOCATION}" "${EVAL_GLOBAL_STEP}" "${EVAL_CONFIG_NAME}"
-        unset EVAL_HYDRA_OVERRIDES
     else
         echo "Task $TASK_ID failed with exit code $EXIT_CODE"
         OVERALL_EXIT_CODE=$EXIT_CODE
