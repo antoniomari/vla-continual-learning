@@ -96,6 +96,34 @@ TRAIN_NUM_GROUP_ENVS=(4)
 TRAIN_ROLLOUT_EPOCHS=(4)
 DEFAULT_ROLLOUTS_PER_STEP=$((TRAIN_GROUP_SIZES[0] * TRAIN_NUM_GROUP_ENVS[0] * TRAIN_ROLLOUT_EPOCHS[0]))
 
+apply_array_override() {
+  local array_name="$1"
+  local env_name="$2"
+  if [[ -z "${!env_name+x}" ]]; then
+    return 0
+  fi
+
+  local raw="${!env_name}"
+  local values=()
+  local assignment
+  read -r -a values <<< "${raw}"
+  assignment="${array_name}=("
+  for value in "${values[@]}"; do
+    assignment+="$(printf '%q' "${value}") "
+  done
+  assignment+=")"
+  eval "${assignment}"
+}
+
+apply_array_override TRAIN_TASK_INPUTS TRAIN_TASK_INPUTS_OVERRIDE
+apply_array_override TRAIN_MANUAL_CHECKPOINT TRAIN_MANUAL_CHECKPOINT_OVERRIDE
+apply_array_override TRAIN_MAX_EPOCHS TRAIN_MAX_EPOCHS_OVERRIDE
+apply_array_override TRAIN_CONFIG_NAMES TRAIN_CONFIG_NAMES_OVERRIDE
+apply_array_override TRAIN_SEEDS TRAIN_SEEDS_OVERRIDE
+apply_array_override TRAIN_GROUP_SIZES TRAIN_GROUP_SIZES_OVERRIDE
+apply_array_override TRAIN_NUM_GROUP_ENVS TRAIN_NUM_GROUP_ENVS_OVERRIDE
+apply_array_override TRAIN_ROLLOUT_EPOCHS TRAIN_ROLLOUT_EPOCHS_OVERRIDE
+
 # ============== EVAL SWEEP (eval_embodiment.sh) ==============
 # Usage of eval_embodiment.sh:
 #   CHECKPOINT_LOCATION [STEP_NUMBER] [CONFIG_NAME]

@@ -203,6 +203,50 @@ TRAIN_OPD_LOSS_TYPES=("embodied_opd_reinforce")
 TRAIN_OPD_MODE="${TRAIN_OPD_MODE:-opd_bc}"
 TRAIN_OPD_TEACHER_HF_REPO="${TRAIN_OPD_TEACHER_HF_REPO:-Haozhan72/Openvla-oft-SFT-libero-spatial-trajall}"
 
+apply_array_override() {
+  local array_name="$1"
+  local env_name="$2"
+  if [[ -z "${!env_name+x}" ]]; then
+    return 0
+  fi
+
+  local raw="${!env_name}"
+  if [[ "${raw}" == "__empty__" ]]; then
+    eval "${array_name}=(\"\")"
+    return 0
+  fi
+
+  local values=()
+  local assignment
+  read -r -a values <<< "${raw}"
+  assignment="${array_name}=("
+  for value in "${values[@]}"; do
+    assignment+="$(printf '%q' "${value}") "
+  done
+  assignment+=")"
+  eval "${assignment}"
+}
+
+apply_array_override TRAIN_TASK_INPUTS TRAIN_TASK_INPUTS_OVERRIDE
+apply_array_override TRAIN_MANUAL_CHECKPOINT TRAIN_MANUAL_CHECKPOINT_OVERRIDE
+apply_array_override TRAIN_MAX_EPOCHS TRAIN_MAX_EPOCHS_OVERRIDE
+apply_array_override TRAIN_CONFIG_NAMES TRAIN_CONFIG_NAMES_OVERRIDE
+apply_array_override TRAIN_SEEDS TRAIN_SEEDS_OVERRIDE
+apply_array_override TRAIN_GROUP_SIZES TRAIN_GROUP_SIZES_OVERRIDE
+apply_array_override TRAIN_NUM_GROUP_ENVS TRAIN_NUM_GROUP_ENVS_OVERRIDE
+apply_array_override TRAIN_ROLLOUT_EPOCHS TRAIN_ROLLOUT_EPOCHS_OVERRIDE
+apply_array_override TRAIN_OPD_BC_GLOBAL_BATCH_SIZES TRAIN_OPD_BC_GLOBAL_BATCH_SIZES_OVERRIDE
+apply_array_override TRAIN_OPD_BC_BATCH_SIZES TRAIN_OPD_BC_BATCH_SIZES_OVERRIDE
+apply_array_override TRAIN_OPD_BC_STEPS TRAIN_OPD_BC_STEPS_OVERRIDE
+apply_array_override TRAIN_OPD_TEACHER_LRS TRAIN_OPD_TEACHER_LRS_OVERRIDE
+apply_array_override TRAIN_OPD_SFT_FILTER_FIXED_TASK_IDS TRAIN_OPD_SFT_FILTER_FIXED_TASK_IDS_OVERRIDE
+apply_array_override TRAIN_OPD_SFT_MATCH_TASK_LANGUAGE TRAIN_OPD_SFT_MATCH_TASK_LANGUAGE_OVERRIDE
+apply_array_override TRAIN_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT TRAIN_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT_OVERRIDE
+apply_array_override TRAIN_OPD_NORMALIZE_ADVANTAGES TRAIN_OPD_NORMALIZE_ADVANTAGES_OVERRIDE
+apply_array_override TRAIN_OPD_REWARD_NORMALIZATIONS TRAIN_OPD_REWARD_NORMALIZATIONS_OVERRIDE
+apply_array_override TRAIN_OPD_TEACHER_MICRO_BATCH_SIZES TRAIN_OPD_TEACHER_MICRO_BATCH_SIZES_OVERRIDE
+apply_array_override TRAIN_OPD_LOSS_TYPES TRAIN_OPD_LOSS_TYPES_OVERRIDE
+
 # ============== EVAL SWEEP ==============
 # Same OpenVLA-OFT Libero spatial eval config as GRPO (student LoRA after OPD).
 # Keep EVAL_* in sync with TRAIN_* above: checkpoint dir is logs/sequential/task_<id>_seed<SEED>/;
@@ -267,6 +311,30 @@ build_opd_sweep_exports() {
     "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" "${11}" "${12}" "${13}" "${14}" "${15}" "${16}" "${17}" "${18}"
 }
 
+opd_variant_tag() {
+  local norm_adv="$1"
+  local loss_type="$2"
+  local tag=""
+
+  if [[ "${norm_adv}" == "0" ]]; then
+    tag="${tag}_nonorm"
+  fi
+
+  case "${loss_type}" in
+    embodied_opd)
+      tag="${tag}_grpo_loss"
+      ;;
+    embodied_opd_reinforce)
+      ;;
+    *)
+      local safe_loss="${loss_type//[^a-zA-Z0-9._-]/_}"
+      tag="${tag}_${safe_loss}"
+      ;;
+  esac
+
+  printf '%s' "${tag}"
+}
+
 echo "OPD embodied SLURM sweep — RUN_MODE=${RUN_MODE}"
 echo "BASE_MODEL=${BASE_MODEL} (1 = force first task in each job to use base SFT checkpoint)"
 echo "GRPO_HP_FROM_SWEEP=${GRPO_HP_FROM_SWEEP} (1 = override group_size, num_group_envs, rollout_epoch, global_batch_size)"
@@ -328,7 +396,8 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                             else
                               TEACHER_TAG="sftteacher"
                             fi
-                            JOB_NAME="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}_rps${ROLLOUTS_PER_STEP}_t${TASK}_s${SEED}"
+                            VARIANT_TAG="$(opd_variant_tag "${OPD_NORM_ADV}" "${OPD_LOSS}")"
+                            JOB_NAME="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}${VARIANT_TAG}_rps${ROLLOUTS_PER_STEP}_t${TASK}_s${SEED}"
                             JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
                             if ((${#JOB_NAME} > 40)); then
                               JOB_NAME="${JOB_NAME:0:40}"
@@ -340,7 +409,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                             ARGS+=("${CFG}" "${SEED}")
                             OPD_EX="$(build_opd_sweep_exports "${OPD_GBS}" "${OPD_MBS}" "${OPD_STEPS}" "${OPD_TLR}" "${OPD_SFT_FILTER}" "${OPD_SFT_LANG}" "${OPD_SFT_ALIGN}" "${OPD_NORM_ADV}" "${OPD_REWARD_NORM}" "${TRAIN_OPD_REWARD_TANH_TAU}" "${TRAIN_OPD_REWARD_CLIP_C}" "${OPD_TMB}" "${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT}" "${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU}" "${TRAIN_OPD_RL_TEACHER}" "${TRAIN_OPD_MODE}" "${TRAIN_OPD_TEACHER_HF_REPO}" "${OPD_LOSS}")"
                             SAVE_INTERVAL_OVERRIDE="${SWEEP_SAVE_INTERVAL:-20}"
-                            WANDB_PREFIX="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}_rps${ROLLOUTS_PER_STEP}_"
+                            WANDB_PREFIX="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}${VARIANT_TAG}_rps${ROLLOUTS_PER_STEP}_"
                             CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 ${TASK_MAPPED_TEACHER_EX} ${OPD_EX} SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
                             echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH} rollouts_per_step=${ROLLOUTS_PER_STEP} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_teacher_model_path=${TASK_MAPPED_TEACHER_PATH:-auto} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_teacher_micro_batch=${OPD_TMB} opd_precompute_teacher_in_rollout=${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT} opd_teacher_stash_logprobs_on_cpu=${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_align=${OPD_SFT_ALIGN}"
 
@@ -379,7 +448,8 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                       else
                         TEACHER_TAG="sftteacher"
                       fi
-                      JOB_NAME="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}_rps${DEFAULT_ROLLOUTS_PER_STEP}_t${TASK}_s${SEED}"
+                      VARIANT_TAG="$(opd_variant_tag "${OPD_NORM_ADV}" "${OPD_LOSS}")"
+                      JOB_NAME="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}${VARIANT_TAG}_rps${DEFAULT_ROLLOUTS_PER_STEP}_t${TASK}_s${SEED}"
                       JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
                       if ((${#JOB_NAME} > 40)); then
                         JOB_NAME="${JOB_NAME:0:40}"
@@ -392,7 +462,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
 
                       OPD_EX="$(build_opd_sweep_exports "${OPD_GBS}" "${OPD_MBS}" "${OPD_STEPS}" "${OPD_TLR}" "${OPD_SFT_FILTER}" "${OPD_SFT_LANG}" "${OPD_SFT_ALIGN}" "${OPD_NORM_ADV}" "${OPD_REWARD_NORM}" "${TRAIN_OPD_REWARD_TANH_TAU}" "${TRAIN_OPD_REWARD_CLIP_C}" "${OPD_TMB}" "${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT}" "${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU}" "${TRAIN_OPD_RL_TEACHER}" "${TRAIN_OPD_MODE}" "${TRAIN_OPD_TEACHER_HF_REPO}" "${OPD_LOSS}")"
                       SAVE_INTERVAL_OVERRIDE="${MAX_EP}"
-                      WANDB_PREFIX="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}_rps${DEFAULT_ROLLOUTS_PER_STEP}_"
+                      WANDB_PREFIX="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}${VARIANT_TAG}_rps${DEFAULT_ROLLOUTS_PER_STEP}_"
                       CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 ${TASK_MAPPED_TEACHER_EX} ${OPD_EX} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
                       echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} rollouts_per_step=${DEFAULT_ROLLOUTS_PER_STEP} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_teacher_model_path=${TASK_MAPPED_TEACHER_PATH:-auto} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_teacher_micro_batch=${OPD_TMB} opd_precompute_teacher_in_rollout=${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT} opd_teacher_stash_logprobs_on_cpu=${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_align=${OPD_SFT_ALIGN}"
 

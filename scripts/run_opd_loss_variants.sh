@@ -1,113 +1,91 @@
 #!/bin/bash
-# Run OPD loss/normalization variants with the current sweep settings.
+# Submit/preview the OPD loss-normalization variants through the canonical SLURM sweep scripts.
 #
-# Defaults mirror examples/crl_experiment/jobs/embodiment_slurm_opd_sweep.sh:
+# This wrapper intentionally calls:
+#   - examples/crl_experiment/jobs/embodiment_slurm_sweep.sh for the GRPO baseline
+#   - examples/crl_experiment/jobs/embodiment_slurm_opd_sweep.sh for OPD variants
+#
+# Defaults mirror the current sweep settings:
 #   - tasks: 1 and 4
-#   - seed: 184
-#   - SFT teacher BC warmup
+#   - OPD seed: 184
+#   - GRPO seed: 4096
 #   - 128 rollouts/step: group_size 8 * num_group_envs 4 * rollout_epoch 4
-#   - embodied_opd_reinforce unless the variant explicitly changes it
 #
-# Override examples:
-#   TASKS="1" bash examples/crl_experiment/jobs/run_opd_loss_variants.sh
-#   SEED=185 MAX_EPOCH=50 bash examples/crl_experiment/jobs/run_opd_loss_variants.sh
+# Useful preview:
+#   DRY_RUN=1 bash scripts/run_opd_loss_variants.sh
+#
+# Useful narrowing:
+#   TASKS="1" DRY_RUN=1 bash scripts/run_opd_loss_variants.sh
 
 set -euo pipefail
 
 TASKS="${TASKS:-1 4}"
-SEED="${SEED:-184}"
+OPD_SEED="${OPD_SEED:-184}"
+GRPO_SEED="${GRPO_SEED:-4096}"
 MAX_EPOCH="${MAX_EPOCH:-60}"
-CONFIG_NAME="${CONFIG_NAME:-crl_experiment/libero_spatial_opd_openvlaoft_spatial}"
-CHECKPOINT="${CHECKPOINT:-base}"
+GROUP_SIZE="${GROUP_SIZE:-8}"
+NUM_GROUP_ENVS="${NUM_GROUP_ENVS:-4}"
+ROLLOUT_EPOCH="${ROLLOUT_EPOCH:-4}"
 
-# Current sweep rollout geometry: 8 * 4 * 4 = 128 rollouts/step.
-SWEEP_GROUP_SIZE="${SWEEP_GROUP_SIZE:-8}"
-SWEEP_NUM_GROUP_ENVS="${SWEEP_NUM_GROUP_ENVS:-4}"
-SWEEP_ROLLOUT_EPOCH="${SWEEP_ROLLOUT_EPOCH:-4}"
-SWEEP_GLOBAL_BATCH_SIZE="${SWEEP_GLOBAL_BATCH_SIZE:-2048}"
-SWEEP_SAVE_INTERVAL="${SWEEP_SAVE_INTERVAL:-20}"
+GRPO_SWEEP="examples/crl_experiment/jobs/embodiment_slurm_sweep.sh"
+OPD_SWEEP="examples/crl_experiment/jobs/embodiment_slurm_opd_sweep.sh"
 
-# Current sweep OPD teacher/SFT settings.
-SWEEP_OPD_BC_GLOBAL_BATCH_SIZE="${SWEEP_OPD_BC_GLOBAL_BATCH_SIZE:-32}"
-SWEEP_OPD_BC_BATCH_SIZE="${SWEEP_OPD_BC_BATCH_SIZE:-8}"
-SWEEP_OPD_BC_STEPS="${SWEEP_OPD_BC_STEPS:-1000}"
-SWEEP_OPD_TEACHER_LR="${SWEEP_OPD_TEACHER_LR:-1e-04}"
-SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS="${SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS:-1}"
-SWEEP_OPD_SFT_MATCH_TASK_LANGUAGE="${SWEEP_OPD_SFT_MATCH_TASK_LANGUAGE:-1}"
-SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT="${SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT:-0}"
-SWEEP_OPD_RL_TEACHER="${SWEEP_OPD_RL_TEACHER:-0}"
+COMMON_ENV=(
+  "RUN_MODE=train"
+  "BASE_MODEL=1"
+  "GRPO_HP_FROM_SWEEP=1"
+  "TRAIN_TASK_INPUTS_OVERRIDE=${TASKS}"
+  "TRAIN_MAX_EPOCHS_OVERRIDE=${MAX_EPOCH}"
+  "TRAIN_GROUP_SIZES_OVERRIDE=${GROUP_SIZE}"
+  "TRAIN_NUM_GROUP_ENVS_OVERRIDE=${NUM_GROUP_ENVS}"
+  "TRAIN_ROLLOUT_EPOCHS_OVERRIDE=${ROLLOUT_EPOCH}"
+)
 
-run_opd_variant() {
-  local task="$1"
-  local name_prefix="$2"
-  local normalize_advantages="$3"
-  local loss_type="$4"
-  local reward_normalization="${5:-}"
-
+run_grpo_baseline() {
   echo "============================================================"
-  echo "Task ${task}: ${name_prefix}"
-  echo "  normalize_advantages=${normalize_advantages}"
-  echo "  loss_type=${loss_type}"
-  echo "  reward_normalization=${reward_normalization:-disabled/not set}"
+  echo "GRPO baseline through ${GRPO_SWEEP}"
+  echo "  loss_type comes from the GRPO config: embodied_grpo"
   echo "============================================================"
 
-  local env_args=(
-    "EXPERIMENT_NAME_PREFIX=${name_prefix}"
-    "SKIP_POST_TRAIN_EVAL=1"
-    "SWEEP_GROUP_SIZE=${SWEEP_GROUP_SIZE}"
-    "SWEEP_NUM_GROUP_ENVS=${SWEEP_NUM_GROUP_ENVS}"
-    "SWEEP_ROLLOUT_EPOCH=${SWEEP_ROLLOUT_EPOCH}"
-    "SWEEP_GLOBAL_BATCH_SIZE=${SWEEP_GLOBAL_BATCH_SIZE}"
-    "SWEEP_SAVE_INTERVAL=${SWEEP_SAVE_INTERVAL}"
-    "SWEEP_OPD_BC_GLOBAL_BATCH_SIZE=${SWEEP_OPD_BC_GLOBAL_BATCH_SIZE}"
-    "SWEEP_OPD_BC_BATCH_SIZE=${SWEEP_OPD_BC_BATCH_SIZE}"
-    "SWEEP_OPD_BC_STEPS=${SWEEP_OPD_BC_STEPS}"
-    "SWEEP_OPD_TEACHER_LR=${SWEEP_OPD_TEACHER_LR}"
-    "SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS=${SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS}"
-    "SWEEP_OPD_SFT_MATCH_TASK_LANGUAGE=${SWEEP_OPD_SFT_MATCH_TASK_LANGUAGE}"
-    "SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT=${SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT}"
-    "SWEEP_OPD_NORMALIZE_ADVANTAGES=${normalize_advantages}"
-    "SWEEP_OPD_RL_TEACHER=${SWEEP_OPD_RL_TEACHER}"
-    "SWEEP_OPD_LOSS_TYPE=${loss_type}"
-  )
-
-  if [[ -n "${reward_normalization}" ]]; then
-    env_args+=("SWEEP_OPD_REWARD_NORMALIZATION=${reward_normalization}")
-  fi
-
-  env "${env_args[@]}" \
-    bash examples/crl_experiment/run_embodiment_opd_sequential.sh \
-      "${task}" \
-      "${CHECKPOINT}" \
-      "${MAX_EPOCH}" \
-      "${CONFIG_NAME}" \
-      "${SEED}"
+  env "${COMMON_ENV[@]}" \
+    "TRAIN_SEEDS_OVERRIDE=${GRPO_SEED}" \
+    "TRAIN_CONFIG_NAMES_OVERRIDE=crl_experiment/libero_spatial_grpo_openvlaoft_spatial" \
+    bash "${GRPO_SWEEP}"
 }
 
-for task in ${TASKS}; do
-  # Current setting: OPD REINFORCE objective with group-zscore-normalized OPD rewards.
-  run_opd_variant \
-    "${task}" \
-    "opd_sftteacher_adv1_rps128_" \
-    "1" \
-    "embodied_opd_reinforce" \
-    "group_zscore"
+run_opd_variant() {
+  local label="$1"
+  local normalize_advantages="$2"
+  local reward_normalizations="$3"
+  local loss_types="$4"
 
-  # Ablation: same OPD REINFORCE objective, but no OPD reward/advantage normalization.
-  # We intentionally do not set SWEEP_OPD_REWARD_NORMALIZATION here, so W&B does not
-  # append a misleading "_norm_group_zscore" suffix.
-  run_opd_variant \
-    "${task}" \
-    "opd_sftteacher_adv0_nonorm_rps128_" \
-    "0" \
-    "embodied_opd_reinforce"
+  echo "============================================================"
+  echo "${label} through ${OPD_SWEEP}"
+  echo "  TRAIN_OPD_NORMALIZE_ADVANTAGES=${normalize_advantages}"
+  echo "  TRAIN_OPD_REWARD_NORMALIZATIONS=${reward_normalizations}"
+  echo "  TRAIN_OPD_LOSS_TYPES=${loss_types}"
+  echo "============================================================"
 
-  # Clipped-loss variant: OPD rewards are still group-zscore-normalized, but the actor
-  # objective is embodied_opd, which delegates to the GRPO-style clipped ratio loss.
-  run_opd_variant \
-    "${task}" \
-    "opd_sftteacher_adv1_grpo_loss_rps128_" \
-    "1" \
-    "embodied_opd" \
-    "group_zscore"
-done
+  env "${COMMON_ENV[@]}" \
+    "TRAIN_SEEDS_OVERRIDE=${OPD_SEED}" \
+    "TRAIN_CONFIG_NAMES_OVERRIDE=crl_experiment/libero_spatial_opd_openvlaoft_spatial" \
+    "TRAIN_OPD_NORMALIZE_ADVANTAGES_OVERRIDE=${normalize_advantages}" \
+    "TRAIN_OPD_REWARD_NORMALIZATIONS_OVERRIDE=${reward_normalizations}" \
+    "TRAIN_OPD_LOSS_TYPES_OVERRIDE=${loss_types}" \
+    bash "${OPD_SWEEP}"
+}
+
+# Reference GRPO run using the existing GRPO SLURM sweep.
+run_grpo_baseline
+
+# Current OPD setting: REINFORCE-style OPD objective with group-zscore-normalized OPD rewards.
+run_opd_variant "Current OPD group-normalized REINFORCE" "1" "group_zscore" "embodied_opd_reinforce"
+
+# OPD ablation: same REINFORCE-style objective, but no reward/advantage normalization.
+# "__empty__" tells the OPD sweep to leave SWEEP_OPD_REWARD_NORMALIZATION empty, so the
+# W&B name does not append a misleading norm suffix; the sweep prefix includes "nonorm".
+run_opd_variant "OPD REINFORCE without normalization" "0" "__empty__" "embodied_opd_reinforce"
+
+# OPD clipped-loss variant: keep group-zscore-normalized OPD rewards, but use embodied_opd,
+# which dispatches to the GRPO-style clipped ratio loss. The sweep prefix includes "grpo_loss".
+run_opd_variant "OPD with GRPO clipping loss" "1" "group_zscore" "embodied_opd"
