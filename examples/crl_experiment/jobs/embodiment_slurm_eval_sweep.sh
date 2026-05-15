@@ -14,6 +14,9 @@
 #
 # Optional:
 #   DRY_RUN=1 bash ... # print batch scripts, no sbatch
+#   EVAL_TARGET=/abs/or/relative/path  # override EVAL_CHECKPOINT_LOCS with one target
+#   EVAL_STEPS="10,20,30"              # override EVAL_STEPS array
+#   EVAL_SEED=1234                     # seed passed to eval_embodiment.sh
 #   PROJECT_ROOT, VENV_PATH, SLURM_LOG_DIR — overrides
 #   SLURM_PARTITION — optional on any cluster
 #   SLURM_ACCOUNT — on other clusters; on $HOME=/users/anmari defaults to a143 (override if needed)
@@ -65,6 +68,37 @@ EVAL_CHECKPOINT_LOCS=(
 EVAL_STEPS=(0)
 # For base-only eval use: EVAL_STEPS=(0) and only "base" in EVAL_CHECKPOINT_LOCS.
 EVAL_CONFIG_NAMES=("crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial")
+EVAL_SEED="${EVAL_SEED:-1234}"
+
+if [[ -n "${EVAL_TARGET:-}" ]]; then
+  EVAL_CHECKPOINT_LOCS=("${EVAL_TARGET}")
+fi
+if [[ -n "${EVAL_STEPS:-}" ]]; then
+  STEP_SET_NORMALIZED="${EVAL_STEPS//,/ }"
+  read -r -a EVAL_STEPS <<< "${STEP_SET_NORMALIZED}"
+fi
+
+normalize_target_for_eval() {
+  local target="$1"
+  target="${target%/}"
+  if [[ "${target}" == "base" ]]; then
+    printf '%s\n' "base"
+    return 0
+  fi
+  if [[ "${target}" = /* ]]; then
+    case "${target}" in
+      "${PROJECT_ROOT}"/*)
+        printf '%s\n' "${target#${PROJECT_ROOT}/}"
+        ;;
+      *)
+        echo "ERROR: Absolute checkpoint location must be under PROJECT_ROOT (${PROJECT_ROOT}), got: ${target}"
+        exit 1
+        ;;
+    esac
+  else
+    printf '%s\n' "${target}"
+  fi
+}
 
 # ============== SUBMIT HELPER ==============
 submit_job() {
@@ -119,6 +153,7 @@ submit_job() {
 echo "Embodied eval SLURM sweep"
 echo "PROJECT_ROOT=${PROJECT_ROOT}"
 echo "SLURM_LOG_DIR=${SLURM_LOG_DIR}"
+echo "EVAL_SEED=${EVAL_SEED}"
 if [[ -n "${LIBERO_REPO_PATH}" ]]; then
   echo "LIBERO_REPO_PATH (in jobs)=${LIBERO_REPO_PATH}"
 else
@@ -133,16 +168,25 @@ echo "=================================="
 
 job_count=0
 for LOC in "${EVAL_CHECKPOINT_LOCS[@]}"; do
+  RESOLVED_LOC="$(normalize_target_for_eval "${LOC}")"
   for STEP in "${EVAL_STEPS[@]}"; do
+    if ! [[ "${STEP}" =~ ^[0-9]+$ ]]; then
+      echo "ERROR: EVAL_STEPS must contain only non-negative integers, got: ${STEP}"
+      exit 1
+    fi
     for ECFG in "${EVAL_CONFIG_NAMES[@]}"; do
-      JOB_NAME="emb_ev_s${STEP}"
+      EVAL_LOC_STEM="$(basename "${RESOLVED_LOC%/}")"
+      EVAL_WANDB_NAME="eval_${EVAL_LOC_STEM}_step_${STEP}_seed_${EVAL_SEED}"
+      EVAL_WANDB_NAME="${EVAL_WANDB_NAME//[^a-zA-Z0-9._-]/_}"
+      JOB_NAME="${EVAL_WANDB_NAME}"
       JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
       if ((${#JOB_NAME} > 40)); then
         JOB_NAME="${JOB_NAME:0:40}"
       fi
 
-      CMD=$(printf '%q ' bash examples/crl_experiment/eval_embodiment.sh "${LOC}" "${STEP}" "${ECFG}")
-      echo "Submit eval: loc=${LOC} step=${STEP} cfg=${ECFG}"
+      EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${EVAL_WANDB_NAME} actor.seed=${EVAL_SEED}"
+      CMD=$(printf '%q ' env EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES}" bash examples/crl_experiment/eval_embodiment.sh "${RESOLVED_LOC}" "${STEP}" "${ECFG}" "${EVAL_SEED}")
+      echo "Submit eval: loc=${LOC} resolved_loc=${RESOLVED_LOC} step=${STEP} seed=${EVAL_SEED} cfg=${ECFG} wandb_name=${EVAL_WANDB_NAME}"
 
       submit_job "${JOB_NAME}" "${CMD}"
       job_count=$((job_count + 1))

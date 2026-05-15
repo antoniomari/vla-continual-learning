@@ -21,10 +21,16 @@
 ###           SWEEP_SAVE_INTERVAL — optional override for runner.save_interval.
 ### Optional (OPD Slurm sweep): SWEEP_OPD_BC_GLOBAL_BATCH_SIZE, SWEEP_OPD_BC_BATCH_SIZE,
 ###           SWEEP_OPD_BC_STEPS, SWEEP_OPD_TEACHER_LR — BC warmup overrides (see jobs/embodiment_slurm_opd_sweep.sh).
+###           SWEEP_OPD_TEACHER_MODEL_PATH — override algorithm.opd_teacher_model_path
+###               (use pre-trained SFT teacher from explicit path; skip BC if runner detects a usable teacher).
 ###           SWEEP_OPD_NORMALIZE_ADVANTAGES — override algorithm.normalize_advantages.
 ###           SWEEP_OPD_REWARD_NORMALIZATION — override algorithm.opd_reward_normalization.
 ###           SWEEP_OPD_REWARD_TANH_TAU — override algorithm.opd_reward_tanh_tau.
 ###           SWEEP_OPD_REWARD_CLIP_C — override algorithm.opd_reward_clip_c.
+###           SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE — override algorithm.opd_teacher_micro_batch_size
+###               (rollout-side OPD teacher logprob microbatch; reduce this first on OOM).
+###           SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT — override algorithm.opd_precompute_teacher_in_rollout (0/1).
+###           SWEEP_OPD_TEACHER_STASH_LOGPROBS_ON_CPU — override algorithm.opd_teacher_stash_logprobs_on_cpu (0/1, slower).
 ###           SWEEP_OPD_RL_TEACHER — override algorithm.rl_teacher (0/1).
 ###           SWEEP_OPD_LOSS_TYPE — override algorithm.loss_type (e.g., embodied_opd_reinforce).
 ### Eval after each task: passes global_step (= MAX_EPOCH or get_default_global_step), seed,
@@ -305,6 +311,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ -n "${SWEEP_OPD_TEACHER_LR:-}" ]; then
         OVERRIDES="$OVERRIDES actor.optim.opd_teacher_lr=${SWEEP_OPD_TEACHER_LR}"
     fi
+    if [ -n "${SWEEP_OPD_TEACHER_MODEL_PATH:-}" ]; then
+        OVERRIDES="$OVERRIDES +algorithm.opd_teacher_model_path=${SWEEP_OPD_TEACHER_MODEL_PATH}"
+    fi
     if [ -n "${SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS:-}" ]; then
         OVERRIDES="$OVERRIDES +algorithm.sft_filter_fixed_task_ids_for_opd=${SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS}"
     fi
@@ -328,6 +337,15 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     if [ -n "${SWEEP_OPD_REWARD_CLIP_C:-}" ]; then
         OVERRIDES="$OVERRIDES +algorithm.opd_reward_clip_c=${SWEEP_OPD_REWARD_CLIP_C}"
+    fi
+    if [ -n "${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.opd_teacher_micro_batch_size=${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE}"
+    fi
+    if [ -n "${SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.opd_precompute_teacher_in_rollout=${SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT}"
+    fi
+    if [ -n "${SWEEP_OPD_TEACHER_STASH_LOGPROBS_ON_CPU:-}" ]; then
+        OVERRIDES="$OVERRIDES algorithm.opd_teacher_stash_logprobs_on_cpu=${SWEEP_OPD_TEACHER_STASH_LOGPROBS_ON_CPU}"
     fi
     if [ -n "${SWEEP_OPD_RL_TEACHER:-}" ]; then
         OVERRIDES="$OVERRIDES algorithm.rl_teacher=${SWEEP_OPD_RL_TEACHER}"

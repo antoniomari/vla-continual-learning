@@ -8,7 +8,7 @@
 #   examples/crl_experiment/eval_embodiment.sh
 #
 # Usage:
-#   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh [TARGET] [STEP] [CONFIG_NAME] [SEED]
+#   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh [TARGET] [STEP_OR_STEP_SET] [CONFIG_NAME] [SEED] [SFT_MODEL_EVAL_TASK]
 #
 # Examples:
 #   # Base model, default config, 320 rollouts/task
@@ -20,6 +20,12 @@
 #   # Specific checkpoint (relative path), global_step_50
 #   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh logs/sequential/task_4_seed184 50
 #
+#   # Specific checkpoint (absolute path under PROJECT_ROOT), multiple steps
+#   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh /users/anmari/vla-continual-learning/logs_spatial/sequential/task_1_seed184 10,20,30
+#
+#   # Evaluate mapped SFT teacher for task 1 (uses JSON map path directly)
+#   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh base 0 crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial 184 1
+#
 # Optional env:
 #   DRY_RUN=1                -> print batch script, do not submit
 #   PROJECT_ROOT, VENV_PATH, SLURM_LOG_DIR
@@ -29,6 +35,9 @@
 #   EVAL_NUM_ENVS_TOTAL      -> total eval envs across tasks used by OPD sweep/config (default: 80)
 #   EVAL_TASK_COUNT          -> number of tasks in suite (default: 10)
 #   EVAL_ROLLOUTS_PER_TASK   -> desired rollouts per task (default: 320)
+#   EVAL_STEPS               -> optional step set, e.g. "10,20,30" (same as STEP_OR_STEP_SET arg)
+#   OPD_TEACHER_MAPPING_JSON -> task->teacher adapter map JSON (default: jobs/opd_teacher_mapping.json)
+#   SFT_MODEL_EVAL_TASK      -> task id to evaluate mapped SFT teacher adapter (same as positional arg 5)
 #
 set -euo pipefail
 
@@ -57,19 +66,96 @@ fi
 LIBERO_REPO_PATH="${LIBERO_REPO_PATH:-}"
 LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-}"
 
-TARGET="${1:-${EVAL_TARGET:-base}}"
-STEP="${2:-${EVAL_STEP:-0}}"
+TARGET_INPUT="${1:-${EVAL_TARGET:-base}}"
+STEP_SET_RAW="${2:-${EVAL_STEPS:-${EVAL_STEP:-0}}}"
 CONFIG_NAME="${3:-${EVAL_CONFIG_NAME:-crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial}}"
 SEED="${4:-${EVAL_SEED:-1234}}"
+SFT_MODEL_EVAL_TASK="${5:-${SFT_MODEL_EVAL_TASK:-}}"
+OPD_TEACHER_MAPPING_JSON="${OPD_TEACHER_MAPPING_JSON:-${SCRIPT_DIR}/opd_teacher_mapping.json}"
 
-if ! [[ "${STEP}" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: STEP must be a non-negative integer, got: ${STEP}"
-  exit 1
-fi
 if ! [[ "${SEED}" =~ ^[0-9]+$ ]]; then
   echo "ERROR: SEED must be a non-negative integer, got: ${SEED}"
   exit 1
 fi
+
+normalize_target_for_eval() {
+  local target="$1"
+  target="${target%/}"
+  if [[ "${target}" == "base" ]]; then
+    printf '%s\n' "base"
+    return 0
+  fi
+  if [[ "${target}" = /* ]]; then
+    case "${target}" in
+      "${PROJECT_ROOT}"/*)
+        printf '%s\n' "${target#${PROJECT_ROOT}/}"
+        ;;
+      *)
+        echo "ERROR: Absolute TARGET must be under PROJECT_ROOT (${PROJECT_ROOT}), got: ${target}"
+        exit 1
+        ;;
+    esac
+  else
+    printf '%s\n' "${target}"
+  fi
+}
+
+TARGET="$(normalize_target_for_eval "${TARGET_INPUT}")"
+
+lookup_mapped_teacher_path() {
+  local task_id="$1"
+  if [[ ! -f "${OPD_TEACHER_MAPPING_JSON}" ]]; then
+    echo "ERROR: OPD_TEACHER_MAPPING_JSON not found: ${OPD_TEACHER_MAPPING_JSON}"
+    exit 1
+  fi
+  python3 - "${OPD_TEACHER_MAPPING_JSON}" "${task_id}" <<'PY'
+import json
+import sys
+
+mapping_path = sys.argv[1]
+task_id = str(sys.argv[2])
+with open(mapping_path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+path = (
+    data.get("teacher_sft_by_task", {}).get(task_id)
+    or data.get(task_id)
+    or ""
+)
+print(path)
+PY
+}
+
+SFT_TEACHER_MODE=0
+SFT_TEACHER_PATH=""
+if [[ -n "${SFT_MODEL_EVAL_TASK}" ]]; then
+  if ! [[ "${SFT_MODEL_EVAL_TASK}" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: SFT_MODEL_EVAL_TASK must be a non-negative integer, got: ${SFT_MODEL_EVAL_TASK}"
+    exit 1
+  fi
+  SFT_TEACHER_PATH="$(lookup_mapped_teacher_path "${SFT_MODEL_EVAL_TASK}")"
+  if [[ -z "${SFT_TEACHER_PATH}" ]]; then
+    echo "ERROR: No teacher mapping found for task ${SFT_MODEL_EVAL_TASK} in ${OPD_TEACHER_MAPPING_JSON}"
+    exit 1
+  fi
+  if [[ ! -d "${SFT_TEACHER_PATH}" ]]; then
+    echo "ERROR: Mapped SFT teacher path does not exist: ${SFT_TEACHER_PATH}"
+    exit 1
+  fi
+  SFT_TEACHER_MODE=1
+fi
+
+STEP_SET_NORMALIZED="${STEP_SET_RAW//,/ }"
+read -r -a STEP_LIST <<< "${STEP_SET_NORMALIZED}"
+if ((${#STEP_LIST[@]} == 0)); then
+  echo "ERROR: STEP_OR_STEP_SET is empty. Provide e.g. 50 or 10,20,30"
+  exit 1
+fi
+for STEP in "${STEP_LIST[@]}"; do
+  if ! [[ "${STEP}" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: STEP values must be non-negative integers, got: ${STEP}"
+    exit 1
+  fi
+done
 
 EVAL_NUM_ENVS_TOTAL="${EVAL_NUM_ENVS_TOTAL:-80}"
 EVAL_TASK_COUNT="${EVAL_TASK_COUNT:-10}"
@@ -140,34 +226,52 @@ submit_job() {
   rm -f "${batch}"
 }
 
-TARGET_STEM="$(basename "${TARGET%/}")"
-W_NAME="eval_full_${TARGET_STEM}_step_${STEP}_seed_${SEED}_rpt_${ACTUAL_ROLLOUTS_PER_TASK}"
-W_NAME="${W_NAME//[^a-zA-Z0-9._-]/_}"
-JOB_NAME="${W_NAME}"
-if ((${#JOB_NAME} > 40)); then
-  JOB_NAME="${JOB_NAME:0:40}"
-fi
-
-# Keep eval env count aligned with OPD sweep/config; only override eval_rollout_epoch.
-EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${W_NAME} actor.seed=${SEED} algorithm.eval_rollout_epoch=${EVAL_ROLLOUT_EPOCH}"
-CMD=$(printf '%q ' env EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES}" bash examples/crl_experiment/eval_embodiment.sh "${TARGET}" "${STEP}" "${CONFIG_NAME}" "${SEED}")
-
 echo "Full eval submit helper"
 echo "PROJECT_ROOT=${PROJECT_ROOT}"
-echo "TARGET=${TARGET}"
-echo "STEP=${STEP}"
+echo "TARGET(input)=${TARGET_INPUT}"
+echo "TARGET(resolved_for_eval)=${TARGET}"
+echo "STEPS=${STEP_SET_RAW}"
 echo "SEED=${SEED}"
 echo "CONFIG=${CONFIG_NAME}"
+echo "OPD_TEACHER_MAPPING_JSON=${OPD_TEACHER_MAPPING_JSON}"
+if [[ "${SFT_TEACHER_MODE}" == "1" ]]; then
+  echo "SFT teacher eval mode: task=${SFT_MODEL_EVAL_TASK}"
+  echo "SFT teacher path=${SFT_TEACHER_PATH}"
+fi
 echo "EVAL_NUM_ENVS_TOTAL(assumed from OPD eval config)=${EVAL_NUM_ENVS_TOTAL}"
 echo "EVAL_TASK_COUNT=${EVAL_TASK_COUNT}"
 echo "EVAL_ROLLOUTS_PER_TASK(requested)=${EVAL_ROLLOUTS_PER_TASK}"
 echo "PER_EPOCH_PER_TASK=${PER_EPOCH_PER_TASK}"
 echo "algorithm.eval_rollout_epoch(derived)=${EVAL_ROLLOUT_EPOCH}"
 echo "ACTUAL_ROLLOUTS_PER_TASK=${ACTUAL_ROLLOUTS_PER_TASK}"
-echo "wandb_name=${W_NAME}"
-echo "Submitting job: ${JOB_NAME}"
+echo "=================================="
 
-submit_job "${JOB_NAME}" "${CMD}"
+job_count=0
+for STEP in "${STEP_LIST[@]}"; do
+  if [[ "${SFT_TEACHER_MODE}" == "1" ]]; then
+    TARGET_STEM="sft_teacher_task_${SFT_MODEL_EVAL_TASK}"
+  else
+    TARGET_STEM="$(basename "${TARGET%/}")"
+  fi
+  W_NAME="eval_full_${TARGET_STEM}_step_${STEP}_seed_${SEED}_rpt_${ACTUAL_ROLLOUTS_PER_TASK}"
+  W_NAME="${W_NAME//[^a-zA-Z0-9._-]/_}"
+  JOB_NAME="${W_NAME}"
+  if ((${#JOB_NAME} > 40)); then
+    JOB_NAME="${JOB_NAME:0:40}"
+  fi
 
-echo "Submitted 1 job. Logs: ${SLURM_LOG_DIR}/eval_*.out"
+  # Keep eval env count aligned with OPD sweep/config; only override eval_rollout_epoch.
+  if [[ "${SFT_TEACHER_MODE}" == "1" ]]; then
+    CMD=$(printf '%q ' bash examples/embodiment/eval_embodiment.sh "${CONFIG_NAME}" "runner.logger.experiment_name=${W_NAME}" "actor.seed=${SEED}" "algorithm.eval_rollout_epoch=${EVAL_ROLLOUT_EPOCH}" "+actor.model.lora_path=${SFT_TEACHER_PATH}")
+  else
+    EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${W_NAME} actor.seed=${SEED} algorithm.eval_rollout_epoch=${EVAL_ROLLOUT_EPOCH}"
+    CMD=$(printf '%q ' env EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES}" bash examples/crl_experiment/eval_embodiment.sh "${TARGET}" "${STEP}" "${CONFIG_NAME}" "${SEED}")
+  fi
+
+  echo "Submitting job: ${JOB_NAME} (step=${STEP}, wandb_name=${W_NAME})"
+  submit_job "${JOB_NAME}" "${CMD}"
+  job_count=$((job_count + 1))
+done
+
+echo "Submitted ${job_count} job(s). Logs: ${SLURM_LOG_DIR}/eval_*.out"
 echo "Check: squeue -u \$USER"
