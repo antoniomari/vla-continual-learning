@@ -49,6 +49,7 @@
 #       TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT -> algorithm.opd_precompute_teacher_in_rollout (0/1)
 #       TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU -> algorithm.opd_teacher_stash_logprobs_on_cpu (0/1; slower)
 #   OPD teacher warmup mode toggle: TRAIN_OPD_RL_TEACHER (0/1), wired to algorithm.rl_teacher.
+#   SWEEP_WANDB_EXTRA_TAG — optional sanitized token appended to the generated W&B prefix.
 #   PROJECT_ROOT, VENV_PATH, SLURM_LOG_DIR — overrides (default logs: logs/slurm_embodiment_opd)
 #   SLURM_PARTITION, SLURM_ACCOUNT, SBATCH_EXTRA
 #   PYTORCH_CUDA_ALLOC_CONF — CUDA allocator tuning (default: expandable_segments:True)
@@ -247,6 +248,16 @@ apply_array_override TRAIN_OPD_REWARD_NORMALIZATIONS TRAIN_OPD_REWARD_NORMALIZAT
 apply_array_override TRAIN_OPD_TEACHER_MICRO_BATCH_SIZES TRAIN_OPD_TEACHER_MICRO_BATCH_SIZES_OVERRIDE
 apply_array_override TRAIN_OPD_LOSS_TYPES TRAIN_OPD_LOSS_TYPES_OVERRIDE
 
+append_wandb_extra_tag() {
+  local prefix="$1"
+  local extra="${SWEEP_WANDB_EXTRA_TAG:-}"
+  if [[ -n "${extra}" ]]; then
+    extra="${extra//[^a-zA-Z0-9._-]/_}"
+    prefix="${prefix}${extra}_"
+  fi
+  echo "${prefix}"
+}
+
 # ============== EVAL SWEEP ==============
 # Same OpenVLA-OFT Libero spatial eval config as GRPO (student LoRA after OPD).
 # Keep EVAL_* in sync with TRAIN_* above: checkpoint dir is logs/sequential/task_<id>_seed<SEED>/;
@@ -410,6 +421,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                             OPD_EX="$(build_opd_sweep_exports "${OPD_GBS}" "${OPD_MBS}" "${OPD_STEPS}" "${OPD_TLR}" "${OPD_SFT_FILTER}" "${OPD_SFT_LANG}" "${OPD_SFT_ALIGN}" "${OPD_NORM_ADV}" "${OPD_REWARD_NORM}" "${TRAIN_OPD_REWARD_TANH_TAU}" "${TRAIN_OPD_REWARD_CLIP_C}" "${OPD_TMB}" "${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT}" "${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU}" "${TRAIN_OPD_RL_TEACHER}" "${TRAIN_OPD_MODE}" "${TRAIN_OPD_TEACHER_HF_REPO}" "${OPD_LOSS}")"
                             SAVE_INTERVAL_OVERRIDE="${SWEEP_SAVE_INTERVAL:-20}"
                             WANDB_PREFIX="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}${VARIANT_TAG}_rps${ROLLOUTS_PER_STEP}_"
+                            WANDB_PREFIX="$(append_wandb_extra_tag "${WANDB_PREFIX}")"
                             CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 ${TASK_MAPPED_TEACHER_EX} ${OPD_EX} SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
                             echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH} rollouts_per_step=${ROLLOUTS_PER_STEP} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_teacher_model_path=${TASK_MAPPED_TEACHER_PATH:-auto} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_teacher_micro_batch=${OPD_TMB} opd_precompute_teacher_in_rollout=${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT} opd_teacher_stash_logprobs_on_cpu=${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_align=${OPD_SFT_ALIGN}"
 
@@ -463,6 +475,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                       OPD_EX="$(build_opd_sweep_exports "${OPD_GBS}" "${OPD_MBS}" "${OPD_STEPS}" "${OPD_TLR}" "${OPD_SFT_FILTER}" "${OPD_SFT_LANG}" "${OPD_SFT_ALIGN}" "${OPD_NORM_ADV}" "${OPD_REWARD_NORM}" "${TRAIN_OPD_REWARD_TANH_TAU}" "${TRAIN_OPD_REWARD_CLIP_C}" "${OPD_TMB}" "${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT}" "${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU}" "${TRAIN_OPD_RL_TEACHER}" "${TRAIN_OPD_MODE}" "${TRAIN_OPD_TEACHER_HF_REPO}" "${OPD_LOSS}")"
                       SAVE_INTERVAL_OVERRIDE="${MAX_EP}"
                       WANDB_PREFIX="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}${VARIANT_TAG}_rps${DEFAULT_ROLLOUTS_PER_STEP}_"
+                      WANDB_PREFIX="$(append_wandb_extra_tag "${WANDB_PREFIX}")"
                       CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 ${TASK_MAPPED_TEACHER_EX} ${OPD_EX} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
                       echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} rollouts_per_step=${DEFAULT_ROLLOUTS_PER_STEP} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_teacher_model_path=${TASK_MAPPED_TEACHER_PATH:-auto} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_teacher_micro_batch=${OPD_TMB} opd_precompute_teacher_in_rollout=${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT} opd_teacher_stash_logprobs_on_cpu=${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_align=${OPD_SFT_ALIGN}"
 
