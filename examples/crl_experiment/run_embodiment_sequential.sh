@@ -339,13 +339,13 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         OVERRIDES="$OVERRIDES +algorithm.opd_reward_clip_c=${SWEEP_OPD_REWARD_CLIP_C}"
     fi
     if [ -n "${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE:-}" ]; then
-        OVERRIDES="$OVERRIDES algorithm.opd_teacher_micro_batch_size=${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE}"
+        OVERRIDES="$OVERRIDES ++algorithm.opd_teacher_micro_batch_size=${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE}"
     fi
     if [ -n "${SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT:-}" ]; then
-        OVERRIDES="$OVERRIDES algorithm.opd_precompute_teacher_in_rollout=${SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT}"
+        OVERRIDES="$OVERRIDES ++algorithm.opd_precompute_teacher_in_rollout=${SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT}"
     fi
     if [ -n "${SWEEP_OPD_TEACHER_STASH_LOGPROBS_ON_CPU:-}" ]; then
-        OVERRIDES="$OVERRIDES algorithm.opd_teacher_stash_logprobs_on_cpu=${SWEEP_OPD_TEACHER_STASH_LOGPROBS_ON_CPU}"
+        OVERRIDES="$OVERRIDES ++algorithm.opd_teacher_stash_logprobs_on_cpu=${SWEEP_OPD_TEACHER_STASH_LOGPROBS_ON_CPU}"
     fi
     if [ -n "${SWEEP_OPD_RL_TEACHER:-}" ]; then
         OVERRIDES="$OVERRIDES algorithm.rl_teacher=${SWEEP_OPD_RL_TEACHER}"

@@ -26,6 +26,12 @@ MAX_EPOCH="${MAX_EPOCH:-60}"
 GROUP_SIZE="${GROUP_SIZE:-8}"
 NUM_GROUP_ENVS="${NUM_GROUP_ENVS:-4}"
 ROLLOUT_EPOCH="${ROLLOUT_EPOCH:-4}"
+# OPD OOM-safety knobs (override per run if needed).
+OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT="${OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT:-1}"
+OPD_TEACHER_STASH_LOGPROBS_ON_CPU="${OPD_TEACHER_STASH_LOGPROBS_ON_CPU:-1}"
+OPD_TEACHER_MICRO_BATCH="${OPD_TEACHER_MICRO_BATCH:-8}"
+# Helps reduce fragmentation-related OOMs.
+PYTORCH_CUDA_ALLOC_CONF_VALUE="${PYTORCH_CUDA_ALLOC_CONF_VALUE:-expandable_segments:True}"
 
 GRPO_SWEEP="examples/crl_experiment/jobs/embodiment_slurm_sweep.sh"
 OPD_SWEEP="examples/crl_experiment/jobs/embodiment_slurm_opd_sweep.sh"
@@ -67,16 +73,20 @@ run_opd_variant() {
   echo "============================================================"
 
   env "${COMMON_ENV[@]}" \
+    "PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF_VALUE}" \
     "TRAIN_SEEDS_OVERRIDE=${OPD_SEED}" \
     "TRAIN_CONFIG_NAMES_OVERRIDE=crl_experiment/libero_spatial_opd_openvlaoft_spatial" \
     "TRAIN_OPD_NORMALIZE_ADVANTAGES_OVERRIDE=${normalize_advantages}" \
     "TRAIN_OPD_REWARD_NORMALIZATIONS_OVERRIDE=${reward_normalizations}" \
     "TRAIN_OPD_LOSS_TYPES_OVERRIDE=${loss_types}" \
+    "TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT=${OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT}" \
+    "TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU=${OPD_TEACHER_STASH_LOGPROBS_ON_CPU}" \
+    "TRAIN_OPD_TEACHER_MICRO_BATCH_SIZES_OVERRIDE=${OPD_TEACHER_MICRO_BATCH}" \
     bash "${OPD_SWEEP}"
 }
 
 # Reference GRPO run using the existing GRPO SLURM sweep.
-run_grpo_baseline
+# run_grpo_baseline
 
 # Current OPD setting: REINFORCE-style OPD objective with group-zscore-normalized OPD rewards.
 run_opd_variant "Current OPD group-normalized REINFORCE" "1" "group_zscore" "embodied_opd_reinforce"

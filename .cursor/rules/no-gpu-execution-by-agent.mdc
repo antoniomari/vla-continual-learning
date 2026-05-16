@@ -1,0 +1,11 @@
+---
+description: Do not run GPU-dependent scripts from the agent
+alwaysApply: true
+---
+
+# No GPU Execution by Agent
+
+- Do not execute training/evaluation scripts that require GPUs.
+- Do not launch long GPU jobs directly from the agent.
+- Prefer preparing commands, editing configs/scripts, and using `DRY_RUN=1` when available.
+- If runtime verification is needed, ask the user to run the command on a GPU-capable node.
