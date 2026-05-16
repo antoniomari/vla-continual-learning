@@ -14,8 +14,8 @@
 ###       If CHECKPOINT_PATH is provided for a range, it will only be used for the first task
 ###       MAX_EPOCH is optional and can always be specified to override the default max_epochs
 ###       SEED is optional and defaults to 1234 if not provided
-### Optional: EXPERIMENT_NAME_PREFIX=opd_ prepended to runner.logger.experiment_name (WandB run name);
-###           run_embodiment_opd_sequential.sh sets this by default.
+### Optional: EXPERIMENT_NAME_PREFIX=opd_ prepended to runner.logger.experiment_name (WandB run name)
+###           and mirrored in the log/checkpoint directory basename; run_embodiment_opd_sequential.sh sets this by default.
 ### Optional (Slurm sweep): SWEEP_GROUP_SIZE, SWEEP_NUM_GROUP_ENVS, SWEEP_ROLLOUT_EPOCH,
 ###           SWEEP_GLOBAL_BATCH_SIZE — appended as Hydra overrides for GRPO / actor batch sizing.
 ###           SWEEP_SAVE_INTERVAL — optional override for runner.save_interval.
@@ -111,6 +111,40 @@ source "examples/crl_experiment/common_functions.sh"
 # Extract config tag and derive eval config name
 CONFIG_TAG=$(extract_config_tag "$CONFIG_NAME")
 EVAL_CONFIG_NAME=$(derive_eval_config_name "$CONFIG_NAME")
+
+build_log_parent() {
+    local parent="./logs/${EXPERIMENT_TYPE}"
+    if [ -n "$CONFIG_TAG" ]; then
+        parent=$(inject_config_tag_into_log_path "$parent" "$CONFIG_TAG")
+    fi
+    echo "$parent"
+}
+
+build_experiment_name() {
+    local base_name="$1"
+    local experiment_name="$base_name"
+    if [ -n "$CONFIG_TAG" ]; then
+        experiment_name="${experiment_name}_${CONFIG_TAG}"
+    fi
+    if [ -n "${SWEEP_OPD_REWARD_NORMALIZATION:-}" ]; then
+        local norm_tag="${SWEEP_OPD_REWARD_NORMALIZATION//[^a-zA-Z0-9._-]/_}"
+        experiment_name="${experiment_name}_norm_${norm_tag}"
+    fi
+    if [ -n "${EXPERIMENT_NAME_PREFIX:-}" ]; then
+        experiment_name="${EXPERIMENT_NAME_PREFIX}${experiment_name}"
+    fi
+    echo "$experiment_name"
+}
+
+build_log_dir() {
+    local base_name="$1"
+    local parent
+    local experiment_name
+    parent=$(build_log_parent)
+    experiment_name=$(build_experiment_name "$base_name")
+    echo "${parent}/${experiment_name}"
+}
+
 # Final checkpoint folder is global_step_<N> with N == max_epochs for embodied training.
 if [ -n "$MAX_EPOCH" ]; then
     GLOBAL_STEP="$MAX_EPOCH"
@@ -141,20 +175,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         CHECKPOINT_PATH=""
     else
         PREV_TASK_ID=$((TASK_ID - 1))
-        PREV_LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${PREV_TASK_ID}_seed${SEED}"
-        if [ -n "$CONFIG_TAG" ]; then
-            PREV_LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$PREV_LOG_DIR" "$CONFIG_TAG")
-            if [ -z "$PREV_LOG_DIR_TRANSFORMED" ]; then
-                echo "  ERROR: Failed to transform previous task log directory for task $PREV_TASK_ID"
-                echo "         Original PREV_LOG_DIR: [$PREV_LOG_DIR]"
-                echo "         CONFIG_TAG: [$CONFIG_TAG]"
-                OVERALL_EXIT_CODE=1
-                break
-            fi
-        else
-            PREV_LOG_DIR_TRANSFORMED="$PREV_LOG_DIR"
-        fi
-        CHECKPOINT_PATH="${PREV_LOG_DIR_TRANSFORMED}/checkpoints/global_step_${GLOBAL_STEP}/actor"
+        PREV_LOG_BASENAME="task_${PREV_TASK_ID}_seed${SEED}"
+        PREV_LOG_DIR=$(build_log_dir "$PREV_LOG_BASENAME")
+        CHECKPOINT_PATH="${PREV_LOG_DIR}/checkpoints/global_step_${GLOBAL_STEP}/actor"
 
         if [[ "$CHECKPOINT_PATH" =~ ^/checkpoints/ ]]; then
             echo "  ERROR: Invalid checkpoint path construction detected"
@@ -166,15 +189,16 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         fi
     fi
 
-    # Determine LOG_DIR based on checkpoint path
+    # Determine the base run name, then use the final W&B experiment name as the
+    # log/checkpoint directory basename so saved results mirror W&B.
     if [ "$TASK_ID" -eq "$TASK_START" ] && [ "$USE_BASE_MODEL_START" -eq 1 ]; then
-        LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_seed${SEED}"
+        LOG_BASENAME="task_${TASK_ID}_seed${SEED}"
     elif [ "$TASK_ID" -eq "$TASK_START" ] && [ -n "$MANUAL_CHECKPOINT_PATH" ]; then
         if [[ "$CHECKPOINT_PATH" =~ task_([0-9]+) ]]; then
             SOURCE_TASK="${BASH_REMATCH[1]}"
             if [[ "$CHECKPOINT_PATH" =~ global_step_([0-9]+) ]]; then
                 SOURCE_STEP="${BASH_REMATCH[1]}"
-                LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_from_task_${SOURCE_TASK}_step_${SOURCE_STEP}_seed${SEED}"
+                LOG_BASENAME="task_${TASK_ID}_from_task_${SOURCE_TASK}_step_${SOURCE_STEP}_seed${SEED}"
             else
                 echo "ERROR: Could not extract global_step from checkpoint path: $CHECKPOINT_PATH"
                 echo "       Expected format: .../checkpoints/global_step_<M>/actor"
@@ -188,21 +212,11 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
             break
         fi
     else
-        LOG_DIR="./logs/${EXPERIMENT_TYPE}/task_${TASK_ID}_seed${SEED}"
+        LOG_BASENAME="task_${TASK_ID}_seed${SEED}"
     fi
 
-    # Inject config tag into LOG_DIR
-    if [ -n "$CONFIG_TAG" ]; then
-        LOG_DIR_TRANSFORMED=$(inject_config_tag_into_log_path "$LOG_DIR" "$CONFIG_TAG")
-        if [ -z "$LOG_DIR_TRANSFORMED" ]; then
-            echo "  ERROR: Failed to transform LOG_DIR with config tag"
-            echo "         Original LOG_DIR: [$LOG_DIR]"
-            echo "         CONFIG_TAG: [$CONFIG_TAG]"
-            OVERALL_EXIT_CODE=1
-            break
-        fi
-        LOG_DIR="$LOG_DIR_TRANSFORMED"
-    fi
+    EXPERIMENT_NAME=$(build_experiment_name "$LOG_BASENAME")
+    LOG_DIR="$(build_log_parent)/${EXPERIMENT_NAME}"
 
     if [ -z "$LOG_DIR" ]; then
         echo "  ERROR: LOG_DIR is empty after path construction"
@@ -212,18 +226,6 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
 
     export LOG_DIR
     mkdir -p "${LOG_DIR}"
-
-    EXPERIMENT_NAME=$(basename "$LOG_DIR")
-    if [ -n "$CONFIG_TAG" ]; then
-        EXPERIMENT_NAME="${EXPERIMENT_NAME}_${CONFIG_TAG}"
-    fi
-    if [ -n "${SWEEP_OPD_REWARD_NORMALIZATION:-}" ]; then
-        NORM_TAG="${SWEEP_OPD_REWARD_NORMALIZATION//[^a-zA-Z0-9._-]/_}"
-        EXPERIMENT_NAME="${EXPERIMENT_NAME}_norm_${NORM_TAG}"
-    fi
-    if [ -n "${EXPERIMENT_NAME_PREFIX:-}" ]; then
-        EXPERIMENT_NAME="${EXPERIMENT_NAME_PREFIX}${EXPERIMENT_NAME}"
-    fi
 
     echo "Configuration:"
     echo "  Task ID: $TASK_ID"

@@ -24,6 +24,7 @@
 #       TRAIN_ROLLOUT_EPOCHS × TRAIN_SEEDS with global_batch_size = product of the first three.
 #   TRAIN_MAX_EPOCHS — passed as 3rd arg to run_embodiment_sequential (runner.max_epochs + checkpoint index).
 #       Post-train eval uses global_step_<TRAIN_MAX_EPOCHS>; keep EVAL_STEPS in sync for RUN_MODE=eval.
+#   SWEEP_WANDB_EXTRA_TAG — optional sanitized token appended to the generated W&B prefix.
 #   Eval-only jobs: W&B run name eval_<basename(LOG_DIR)>_step_<STEP> via EVAL_HYDRA_OVERRIDES.
 #   PROJECT_ROOT, VENV_PATH, SLURM_LOG_DIR — overrides
 #   SLURM_PARTITION — optional on any cluster
@@ -123,6 +124,16 @@ apply_array_override TRAIN_SEEDS TRAIN_SEEDS_OVERRIDE
 apply_array_override TRAIN_GROUP_SIZES TRAIN_GROUP_SIZES_OVERRIDE
 apply_array_override TRAIN_NUM_GROUP_ENVS TRAIN_NUM_GROUP_ENVS_OVERRIDE
 apply_array_override TRAIN_ROLLOUT_EPOCHS TRAIN_ROLLOUT_EPOCHS_OVERRIDE
+
+append_wandb_extra_tag() {
+  local prefix="$1"
+  local extra="${SWEEP_WANDB_EXTRA_TAG:-}"
+  if [[ -n "${extra}" ]]; then
+    extra="${extra//[^a-zA-Z0-9._-]/_}"
+    prefix="${prefix}${extra}_"
+  fi
+  echo "${prefix}"
+}
 
 # ============== EVAL SWEEP (eval_embodiment.sh) ==============
 # Usage of eval_embodiment.sh:
@@ -226,6 +237,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                     ARGS+=("${CFG}" "${SEED}")
                     SAVE_INTERVAL_OVERRIDE="${SWEEP_SAVE_INTERVAL:-20}"
                     WANDB_PREFIX="grpo_rps${ROLLOUTS_PER_STEP}_gb${G_BATCH}_gs${GS}_"
+                    WANDB_PREFIX="$(append_wandb_extra_tag "${WANDB_PREFIX}")"
                     CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
                     echo "Submit train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH} rollouts_per_step=${ROLLOUTS_PER_STEP}"
 
@@ -250,6 +262,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
 
               SAVE_INTERVAL_OVERRIDE="${MAX_EP}"
               WANDB_PREFIX="grpo_rps${DEFAULT_ROLLOUTS_PER_STEP}_gbna_gsna_"
+              WANDB_PREFIX="$(append_wandb_extra_tag "${WANDB_PREFIX}")"
               CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
               echo "Submit train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none}"
 
