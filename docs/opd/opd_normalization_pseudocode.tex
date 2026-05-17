@@ -1,0 +1,269 @@
+\documentclass[10pt]{article}
+
+\usepackage[margin=0.8in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{microtype}
+
+\definecolor{DiffBlue}{RGB}{0,84,166}
+\definecolor{SoftGray}{RGB}{245,247,250}
+
+\newcommand{\Diff}[1]{\textcolor{DiffBlue}{\textbf{#1}}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\Margin}{\Delta}
+\newcommand{\Mask}{M}
+\newcommand{\Adv}{A}
+
+\setlist[itemize]{leftmargin=1.4em,itemsep=0.2em,topsep=0.25em}
+\setlist[enumerate]{leftmargin=1.5em,itemsep=0.2em,topsep=0.25em}
+
+\title{\vspace{-2em}OPD Normalization Strategies: Pseudocode}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-2em}
+
+\section*{Shared Setup}
+
+For each rollout chunk index $t$, rollout sample $b$, and flattened action token
+$k$, OPD first computes the sampled-action teacher margin
+\[
+  \Margin_{t,b,k}
+  =
+  \log \pi_{\mathrm{teacher}}(a_{t,b,k}\mid s_{t,b})
+  -
+  \log \pi_{\mathrm{student,old}}(a_{t,b,k}\mid s_{t,b}).
+\]
+
+Let $\Mask_{t,b,k}\in\{0,1\}$ be the valid-token mask. In all modes below, invalid
+tokens are zeroed at the end:
+\[
+  \Adv \leftarrow \Adv \odot \Mask.
+\]
+
+For OpenVLA-OFT chunked actions, the last dimension is typically
+\[
+  k = (h,d), \qquad h\in\{1,\ldots,H\}, \quad d\in\{1,\ldots,D\},
+\]
+where $H=8$ future actions and $D=7$ action dimensions.
+
+\section*{Mode Summary}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Mode & What Is Normalized & Dense Token Feedback Preserved? \\
+\midrule
+\code{group\_zscore} & chunk scalar within rollout group & No \\
+\code{token\_zscore} & each flattened token position $k$ & Yes \\
+\code{action\_dim\_zscore} & each action dimension $d$ & Yes \\
+\code{positive\_clip} & raw positive token margins & Yes \\
+\code{teacher\_prob} & sampled teacher probability weights & Yes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section*{1. Current \code{group\_zscore}}
+
+\Diff{Difference: collapse all action tokens in a chunk into one scalar, normalize
+that scalar within a rollout group, then broadcast it back to every token.}
+
+\begin{enumerate}
+  \item Compute one score per chunk/sample by averaging token margins:
+  \[
+    s_{t,b}
+    =
+    \frac{\sum_k \Mask_{t,b,k}\Margin_{t,b,k}}
+         {\max\left(1,\sum_k \Mask_{t,b,k}\right)}.
+  \]
+
+  \item Partition the batch dimension into groups $g$ of size $G$:
+  \[
+    b=(g,i), \qquad i\in\{1,\ldots,G\}.
+  \]
+
+  \item For every chunk $t$ and group $g$, compute:
+  \[
+    \mu_{t,g} = \frac{1}{G}\sum_{i=1}^G s_{t,g,i},
+    \qquad
+    \sigma_{t,g}
+    =
+    \mathrm{std}_{i=1}^G(s_{t,g,i}).
+  \]
+
+  \item Broadcast the normalized scalar to every token in that chunk/sample:
+  \[
+    \Adv_{t,g,i,k}
+    =
+    \frac{s_{t,g,i}-\mu_{t,g}}{\sigma_{t,g}+\epsilon}.
+  \]
+\end{enumerate}
+
+In one line:
+\[
+  \text{token margins}
+  \rightarrow
+  \text{chunk mean}
+  \rightarrow
+  \text{group z-score}
+  \rightarrow
+  \text{same advantage for all tokens in the chunk}.
+\]
+
+\section*{2. \code{token\_zscore}}
+
+\Diff{Difference: keep each flattened token position separate. Do not average the
+action chunk into one scalar.}
+
+For each token position $k$:
+\[
+  \mu_k
+  =
+  \frac{\sum_{t,b}\Mask_{t,b,k}\Margin_{t,b,k}}
+       {\max\left(1,\sum_{t,b}\Mask_{t,b,k}\right)},
+\]
+\[
+  \sigma_k
+  =
+  \sqrt{
+    \frac{\sum_{t,b}\Mask_{t,b,k}(\Margin_{t,b,k}-\mu_k)^2}
+         {\max\left(1,\sum_{t,b}\Mask_{t,b,k}\right)}
+  }.
+\]
+
+Then:
+\[
+  \Adv_{t,b,k}
+  =
+  \frac{\Margin_{t,b,k}-\mu_k}{\sigma_k+\epsilon}.
+\]
+
+This preserves token-level credit assignment:
+\[
+  \text{token } k_1 \text{ and token } k_2
+  \text{ may receive different OPD feedback inside the same chunk.}
+\]
+
+\section*{3. \code{action\_dim\_zscore}}
+
+\Diff{Difference: keep semantic action dimensions separate. Pool over chunk horizon
+$h$, rollout chunks $t$, and batch samples $b$, but not over action dimension $d$.}
+
+Reshape:
+\[
+  \Margin_{t,b,k}
+  \rightarrow
+  \Margin_{t,b,h,d}.
+\]
+
+For each action dimension $d$:
+\[
+  \mu_d
+  =
+  \frac{\sum_{t,b,h}\Mask_{t,b,h,d}\Margin_{t,b,h,d}}
+       {\max\left(1,\sum_{t,b,h}\Mask_{t,b,h,d}\right)},
+\]
+\[
+  \sigma_d
+  =
+  \sqrt{
+    \frac{\sum_{t,b,h}\Mask_{t,b,h,d}(\Margin_{t,b,h,d}-\mu_d)^2}
+         {\max\left(1,\sum_{t,b,h}\Mask_{t,b,h,d}\right)}
+  }.
+\]
+
+Then:
+\[
+  \Adv_{t,b,h,d}
+  =
+  \frac{\Margin_{t,b,h,d}-\mu_d}{\sigma_d+\epsilon}.
+\]
+
+This avoids mixing, for example, gripper margins with translation or rotation margins.
+
+\section*{4. \code{positive\_clip}}
+
+\Diff{Difference: no centering and no z-score. Preserve raw token-level margins, but
+only reinforce actions that the teacher scores above the old student.}
+
+For each token:
+\[
+  \Adv_{t,b,k}
+  =
+  \min\left(c,\max\left(0,\Margin_{t,b,k}\right)\right).
+\]
+
+Interpretation:
+\[
+  \Margin_{t,b,k} > 0
+  \Rightarrow
+  \text{reinforce sampled action token},
+\]
+\[
+  \Margin_{t,b,k} \le 0
+  \Rightarrow
+  \text{do not actively push against it}.
+\]
+
+This is conservative sampled imitation and may be useful when the teacher is strong on
+the current task but unreliable for retained old-task behavior.
+
+\section*{5. \code{teacher\_prob}}
+
+\Diff{Difference: ignore the student margin and weight sampled actions by teacher
+confidence. This is not full-distribution KL; it is sampled-action distillation.}
+
+For each sampled action token:
+\[
+  w_{t,b,k}
+  =
+  \exp\left(
+    \mathrm{clip}\left(
+      \log \pi_{\mathrm{teacher}}(a_{t,b,k}\mid s_{t,b}),
+      -20,
+      0
+    \right)
+  \right).
+\]
+
+Normalize the scale over valid tokens:
+\[
+  \bar{w}
+  =
+  \frac{\sum_{t,b,k}\Mask_{t,b,k}w_{t,b,k}}
+       {\max\left(1,\sum_{t,b,k}\Mask_{t,b,k}\right)}.
+\]
+
+Then:
+\[
+  \Adv_{t,b,k}
+  =
+  \frac{w_{t,b,k}}{\bar{w}+\epsilon}.
+\]
+
+Interpretation:
+\[
+  \text{high teacher probability}
+  \Rightarrow
+  \text{larger imitation weight};
+  \qquad
+  \text{low teacher probability}
+  \Rightarrow
+  \text{small update}.
+\]
+
+\section*{Continual-Learning Reading}
+
+With a current-task SFT teacher, \code{group\_zscore}, \code{token\_zscore}, and
+\code{action\_dim\_zscore} are still relative/centered objectives: some sampled
+actions receive negative advantages even if the teacher is generally good. In contrast,
+\code{positive\_clip} and \code{teacher\_prob} are more conservative imitation signals:
+they mostly reinforce what the current-task teacher likes, but they do not by themselves
+provide old-task retention signal. Forgetting prevention still requires replay,
+old-task teacher/base regularization, EWC, or another source of old-task pressure.
+
+\end{document}
