@@ -5,14 +5,16 @@
 #   - examples/crl_experiment/jobs/embodiment_slurm_sweep.sh for the GRPO baseline
 #   - examples/crl_experiment/jobs/embodiment_slurm_opd_sweep.sh for OPD variants
 #
-# By default this submits/previews the gs8_nge4 suite:
-#   - group_size=8, num_group_envs=4, rollout_epoch=1
-#   - 100 steps, save every 25
+# By default this submits/previews the rps8 suite:
+#   - group_size=8, num_group_envs=1, rollout_epoch=1
+#   - RPS_MAX_EPOCH steps, save every 25
 #
 # The same loss/normalization variants are submitted for each enabled suite:
 #   - tasks: 1 and 4
 #   - OPD seed: 184
 #   - GRPO seed: 4096
+#   - with the default TASKS="1 4", the RPS8 suite submits 8 OPD jobs:
+#     4 normalization modes × 2 tasks.
 #
 # Useful preview:
 #   DRY_RUN=1 bash scripts/run_opd_loss_variants.sh
@@ -147,18 +149,14 @@ run_suite() {
   echo "############################################################"
 
   # GRPO baseline disabled: keep this wrapper focused on OPD variants only.
-
-  # Current OPD setting: REINFORCE-style OPD objective with group-zscore-normalized OPD rewards.
-  run_opd_variant "${suite_label}" "Current OPD group-normalized REINFORCE" "1" "group_zscore" "embodied_opd_reinforce"
-
-  # OPD ablation: same REINFORCE-style objective, but no reward/advantage normalization.
-  # "__empty__" tells the OPD sweep to leave SWEEP_OPD_REWARD_NORMALIZATION empty, so the
-  # W&B name does not append a misleading norm suffix; the sweep prefix includes "nonorm".
-  run_opd_variant "${suite_label}" "OPD REINFORCE without normalization" "0" "__empty__" "embodied_opd_reinforce"
-
-  # OPD clipped-loss variant: keep group-zscore-normalized OPD rewards, but use embodied_opd,
-  # which dispatches to the GRPO-style clipped ratio loss. The sweep prefix includes "grpo_loss".
-  run_opd_variant "${suite_label}" "OPD with GRPO clipping loss" "1" "group_zscore" "embodied_opd"
+  # Submit four dense OPD normalization strategies with the GRPO-style clipped ratio
+  # OPD loss. With the default two tasks and one OPD seed, this is 4 × 2 = 8 jobs.
+  run_opd_variant \
+    "${suite_label}" \
+    "OPD dense-normalization variants with GRPO clipping loss" \
+    "1" \
+    "token_zscore action_dim_zscore positive_clip teacher_prob" \
+    "embodied_opd"
 }
 
 # Existing sweep settings: 8 * 4 * 4 = 128 rollouts/step for 60 training steps.
@@ -166,7 +164,8 @@ if [[ "${RUN_CURRENT}" == "1" ]]; then
   run_suite "current_rps128_steps60" 60 8 4 4 ""
 fi
 
-# Same loss/normalization settings with group_size=8, num_group_envs=4.
+# Dense-normalization OPD settings with 8 rollouts/step:
+# group_size=8, num_group_envs=1, rollout_epoch=1.
 if [[ "${RUN_RPS8_200}" == "1" ]]; then
-  run_suite "gs8_nge4_steps${RPS_MAX_EPOCH}_si25" "${RPS_MAX_EPOCH}" 8 4 1 "steps${RPS_MAX_EPOCH}_si25" 25
+  run_suite "rps8_steps${RPS_MAX_EPOCH}_si25" "${RPS_MAX_EPOCH}" 8 1 1 "steps${RPS_MAX_EPOCH}_si25" 25
 fi
