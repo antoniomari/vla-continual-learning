@@ -128,6 +128,14 @@ algorithm:
   # and sends teacher_logprobs with the batch—no second full teacher pass on the actor. Needs extra VRAM
   # on rollout GPUs (student + teacher). Set false to keep the old actor-side teacher scoring.
   opd_precompute_teacher_in_rollout: true
+  # OPD reward/advantage normalization mode. Useful options:
+  #   group_zscore       : current GRPO-like group-relative chunk scalar
+  #   token_zscore       : preserve each action-token position and normalize it separately
+  #   action_dim_zscore  : preserve x/y/z/rot/gripper-style dimensions and normalize each dimension
+  #   positive_clip      : reinforce only positive teacher-vs-student margins, clipped by opd_reward_clip_c
+  #   teacher_prob       : sampled teacher-confidence weighted imitation, not full-distribution KL
+  #   mad_abs|batch_zscore|tanh_squash|clip : older scalar/elementwise stabilizers
+  opd_reward_normalization: group_zscore
   # Teacher forward during compute_advantages (OPD): microbatch size; can exceed actor.micro_batch_size
   # if VRAM allows (teacher-only forward, no student grads).
   # opd_teacher_micro_batch_size: 32

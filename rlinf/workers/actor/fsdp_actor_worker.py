@@ -571,6 +571,7 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
                 "opd_reward_clip_c": self.cfg.algorithm.get(
                     "opd_reward_clip_c", 1.0
                 ),
+                "single_action_dim": getattr(student_core, "action_dim", None),
             }
         else:
             kwargs = {
@@ -1750,4 +1751,3 @@ class EmbodiedFSDPActor(FSDPModelManager, Worker):
             print(f"[EWC] Saving {len(fisher_to_save)} Fisher parameters")
             save_ewc_data(fisher_to_save, save_path)
             print(f"✓ EWC data saved to {save_path}")
-

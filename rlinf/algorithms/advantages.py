@@ -176,10 +176,11 @@ def compute_embodied_opd_advantages(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """OPD reward r_t = log pi_teacher(a|s) - log pi_student(a|s) at rollout student logprobs.
 
-    By default (when ``normalize_advantages`` is True, from algorithm config), advantages
-    are **group-relative** like embodied GRPO: we sum the per-token margins over valid
-    tokens for each parallel env trajectory, subtract the group mean and divide by group
-    std (size ``algorithm.group_size``), then broadcast that scalar back to every token.
+    By default (when ``normalize_advantages`` is True, from algorithm config), the
+    selected ``opd_reward_normalization`` mode rescales these margins before training.
+    ``group_zscore`` is GRPO-like: it reduces each action chunk to one scalar, normalizes
+    that scalar within groups of size ``algorithm.group_size``, then broadcasts it back
+    to all tokens in the chunk. Other modes preserve token/action-level feedback.
 
     When ``normalize_advantages`` is False, raw per-token margins are returned.
 
@@ -197,6 +198,7 @@ def compute_embodied_opd_advantages(
     tanh_tau = float(kwargs.get("opd_reward_tanh_tau", 5.0))
     clip_c = float(kwargs.get("opd_reward_clip_c", 1.0))
     group_size = kwargs.get("group_size", 1)
+    single_action_dim = kwargs.get("single_action_dim", None)
     epsilon = kwargs.get("epsilon", 1e-6)
 
     # Advantages are computed as VLA-OPD reward initially
@@ -209,14 +211,19 @@ def compute_embodied_opd_advantages(
 
     if norm_mode not in (
         "group_zscore",
+        "token_zscore",
+        "action_dim_zscore",
         "mad_abs",
         "batch_zscore",
         "tanh_squash",
         "clip",
+        "positive_clip",
+        "teacher_prob",
     ):
         raise ValueError(
             f"Unsupported OPD reward normalization mode: {norm_mode}. "
-            "Use 'group_zscore', 'mad_abs', 'batch_zscore', 'tanh_squash', or 'clip'."
+            "Use 'group_zscore', 'token_zscore', 'action_dim_zscore', 'mad_abs', "
+            "'batch_zscore', 'tanh_squash', 'clip', 'positive_clip', or 'teacher_prob'."
         )
 
     # Sign-preserving global scaling for REINFORCE-like OPD:
@@ -251,6 +258,50 @@ def compute_embodied_opd_advantages(
             adv_out = adv_out * loss_mask
         return adv_out, adv_out
 
+    # Per-token-position z-score. This keeps dense OPD feedback distinct for each
+    # action token position instead of mixing the whole action chunk into one scalar.
+    if norm_mode == "token_zscore":
+        if loss_mask is not None:
+            m = loss_mask.float()
+            denom = m.sum(dim=(0, 1), keepdim=True).clamp(min=1.0)
+            mean = (advantages * m).sum(dim=(0, 1), keepdim=True) / denom
+            var = (((advantages - mean) * m) ** 2).sum(dim=(0, 1), keepdim=True) / denom
+        else:
+            mean = advantages.mean(dim=(0, 1), keepdim=True)
+            var = ((advantages - mean) ** 2).mean(dim=(0, 1), keepdim=True)
+        adv_out = (advantages - mean) / torch.sqrt(var + epsilon)
+        if loss_mask is not None:
+            adv_out = adv_out * loss_mask
+        return adv_out, adv_out
+
+    # Per-action-dimension z-score. For flattened chunks laid out as
+    # [num_action_chunks * action_dim], pool the same semantic action dimension
+    # across chunk horizon, rollout time, and batch, but keep dimensions separate.
+    if norm_mode == "action_dim_zscore":
+        if single_action_dim is None:
+            raise ValueError(
+                "opd_reward_normalization=action_dim_zscore requires single_action_dim"
+            )
+        single_action_dim = int(single_action_dim)
+        if single_action_dim <= 0 or advantages.shape[-1] % single_action_dim != 0:
+            raise ValueError(
+                "embodied_opd action_dim_zscore expected token dimension divisible by "
+                f"single_action_dim={single_action_dim}, got {advantages.shape[-1]}"
+            )
+        reshaped = advantages.reshape(*advantages.shape[:-1], -1, single_action_dim)
+        if loss_mask is not None:
+            m = loss_mask.reshape(*loss_mask.shape[:-1], -1, single_action_dim).float()
+            denom = m.sum(dim=(0, 1, 2), keepdim=True).clamp(min=1.0)
+            mean = (reshaped * m).sum(dim=(0, 1, 2), keepdim=True) / denom
+            var = (((reshaped - mean) * m) ** 2).sum(dim=(0, 1, 2), keepdim=True) / denom
+        else:
+            mean = reshaped.mean(dim=(0, 1, 2), keepdim=True)
+            var = ((reshaped - mean) ** 2).mean(dim=(0, 1, 2), keepdim=True)
+        adv_out = ((reshaped - mean) / torch.sqrt(var + epsilon)).reshape_as(advantages)
+        if loss_mask is not None:
+            adv_out = adv_out * loss_mask
+        return adv_out, adv_out
+
     # Sign-preserving squashing to cap outlier rewards in (-1, 1).
     if norm_mode == "tanh_squash":
         if tanh_tau <= 0:
@@ -269,6 +320,36 @@ def compute_embodied_opd_advantages(
                 f"opd_reward_clip_c must be > 0 for clip mode, got {clip_c}"
             )
         adv_out = torch.clamp(advantages, min=-clip_c, max=clip_c)
+        if loss_mask is not None:
+            adv_out = adv_out * loss_mask
+        return adv_out, adv_out
+
+    # Positive-only clipped margins. This preserves token-level dense feedback while
+    # turning OPD into conservative sampled imitation: reinforce teacher-preferred
+    # sampled actions, but do not actively push away actions with negative margins.
+    if norm_mode == "positive_clip":
+        if clip_c <= 0:
+            raise ValueError(
+                f"opd_reward_clip_c must be > 0 for positive_clip mode, got {clip_c}"
+            )
+        adv_out = torch.clamp(advantages, min=0.0, max=clip_c)
+        if loss_mask is not None:
+            adv_out = adv_out * loss_mask
+        return adv_out, adv_out
+
+    # Sampled teacher-confidence weighting. This is a lightweight on-policy
+    # distillation approximation for the current sampled actions, not a full
+    # distribution KL: high teacher probability increases the weight, low teacher
+    # probability makes the update small. The mean normalization keeps scale stable.
+    if norm_mode == "teacher_prob":
+        teacher_weight = torch.exp(torch.clamp(teacher_logprobs, min=-20.0, max=0.0))
+        if loss_mask is not None:
+            m = loss_mask.float()
+            denom = m.sum().clamp(min=1.0)
+            scale = (teacher_weight * m).sum() / denom
+        else:
+            scale = teacher_weight.mean()
+        adv_out = teacher_weight / (scale + epsilon)
         if loss_mask is not None:
             adv_out = adv_out * loss_mask
         return adv_out, adv_out

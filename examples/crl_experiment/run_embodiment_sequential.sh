@@ -24,7 +24,9 @@
 ###           SWEEP_OPD_TEACHER_MODEL_PATH — override algorithm.opd_teacher_model_path
 ###               (use pre-trained SFT teacher from explicit path; skip BC if runner detects a usable teacher).
 ###           SWEEP_OPD_NORMALIZE_ADVANTAGES — override algorithm.normalize_advantages.
-###           SWEEP_OPD_REWARD_NORMALIZATION — override algorithm.opd_reward_normalization.
+###           SWEEP_OPD_REWARD_NORMALIZATION — override algorithm.opd_reward_normalization
+###           (group_zscore, token_zscore, action_dim_zscore, positive_clip,
+###            teacher_prob, mad_abs, batch_zscore, tanh_squash, clip).
 ###           SWEEP_OPD_REWARD_TANH_TAU — override algorithm.opd_reward_tanh_tau.
 ###           SWEEP_OPD_REWARD_CLIP_C — override algorithm.opd_reward_clip_c.
 ###           SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE — override algorithm.opd_teacher_micro_batch_size

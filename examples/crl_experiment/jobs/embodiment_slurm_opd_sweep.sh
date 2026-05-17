@@ -38,7 +38,7 @@
 #   OPD advantage normalization toggle: TRAIN_OPD_NORMALIZE_ADVANTAGES (0/1), wired to
 #       algorithm.normalize_advantages.
 #   OPD reward normalization mode: TRAIN_OPD_REWARD_NORMALIZATIONS
-#       (e.g., group_zscore|mad_abs|batch_zscore|tanh_squash|clip),
+#       (e.g., group_zscore|token_zscore|action_dim_zscore|positive_clip|teacher_prob|mad_abs|batch_zscore|tanh_squash|clip),
 #       wired to algorithm.opd_reward_normalization.
 #   OPD reward tanh temperature: TRAIN_OPD_REWARD_TANH_TAU
 #       wired to algorithm.opd_reward_tanh_tau (used by tanh_squash).
@@ -214,6 +214,8 @@ TRAIN_OPD_SFT_FILTER_FIXED_TASK_IDS=(1)
 TRAIN_OPD_SFT_MATCH_TASK_LANGUAGE=(1)
 TRAIN_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT=(0)
 TRAIN_OPD_NORMALIZE_ADVANTAGES=(1)
+# Select one or more OPD normalization modes. Override with e.g.
+#   TRAIN_OPD_REWARD_NORMALIZATIONS_OVERRIDE="group_zscore token_zscore action_dim_zscore positive_clip teacher_prob"
 TRAIN_OPD_REWARD_NORMALIZATIONS=("group_zscore")
 TRAIN_OPD_REWARD_TANH_TAU="${TRAIN_OPD_REWARD_TANH_TAU:-5.0}"
 TRAIN_OPD_REWARD_CLIP_C="${TRAIN_OPD_REWARD_CLIP_C:-1.0}"
@@ -351,11 +353,19 @@ build_opd_sweep_exports() {
 
 opd_variant_tag() {
   local norm_adv="$1"
-  local loss_type="$2"
+  local reward_norm="$2"
+  local loss_type="$3"
   local tag=""
 
   if [[ "${norm_adv}" == "0" ]]; then
     tag="${tag}_nonorm"
+  else
+    if [[ -n "${reward_norm}" ]]; then
+      local safe_norm="${reward_norm//[^a-zA-Z0-9._-]/_}"
+      tag="${tag}_${safe_norm}"
+    else
+      tag="${tag}_norm_empty"
+    fi
   fi
 
   case "${loss_type}" in
@@ -435,7 +445,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                             else
                               TEACHER_TAG="sftteacher"
                             fi
-                            VARIANT_TAG="$(opd_variant_tag "${OPD_NORM_ADV}" "${OPD_LOSS}")"
+                            VARIANT_TAG="$(opd_variant_tag "${OPD_NORM_ADV}" "${OPD_REWARD_NORM}" "${OPD_LOSS}")"
                             JOB_NAME="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}${VARIANT_TAG}_rps${ROLLOUTS_PER_STEP}_t${TASK}_s${SEED}"
                             JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
                             if ((${#JOB_NAME} > 40)); then
@@ -488,7 +498,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                       else
                         TEACHER_TAG="sftteacher"
                       fi
-                      VARIANT_TAG="$(opd_variant_tag "${OPD_NORM_ADV}" "${OPD_LOSS}")"
+                      VARIANT_TAG="$(opd_variant_tag "${OPD_NORM_ADV}" "${OPD_REWARD_NORM}" "${OPD_LOSS}")"
                       JOB_NAME="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}${VARIANT_TAG}_rps${DEFAULT_ROLLOUTS_PER_STEP}_t${TASK}_s${SEED}"
                       JOB_NAME="${JOB_NAME//[^a-zA-Z0-9._-]/_}"
                       if ((${#JOB_NAME} > 40)); then
