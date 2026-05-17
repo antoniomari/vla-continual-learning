@@ -1,0 +1,104 @@
+\documentclass{article}
+
+\usepackage[margin=0.6in, landscape]{geometry}
+
+\usepackage{booktabs}
+
+\usepackage{longtable}
+
+\usepackage{array}
+
+\usepackage{float}
+
+\usepackage[table]{xcolor}
+
+\definecolor{taskhighlight}{HTML}{FFF2CC}
+
+\begin{document}
+
+\scriptsize
+
+\setlength{\tabcolsep}{3pt}
+
+\renewcommand{\arraystretch}{1.12}
+
+\sloppy
+
+\section*{Absolute Metrics Tables: Base, SFT Teacher, and GRPO Step 60}
+
+\subsection*{task\_0}
+
+\begin{table}[H]
+\caption{Base, SFT teacher, and GRPO step 60 metrics (task\_0)}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.20\linewidth}>{\columncolor{taskhighlight}\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}}
+\toprule
+Model & Task 0 & Task 1 & Task 2 & Task 3 & Task 4 & TRN AVG & HLD AVG \\
+\midrule
+Base & 0.66 $\pm$ 0.02 & 0.20 $\pm$ 0.02 & 0.89 $\pm$ 0.01 & 0.65 $\pm$ 0.01 & 0.32 $\pm$ 0.02 & 0.54 $\pm$ 0.01 & 0.40 $\pm$ 0.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection*{task\_1}
+
+\begin{table}[H]
+\caption{Base, SFT teacher, and GRPO step 60 metrics (task\_1)}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.20\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\columncolor{taskhighlight}\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}}
+\toprule
+Model & Task 0 & Task 1 & Task 2 & Task 3 & Task 4 & TRN AVG & HLD AVG \\
+\midrule
+Base & 0.66 $\pm$ 0.02 & 0.20 $\pm$ 0.02 & 0.89 $\pm$ 0.01 & 0.65 $\pm$ 0.01 & 0.32 $\pm$ 0.02 & 0.54 $\pm$ 0.01 & 0.40 $\pm$ 0.00 \\
+SFT teacher eval (task 1) & 0.00 & 0.95 & 0.00 & 0.00 & 0.00 & 0.19 & 0.00 \\
+GRPO | task\_1 | train=\{bs:8192,steps:60\} eval=320 & 0.67 & 0.75 & 0.89 & 0.68 & 0.44 & 0.69 & 0.43 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection*{task\_4}
+
+\begin{table}[H]
+\caption{Base, SFT teacher, and GRPO step 60 metrics (task\_4)}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.20\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\columncolor{taskhighlight}\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}>{\centering\arraybackslash}p{0.10\linewidth}}
+\toprule
+Model & Task 0 & Task 1 & Task 2 & Task 3 & Task 4 & TRN AVG & HLD AVG \\
+\midrule
+Base & 0.66 $\pm$ 0.02 & 0.20 $\pm$ 0.02 & 0.89 $\pm$ 0.01 & 0.65 $\pm$ 0.01 & 0.32 $\pm$ 0.02 & 0.54 $\pm$ 0.01 & 0.40 $\pm$ 0.00 \\
+SFT teacher eval (task 4) & 0.01 & 0.00 & 0.09 & 0.15 & 0.87 & 0.22 & 0.02 \\
+GRPO | task\_4 | train=\{bs:8192,steps:60\} eval=320 & 0.49 & 0.25 & 0.86 & 0.76 & 0.77 & 0.63 & 0.43 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\section*{Combined Table}
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.09\linewidth}>{\raggedright\arraybackslash}p{0.25\linewidth}*{7}{>{\centering\arraybackslash}p{0.08\linewidth}}}
+\caption{Base, SFT teacher, and GRPO step 60 absolute metrics} \\
+\toprule
+Training Task & Model & Task 0 & Task 1 & Task 2 & Task 3 & Task 4 & TRN AVG & HLD AVG \\
+\midrule
+\endfirsthead
+\caption[]{Base, SFT teacher, and GRPO step 60 absolute metrics} \\
+\toprule
+Training Task & Model & Task 0 & Task 1 & Task 2 & Task 3 & Task 4 & TRN AVG & HLD AVG \\
+\midrule
+\endhead
+\midrule
+\multicolumn{9}{r}{Continued on next page} \\
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+task\_0 & Base & 0.66 $\pm$ 0.02 & 0.20 $\pm$ 0.02 & 0.89 $\pm$ 0.01 & 0.65 $\pm$ 0.01 & 0.32 $\pm$ 0.02 & 0.54 $\pm$ 0.01 & 0.40 $\pm$ 0.00 \\
+task\_1 & Base & 0.66 $\pm$ 0.02 & 0.20 $\pm$ 0.02 & 0.89 $\pm$ 0.01 & 0.65 $\pm$ 0.01 & 0.32 $\pm$ 0.02 & 0.54 $\pm$ 0.01 & 0.40 $\pm$ 0.00 \\
+task\_1 & SFT teacher eval (task 1) & 0.00 & 0.95 & 0.00 & 0.00 & 0.00 & 0.19 & 0.00 \\
+task\_1 & GRPO | task\_1 | train=\{bs:8192,steps:60\} eval=320 & 0.67 & 0.75 & 0.89 & 0.68 & 0.44 & 0.69 & 0.43 \\
+task\_4 & Base & 0.66 $\pm$ 0.02 & 0.20 $\pm$ 0.02 & 0.89 $\pm$ 0.01 & 0.65 $\pm$ 0.01 & 0.32 $\pm$ 0.02 & 0.54 $\pm$ 0.01 & 0.40 $\pm$ 0.00 \\
+task\_4 & SFT teacher eval (task 4) & 0.01 & 0.00 & 0.09 & 0.15 & 0.87 & 0.22 & 0.02 \\
+task\_4 & GRPO | task\_4 | train=\{bs:8192,steps:60\} eval=320 & 0.49 & 0.25 & 0.86 & 0.76 & 0.77 & 0.63 & 0.43 \\
+\end{longtable}
+
+
+\end{document}

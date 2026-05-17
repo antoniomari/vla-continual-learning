@@ -1,0 +1,30 @@
+training_task,checkpoint_step,run_name,same_task_success,heldout_success,method,label
+1,0,grpo_rps32_gb2048_gs8_steps100_si25_task_1_seed4096_spatial,0.20208333333333336,0.398125,Base,GRPO | Task 1 | 32 rollouts/step | group norm
+1,25,grpo_rps32_gb2048_gs8_steps100_si25_task_1_seed4096_spatial,0.265625,0.39,GRPO,GRPO | Task 1 | 32 rollouts/step | group norm
+1,50,grpo_rps32_gb2048_gs8_steps100_si25_task_1_seed4096_spatial,0.48125,0.4425,GRPO,GRPO | Task 1 | 32 rollouts/step | group norm
+1,75,grpo_rps32_gb2048_gs8_steps100_si25_task_1_seed4096_spatial,0.659375,0.445,GRPO,GRPO | Task 1 | 32 rollouts/step | group norm
+1,0,opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_1_seed184_spatial,0.20208333333333336,0.398125,Base,OPD (SFT Teacher) | Task 1 | 32 rollouts/step | no normalization
+1,25,opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_1_seed184_spatial,0.546875,0.361875,OPD,OPD (SFT Teacher) | Task 1 | 32 rollouts/step | no normalization
+1,50,opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_1_seed184_spatial,0.059375,0.176875,OPD,OPD (SFT Teacher) | Task 1 | 32 rollouts/step | no normalization
+1,75,opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_1_seed184_spatial,0.371875,0.10875000000000001,OPD,OPD (SFT Teacher) | Task 1 | 32 rollouts/step | no normalization
+1,0,opd_sftteacher_adv1_grpo_loss_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore,0.20208333333333336,0.398125,Base,OPD (SFT Teacher) | GRPO loss | Task 1 | 32 rollouts/step | group z-score
+1,25,opd_sftteacher_adv1_grpo_loss_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore,0.375,0.393125,OPD,OPD (SFT Teacher) | GRPO loss | Task 1 | 32 rollouts/step | group z-score
+1,50,opd_sftteacher_adv1_grpo_loss_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore,0.640625,0.41125,OPD,OPD (SFT Teacher) | GRPO loss | Task 1 | 32 rollouts/step | group z-score
+1,75,opd_sftteacher_adv1_grpo_loss_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore,0.78125,0.390625,OPD,OPD (SFT Teacher) | GRPO loss | Task 1 | 32 rollouts/step | group z-score
+1,0,opd_sftteacher_adv1_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore,0.20208333333333336,0.398125,Base,OPD (SFT Teacher) | Task 1 | 32 rollouts/step | group z-score
+1,25,opd_sftteacher_adv1_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore,0.328125,0.39187500000000003,OPD,OPD (SFT Teacher) | Task 1 | 32 rollouts/step | group z-score
+1,50,opd_sftteacher_adv1_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore,0.590625,0.3875,OPD,OPD (SFT Teacher) | Task 1 | 32 rollouts/step | group z-score
+1,75,opd_sftteacher_adv1_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore,0.771875,0.349375,OPD,OPD (SFT Teacher) | Task 1 | 32 rollouts/step | group z-score
+4,0,grpo_rps32_gb2048_gs8_steps100_si25_task_4_seed4096_spatial,0.315625,0.398125,Base,GRPO | Task 4 | 32 rollouts/step | group norm
+4,25,grpo_rps32_gb2048_gs8_steps100_si25_task_4_seed4096_spatial,0.48125,0.390625,GRPO,GRPO | Task 4 | 32 rollouts/step | group norm
+4,50,grpo_rps32_gb2048_gs8_steps100_si25_task_4_seed4096_spatial,0.584375,0.376875,GRPO,GRPO | Task 4 | 32 rollouts/step | group norm
+4,75,grpo_rps32_gb2048_gs8_steps100_si25_task_4_seed4096_spatial,0.703125,0.369375,GRPO,GRPO | Task 4 | 32 rollouts/step | group norm
+4,0,opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_4_seed184_spatial,0.315625,0.398125,Base,OPD (SFT Teacher) | Task 4 | 32 rollouts/step | no normalization
+4,25,opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_4_seed184_spatial,0.396875,0.275,OPD,OPD (SFT Teacher) | Task 4 | 32 rollouts/step | no normalization
+4,50,opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_4_seed184_spatial,0.396875,0.241875,OPD,OPD (SFT Teacher) | Task 4 | 32 rollouts/step | no normalization
+4,0,opd_sftteacher_adv1_grpo_loss_rps32_steps100_si25_task_4_seed184_spatial_norm_group_zscore,0.315625,0.398125,Base,OPD (SFT Teacher) | GRPO loss | Task 4 | 32 rollouts/step | group z-score
+4,25,opd_sftteacher_adv1_grpo_loss_rps32_steps100_si25_task_4_seed184_spatial_norm_group_zscore,0.4375,0.370625,OPD,OPD (SFT Teacher) | GRPO loss | Task 4 | 32 rollouts/step | group z-score
+4,0,opd_sftteacher_adv1_rps32_steps100_si25_task_4_seed184_spatial_norm_group_zscore,0.315625,0.398125,Base,OPD (SFT Teacher) | Task 4 | 32 rollouts/step | group z-score
+4,25,opd_sftteacher_adv1_rps32_steps100_si25_task_4_seed184_spatial_norm_group_zscore,0.446875,0.385,OPD,OPD (SFT Teacher) | Task 4 | 32 rollouts/step | group z-score
+4,50,opd_sftteacher_adv1_rps32_steps100_si25_task_4_seed184_spatial_norm_group_zscore,0.490625,0.36,OPD,OPD (SFT Teacher) | Task 4 | 32 rollouts/step | group z-score
+4,75,opd_sftteacher_adv1_rps32_steps100_si25_task_4_seed184_spatial_norm_group_zscore,0.521875,0.34562499999999996,OPD,OPD (SFT Teacher) | Task 4 | 32 rollouts/step | group z-score
