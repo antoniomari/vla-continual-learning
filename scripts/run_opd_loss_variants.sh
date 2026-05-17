@@ -5,8 +5,9 @@
 #   - examples/crl_experiment/jobs/embodiment_slurm_sweep.sh for the GRPO baseline
 #   - examples/crl_experiment/jobs/embodiment_slurm_opd_sweep.sh for OPD variants
 #
-# By default this submits/previews the new rps8_200 suite:
-#   - 8 rollouts/step for 200 steps
+# By default this submits/previews the gs8_nge4 suite:
+#   - group_size=8, num_group_envs=4, rollout_epoch=1
+#   - 100 steps, save every 25
 #
 # The same loss/normalization variants are submitted for each enabled suite:
 #   - tasks: 1 and 4
@@ -30,10 +31,28 @@ OPD_SEED="${OPD_SEED:-184}"
 GRPO_SEED="${GRPO_SEED:-4096}"
 RUN_CURRENT="${RUN_CURRENT:-0}"
 RUN_RPS8_200="${RUN_RPS8_200:-1}"
+SLURM_ACCOUNT="${SLURM_ACCOUNT:-a143}"
+RPS_MAX_EPOCH="${RPS_MAX_EPOCH:-100}"
 # OPD OOM-safety knobs (override per run if needed).
 OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT="${OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT:-1}"
 OPD_TEACHER_STASH_LOGPROBS_ON_CPU="${OPD_TEACHER_STASH_LOGPROBS_ON_CPU:-1}"
 OPD_TEACHER_MICRO_BATCH="${OPD_TEACHER_MICRO_BATCH:-8}"
+# Teacher source selector for mapped-teacher OPD:
+#   - sft (default): use teacher_sft_by_task and keep algorithm.rl_teacher=0
+#   - rl:            use teacher_rl_by_task and set algorithm.rl_teacher=1
+OPD_TEACHER_SOURCE="${OPD_TEACHER_SOURCE:-sft}"
+if [[ "${OPD_TEACHER_SOURCE}" == "rl" ]]; then
+  OPD_TEACHER_MAPPING_GROUP="teacher_rl_by_task"
+  OPD_RL_TEACHER="1"
+elif [[ "${OPD_TEACHER_SOURCE}" == "sft" ]]; then
+  OPD_TEACHER_MAPPING_GROUP="teacher_sft_by_task"
+  OPD_RL_TEACHER="0"
+else
+  echo "ERROR: OPD_TEACHER_SOURCE must be 'sft' or 'rl', got '${OPD_TEACHER_SOURCE}'"
+  exit 1
+fi
+# Keep OPD on mapped teachers from JSON (no teacher retraining from this wrapper).
+OPD_BC_STEPS_OVERRIDE="${OPD_BC_STEPS_OVERRIDE:-0}"
 # Helps reduce fragmentation-related OOMs.
 PYTORCH_CUDA_ALLOC_CONF_VALUE="${PYTORCH_CUDA_ALLOC_CONF_VALUE:-expandable_segments:True}"
 
@@ -68,6 +87,7 @@ run_opd_variant() {
   echo "  TRAIN_OPD_NORMALIZE_ADVANTAGES=${normalize_advantages}"
   echo "  TRAIN_OPD_REWARD_NORMALIZATIONS=${reward_normalizations}"
   echo "  TRAIN_OPD_LOSS_TYPES=${loss_types}"
+  echo "  OPD_TEACHER_SOURCE=${OPD_TEACHER_SOURCE} (${OPD_TEACHER_MAPPING_GROUP})"
   echo "============================================================"
 
   env "${COMMON_ENV[@]}" \
@@ -77,6 +97,9 @@ run_opd_variant() {
     "TRAIN_OPD_NORMALIZE_ADVANTAGES_OVERRIDE=${normalize_advantages}" \
     "TRAIN_OPD_REWARD_NORMALIZATIONS_OVERRIDE=${reward_normalizations}" \
     "TRAIN_OPD_LOSS_TYPES_OVERRIDE=${loss_types}" \
+    "TRAIN_OPD_BC_STEPS_OVERRIDE=${OPD_BC_STEPS_OVERRIDE}" \
+    "TRAIN_OPD_RL_TEACHER=${OPD_RL_TEACHER}" \
+    "OPD_TEACHER_MAPPING_GROUP=${OPD_TEACHER_MAPPING_GROUP}" \
     "TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT=${OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT}" \
     "TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU=${OPD_TEACHER_STASH_LOGPROBS_ON_CPU}" \
     "TRAIN_OPD_TEACHER_MICRO_BATCH_SIZES_OVERRIDE=${OPD_TEACHER_MICRO_BATCH}" \
@@ -90,6 +113,7 @@ run_suite() {
   local num_group_envs="$4"
   local rollout_epoch="$5"
   local wandb_extra_tag="${6:-}"
+  local save_interval="${7:-20}"
   local rollouts_per_step=$((group_size * num_group_envs * rollout_epoch))
 
   COMMON_ENV=(
@@ -101,6 +125,9 @@ run_suite() {
     "TRAIN_GROUP_SIZES_OVERRIDE=${group_size}"
     "TRAIN_NUM_GROUP_ENVS_OVERRIDE=${num_group_envs}"
     "TRAIN_ROLLOUT_EPOCHS_OVERRIDE=${rollout_epoch}"
+    "SWEEP_SAVE_INTERVAL=${save_interval}"
+    "SLURM_ACCOUNT=${SLURM_ACCOUNT}"
+    "USE_MINIMAL_SBATCH_RESOURCES=1"
     "SWEEP_WANDB_EXTRA_TAG=${wandb_extra_tag}"
   )
 
@@ -112,11 +139,13 @@ run_suite() {
   echo "  num_group_envs=${num_group_envs}"
   echo "  rollout_epoch=${rollout_epoch}"
   echo "  rollouts_per_step=${rollouts_per_step}"
+  echo "  save_interval=${save_interval}"
+  echo "  SLURM_ACCOUNT=${SLURM_ACCOUNT}"
+  echo "  USE_MINIMAL_SBATCH_RESOURCES=1"
   echo "  wandb_extra_tag=${wandb_extra_tag:-none}"
   echo "############################################################"
 
-  # Reference GRPO run using the existing GRPO SLURM sweep.
-  run_grpo_baseline "${suite_label}"
+  # GRPO baseline disabled: keep this wrapper focused on OPD variants only.
 
   # Current OPD setting: REINFORCE-style OPD objective with group-zscore-normalized OPD rewards.
   run_opd_variant "${suite_label}" "Current OPD group-normalized REINFORCE" "1" "group_zscore" "embodied_opd_reinforce"
@@ -136,7 +165,7 @@ if [[ "${RUN_CURRENT}" == "1" ]]; then
   run_suite "current_rps128_steps60" 60 8 4 4 ""
 fi
 
-# Same loss/normalization settings with only 8 rollouts/step and 200 training steps.
+# Same loss/normalization settings with group_size=8, num_group_envs=4.
 if [[ "${RUN_RPS8_200}" == "1" ]]; then
-  run_suite "rps8_steps200" 200 8 1 1 "steps200"
+  run_suite "gs8_nge4_steps${RPS_MAX_EPOCH}_si25" "${RPS_MAX_EPOCH}" 8 4 1 "steps${RPS_MAX_EPOCH}_si25" 25
 fi

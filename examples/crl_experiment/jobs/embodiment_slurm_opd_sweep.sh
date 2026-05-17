@@ -59,7 +59,8 @@
 # before running this script (values are baked into each sbatch script). Optional:
 #   export LIBERO_CONFIG_PATH=...   # defaults to LIBERO_REPO_PATH when exporting.
 #
-# Cluster: if HOME is /users/anmari, emit only #SBATCH --time (no cpus/mem/gpus); --account defaults to a143.
+# Cluster override: if USE_MINIMAL_SBATCH_RESOURCES=1, emit only #SBATCH --time
+# (no cpus/mem/gpus). Useful on clusters where those are injected externally.
 #
 set -euo pipefail
 
@@ -82,28 +83,36 @@ SLURM_ACCOUNT="${SLURM_ACCOUNT:-}"
 SBATCH_EXTRA="${SBATCH_EXTRA:-}"
 PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
-if [[ "${HOME}" == "/users/anmari" ]]; then
-  NEW_CLUSTER_ACCOUNT="${SLURM_ACCOUNT:-a143}"
-else
-  NEW_CLUSTER_ACCOUNT=""
-fi
+USE_MINIMAL_SBATCH_RESOURCES="1"
+NEW_CLUSTER_ACCOUNT="${SLURM_ACCOUNT:-a143}"
 
 # Baked into each job if non-empty (see header). Otherwise run_embodiment.sh uses ${REPO_PATH}/LIBERO.
 LIBERO_REPO_PATH="${LIBERO_REPO_PATH:-}"
 LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-}"
-OPD_TEACHER_MAPPING_JSON="${OPD_TEACHER_MAPPING_JSON:-${SCRIPT_DIR}/opd_teacher_mapping.json}"
+if [[ -z "${OPD_TEACHER_MAPPING_JSON:-}" ]]; then
+  if [[ -n "${SCRATCH:-}" ]]; then
+    OPD_TEACHER_MAPPING_JSON="${SCRATCH%/}/vla-continual-learning/examples/crl_experiment/jobs/opd_teacher_mapping.json"
+  else
+    OPD_TEACHER_MAPPING_JSON="${SCRIPT_DIR}/opd_teacher_mapping.json"
+  fi
+fi
+OPD_TEACHER_MAPPING_GROUP="${OPD_TEACHER_MAPPING_GROUP:-teacher_sft_by_task}"
 
 lookup_mapped_teacher_path() {
   local task_id="$1"
   if [[ ! -f "${OPD_TEACHER_MAPPING_JSON}" ]]; then
     return 0
   fi
-  python3 - "${OPD_TEACHER_MAPPING_JSON}" "${task_id}" <<'PY'
+  python3 - "${OPD_TEACHER_MAPPING_JSON}" "${task_id}" "${PROJECT_ROOT}" "${SCRATCH:-}" "${OPD_TEACHER_MAPPING_GROUP}" <<'PY'
 import json
 import sys
+from pathlib import Path
 
 mapping_path = sys.argv[1]
 task_id = str(sys.argv[2])
+project_root = sys.argv[3]
+scratch_base = sys.argv[4]
+mapping_group = sys.argv[5]
 try:
     with open(mapping_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -112,11 +121,29 @@ except Exception:
     raise SystemExit(0)
 
 path = (
-    data.get("teacher_sft_by_task", {}).get(task_id)
+    data.get(mapping_group, {}).get(task_id)
     or data.get(task_id)
     or ""
 )
-print(path)
+if not path:
+    print("")
+    raise SystemExit(0)
+
+p = Path(path)
+if p.is_absolute():
+    print(str(p))
+    raise SystemExit(0)
+
+# Relative mapping entries are resolved from SCRATCH repo mirror first, then PROJECT_ROOT.
+if scratch_base:
+    scratch_repo = Path(scratch_base) / "vla-continual-learning"
+    scratch_candidate = (scratch_repo / p).resolve()
+    if scratch_candidate.exists():
+        print(str(scratch_candidate))
+        raise SystemExit(0)
+
+project_candidate = (Path(project_root) / p).resolve()
+print(str(project_candidate))
 PY
 }
 
@@ -276,7 +303,7 @@ submit_job() {
     echo "#!/bin/bash"
     echo "#SBATCH --job-name=${job_name}"
     echo "#SBATCH --time=${TIME}"
-    if [[ "${HOME}" != "/users/anmari" ]]; then
+    if [[ "${USE_MINIMAL_SBATCH_RESOURCES}" != "1" ]]; then
       echo "#SBATCH --cpus-per-task=${CPUS_PER_TASK}"
       echo "#SBATCH --mem-per-cpu=${MEM_PER_CPU}"
       echo "#SBATCH --gpus=${GPU}"
@@ -286,7 +313,7 @@ submit_job() {
     if [[ -n "${SLURM_PARTITION}" ]]; then
       echo "#SBATCH --partition=${SLURM_PARTITION}"
     fi
-    if [[ "${HOME}" == "/users/anmari" ]]; then
+    if [[ "${USE_MINIMAL_SBATCH_RESOURCES}" == "1" ]]; then
       echo "#SBATCH --account=${NEW_CLUSTER_ACCOUNT}"
     elif [[ -n "${SLURM_ACCOUNT}" ]]; then
       echo "#SBATCH --account=${SLURM_ACCOUNT}"
@@ -353,13 +380,14 @@ echo "PROJECT_ROOT=${PROJECT_ROOT}"
 echo "SLURM_LOG_DIR=${SLURM_LOG_DIR}"
 echo "PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF}"
 echo "OPD_TEACHER_MAPPING_JSON=${OPD_TEACHER_MAPPING_JSON}"
+echo "OPD_TEACHER_MAPPING_GROUP=${OPD_TEACHER_MAPPING_GROUP}"
 if [[ -n "${LIBERO_REPO_PATH}" ]]; then
   echo "LIBERO_REPO_PATH (in jobs)=${LIBERO_REPO_PATH}"
 else
   echo "LIBERO_REPO_PATH: (unset — jobs use default in run_embodiment.sh: \${REPO_PATH}/LIBERO)"
 fi
-if [[ "${HOME}" == "/users/anmari" ]]; then
-  echo "Resources (HOME=/users/anmari): TIME=${TIME} — no #SBATCH cpus/mem/gpus; account=${NEW_CLUSTER_ACCOUNT}"
+if [[ "${USE_MINIMAL_SBATCH_RESOURCES}" == "1" ]]; then
+  echo "Resources (minimal sbatch mode): TIME=${TIME} — no #SBATCH cpus/mem/gpus; account=${NEW_CLUSTER_ACCOUNT}"
 else
   echo "Resources: TIME=${TIME} CPUS_PER_TASK=${CPUS_PER_TASK} MEM_PER_CPU=${MEM_PER_CPU} GPU=${GPU}"
 fi

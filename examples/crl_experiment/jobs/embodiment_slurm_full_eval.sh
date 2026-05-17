@@ -21,7 +21,7 @@
 #   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh logs/sequential/task_4_seed184 50
 #
 #   # Specific checkpoint (absolute path under PROJECT_ROOT), multiple steps
-#   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh /users/anmari/vla-continual-learning/logs_spatial/sequential/task_1_seed184 10,20,30
+#   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh ${PROJECT_ROOT}/logs_spatial/sequential/task_1_seed184 10,20,30
 #
 #   # Evaluate mapped SFT teacher for task 1 (uses JSON map path directly)
 #   bash examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh base 0 crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial 184 1

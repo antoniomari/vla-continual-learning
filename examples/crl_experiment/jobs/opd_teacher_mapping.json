@@ -1,6 +1,10 @@
 {
   "teacher_sft_by_task": {
-    "1": "/users/anmari/vla-continual-learning/logs_spatial/sequential/task_1_seed184/opd_bc_teacher/actor",
-    "4": "/users/anmari/vla-continual-learning/logs_spatial/sequential/task_4_seed184/opd_bc_teacher/actor"
+    "1": "logs_spatial/sequential/task_1_seed184/opd_bc_teacher/actor",
+    "4": "logs_spatial/sequential/task_4_seed184/opd_bc_teacher/actor"
+  },
+  "teacher_rl_by_task": {
+    "1": "logs_spatial/sequential/task_1_seed4096/checkpoints/global_step_60/actor",
+    "4": "logs_spatial/sequential/task_4_seed4096/checkpoints/global_step_60/actor"
   }
 }

@@ -51,6 +51,43 @@ fi
 
 # Get workspace root (assume we're already in the workspace root)
 WORKSPACE_ROOT=$(pwd)
+SCRATCH_BASE="${SCRATCH:-}"
+SCRATCH_REPO_ROOT=""
+if [ -n "$SCRATCH_BASE" ]; then
+    SCRATCH_REPO_ROOT="${SCRATCH_BASE%/}/vla-continual-learning"
+fi
+
+build_scratch_checkpoint_base() {
+    local ckpt_loc="$1"
+    local rel=""
+    if [ -z "$SCRATCH_REPO_ROOT" ]; then
+        echo ""
+        return 0
+    fi
+    ckpt_loc="${ckpt_loc%/}"
+
+    if [[ "$ckpt_loc" = /* ]]; then
+        case "$ckpt_loc" in
+            "${WORKSPACE_ROOT}"/*)
+                rel="${ckpt_loc#${WORKSPACE_ROOT}/}"
+                ;;
+            "${SCRATCH_REPO_ROOT}"/*)
+                rel="${ckpt_loc#${SCRATCH_REPO_ROOT}/}"
+                ;;
+            *)
+                rel=""
+                ;;
+        esac
+    else
+        rel="${ckpt_loc#./}"
+    fi
+
+    if [ -z "$rel" ]; then
+        echo ""
+    else
+        echo "${SCRATCH_REPO_ROOT}/${rel}"
+    fi
+}
 
 # Base eval mode (no LoRA path)
 IS_BASE_EVAL=false
@@ -69,23 +106,45 @@ fi
 if [ "$IS_BASE_EVAL" = false ]; then
     # Construct full checkpoint path (remove any trailing slashes from CHECKPOINT_LOCATION first)
     CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION%/}"
+    LOCAL_CKPT_BASE="${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}"
+    SCRATCH_CKPT_BASE="$(build_scratch_checkpoint_base "$CHECKPOINT_LOCATION")"
     
     if [ "$IS_SIMPLE_CNN" = true ]; then
         # For simple_cnn, checkpoint is a file (model.pt), not a directory
-        CHECKPOINT_PATH="${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/model.pt"
+        CHECKPOINT_PATH="${LOCAL_CKPT_BASE}/checkpoints/global_step_${STEP_NUMBER}/actor/model.pt"
         
-        # Verify checkpoint file exists
+        # Prefer local path, then scratch mirror.
+        if [ ! -f "$CHECKPOINT_PATH" ] && [ -n "$SCRATCH_CKPT_BASE" ]; then
+            ALT_CHECKPOINT_PATH="${SCRATCH_CKPT_BASE}/checkpoints/global_step_${STEP_NUMBER}/actor/model.pt"
+            if [ -f "$ALT_CHECKPOINT_PATH" ]; then
+                CHECKPOINT_PATH="$ALT_CHECKPOINT_PATH"
+            fi
+        fi
         if [ ! -f "$CHECKPOINT_PATH" ]; then
-            echo "ERROR: Checkpoint file not found at $CHECKPOINT_PATH"
+            echo "ERROR: Checkpoint file not found at:"
+            echo "       local:   ${LOCAL_CKPT_BASE}/checkpoints/global_step_${STEP_NUMBER}/actor/model.pt"
+            if [ -n "$SCRATCH_CKPT_BASE" ]; then
+                echo "       scratch: ${SCRATCH_CKPT_BASE}/checkpoints/global_step_${STEP_NUMBER}/actor/model.pt"
+            fi
             exit 1
         fi
     else
         # For LoRA models, checkpoint is a directory
-        CHECKPOINT_PATH="${WORKSPACE_ROOT}/${CHECKPOINT_LOCATION}/checkpoints/global_step_${STEP_NUMBER}/actor/"
+        CHECKPOINT_PATH="${LOCAL_CKPT_BASE}/checkpoints/global_step_${STEP_NUMBER}/actor/"
         
-        # Verify checkpoint directory exists
+        # Prefer local path, then scratch mirror.
+        if [ ! -d "$CHECKPOINT_PATH" ] && [ -n "$SCRATCH_CKPT_BASE" ]; then
+            ALT_CHECKPOINT_PATH="${SCRATCH_CKPT_BASE}/checkpoints/global_step_${STEP_NUMBER}/actor/"
+            if [ -d "$ALT_CHECKPOINT_PATH" ]; then
+                CHECKPOINT_PATH="$ALT_CHECKPOINT_PATH"
+            fi
+        fi
         if [ ! -d "$CHECKPOINT_PATH" ]; then
-            echo "ERROR: Checkpoint directory not found at $CHECKPOINT_PATH"
+            echo "ERROR: Checkpoint directory not found at:"
+            echo "       local:   ${LOCAL_CKPT_BASE}/checkpoints/global_step_${STEP_NUMBER}/actor/"
+            if [ -n "$SCRATCH_CKPT_BASE" ]; then
+                echo "       scratch: ${SCRATCH_CKPT_BASE}/checkpoints/global_step_${STEP_NUMBER}/actor/"
+            fi
             exit 1
         fi
     fi

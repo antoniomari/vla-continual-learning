@@ -31,19 +31,21 @@ FULL_EVAL="examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh"
 
 EVAL_CONFIG_NAME="${EVAL_CONFIG_NAME:-crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial}"
 EVAL_SEED="${EVAL_SEED:-184}"
-EVAL_STEPS="${EVAL_STEPS:-20,40,60,80,100,120,140,160,180,200}"
+EVAL_STEPS="${EVAL_STEPS:-25,50,75}"
 EVAL_ROLLOUTS_PER_TASK="${EVAL_ROLLOUTS_PER_TASK:-320}"
 INCLUDE_BASE="${INCLUDE_BASE:-0}"
 
+
+
 DEFAULT_TARGETS=(
-  "logs_spatial/sequential/grpo_rps8_gb512_gs8_steps200_task_1_seed4096_spatial"
-  "logs_spatial/sequential/grpo_rps8_gb512_gs8_steps200_task_4_seed4096_spatial"
-  "logs_spatial/sequential/opd_sftteacher_adv1_rps8_steps200_task_1_seed184_spatial_norm_group_zscore"
-  "logs_spatial/sequential/opd_sftteacher_adv1_rps8_steps200_task_4_seed184_spatial_norm_group_zscore"
-  "logs_spatial/sequential/opd_sftteacher_adv0_nonorm_rps8_steps200_task_1_seed184_spatial"
-  "logs_spatial/sequential/opd_sftteacher_adv0_nonorm_rps8_steps200_task_4_seed184_spatial"
-  "logs_spatial/sequential/opd_sftteacher_adv1_grpo_loss_rps8_steps200_task_1_seed184_spatial_norm_group_zscore"
-  "logs_spatial/sequential/opd_sftteacher_adv1_grpo_loss_rps8_steps200_task_4_seed184_spatial_norm_group_zscore"
+  "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps100_si25_task_1_seed4096_spatial"
+  "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps100_si25_task_4_seed4096_spatial"
+  "logs_spatial/sequential/opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_1_seed184_spatial"
+  "logs_spatial/sequential/opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_4_seed184_spatial"
+  "logs_spatial/sequential/opd_sftteacher_adv1_grpo_loss_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_grpo_loss_rps32_steps100_si25_task_4_seed184_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_rps32_steps100_si25_task_4_seed184_spatial_norm_group_zscore"
 )
 
 TARGETS=()

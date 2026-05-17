@@ -107,6 +107,63 @@ if [ -z "${LOG_DIR}" ]; then
         LOG_DIR="${REPO_PATH}/logs/temp/run_$(date +'%Y%m%d-%H:%M:%S')"
     fi
 fi
+
+resolve_abs_log_dir() {
+    local p="$1"
+    if [[ "$p" = /* ]]; then
+        printf '%s\n' "$p"
+    else
+        p="${p#./}"
+        printf '%s/%s\n' "$REPO_PATH" "$p"
+    fi
+}
+
+SCRATCH_BASE="${SCRATCH:-}"
+SCRATCH_REPO_ROOT=""
+if [[ -n "${SCRATCH_BASE}" ]]; then
+    SCRATCH_REPO_ROOT="${SCRATCH_BASE%/}/vla-continual-learning"
+fi
+
+ensure_scratch_checkpoint_symlink() {
+    local abs_log_dir="$1"
+
+    # Only mirror under SCRATCH when log dir is inside this repo.
+    case "$abs_log_dir" in
+        "${REPO_PATH}"/*) ;;
+        *)
+            return 0
+            ;;
+    esac
+
+    if [[ -z "${SCRATCH_REPO_ROOT}" ]]; then
+        echo "SCRATCH is unset; keeping checkpoints under repo log dir."
+        return 0
+    fi
+
+    local rel_log_dir="${abs_log_dir#${REPO_PATH}/}"
+    local scratch_log_dir="${SCRATCH_REPO_ROOT}/${rel_log_dir}"
+    local local_ckpt_dir="${abs_log_dir}/checkpoints"
+    local scratch_ckpt_dir="${scratch_log_dir}/checkpoints"
+
+    mkdir -p "$abs_log_dir" "$scratch_log_dir"
+
+    # If checkpoints already exist locally (legacy runs), move once.
+    if [[ -d "$local_ckpt_dir" && ! -L "$local_ckpt_dir" ]]; then
+        if [[ ! -e "$scratch_ckpt_dir" ]]; then
+            mv "$local_ckpt_dir" "$scratch_ckpt_dir"
+        fi
+    fi
+
+    mkdir -p "$scratch_ckpt_dir"
+    ln -sfn "$scratch_ckpt_dir" "$local_ckpt_dir"
+
+    echo "Checkpoint mirror:"
+    echo "  local:   $local_ckpt_dir"
+    echo "  scratch: $scratch_ckpt_dir"
+}
+
+LOG_DIR="$(resolve_abs_log_dir "$LOG_DIR")"
+ensure_scratch_checkpoint_symlink "$LOG_DIR"
 MEGA_LOG_FILE="${LOG_DIR}/run_embodiment.log"
 mkdir -p "${LOG_DIR}"
 # -u: unbuffered stdout/stderr so [train_embodied_agent] lines keep order vs Ray logs when piped to tee
