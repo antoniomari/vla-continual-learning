@@ -430,7 +430,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                                     for OPD_TMB in "${TRAIN_OPD_TEACHER_MICRO_BATCH_SIZES[@]}"; do
                                       for OPD_LOSS in "${TRAIN_OPD_LOSS_TYPES[@]}"; do
                                         for SEED in "${TRAIN_SEEDS[@]}"; do
-                            if [[ "${TRAIN_OPD_RL_TEACHER}" == "1" ]]; then
+                            if [[ "${OPD_TEACHER_MAPPING_GROUP}" == "teacher_rl_by_task" ]]; then
                               TEACHER_TAG="rlteacher"
                             else
                               TEACHER_TAG="sftteacher"
@@ -482,8 +482,8 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                             for OPD_REWARD_NORM in "${TRAIN_OPD_REWARD_NORMALIZATIONS[@]}"; do
                               for OPD_TMB in "${TRAIN_OPD_TEACHER_MICRO_BATCH_SIZES[@]}"; do
                                 for OPD_LOSS in "${TRAIN_OPD_LOSS_TYPES[@]}"; do
-                                  for SEED in "${TRAIN_SEEDS[@]}"; do
-                      if [[ "${TRAIN_OPD_RL_TEACHER}" == "1" ]]; then
+                  for SEED in "${TRAIN_SEEDS[@]}"; do
+                      if [[ "${OPD_TEACHER_MAPPING_GROUP}" == "teacher_rl_by_task" ]]; then
                         TEACHER_TAG="rlteacher"
                       else
                         TEACHER_TAG="sftteacher"

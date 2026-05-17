@@ -38,21 +38,22 @@ OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT="${OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT:-1}"
 OPD_TEACHER_STASH_LOGPROBS_ON_CPU="${OPD_TEACHER_STASH_LOGPROBS_ON_CPU:-1}"
 OPD_TEACHER_MICRO_BATCH="${OPD_TEACHER_MICRO_BATCH:-8}"
 # Teacher source selector for mapped-teacher OPD:
-#   - sft (default): use teacher_sft_by_task and keep algorithm.rl_teacher=0
-#   - rl:            use teacher_rl_by_task and set algorithm.rl_teacher=1
+#   - sft (default): use teacher_sft_by_task
+#   - rl:            use teacher_rl_by_task
+# NOTE: both modes keep algorithm.rl_teacher=0 so we directly train the OPD student
+# from the mapped teacher checkpoint (no RL-teacher pretraining/warmup).
 OPD_TEACHER_SOURCE="${OPD_TEACHER_SOURCE:-sft}"
 if [[ "${OPD_TEACHER_SOURCE}" == "rl" ]]; then
   OPD_TEACHER_MAPPING_GROUP="teacher_rl_by_task"
-  OPD_RL_TEACHER="1"
 elif [[ "${OPD_TEACHER_SOURCE}" == "sft" ]]; then
   OPD_TEACHER_MAPPING_GROUP="teacher_sft_by_task"
-  OPD_RL_TEACHER="0"
 else
   echo "ERROR: OPD_TEACHER_SOURCE must be 'sft' or 'rl', got '${OPD_TEACHER_SOURCE}'"
   exit 1
 fi
 # Keep OPD on mapped teachers from JSON (no teacher retraining from this wrapper).
 OPD_BC_STEPS_OVERRIDE="${OPD_BC_STEPS_OVERRIDE:-0}"
+OPD_RL_TEACHER="0"
 # Helps reduce fragmentation-related OOMs.
 PYTORCH_CUDA_ALLOC_CONF_VALUE="${PYTORCH_CUDA_ALLOC_CONF_VALUE:-expandable_segments:True}"
 
