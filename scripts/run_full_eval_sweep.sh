@@ -4,11 +4,11 @@
 # This is a thin wrapper around:
 #   examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh
 #
-# Defaults target the rps8/200 runs produced by scripts/run_opd_loss_variants.sh:
-#   - GRPO baseline
-#   - OPD group-normalized REINFORCE
-#   - OPD REINFORCE without normalization
-#   - OPD with GRPO clipping loss
+# Defaults target the 20 OPD steps200 runs from the May 17 sweeps:
+#   - SFT-teacher old variants: group_zscore, no-normalization, GRPO-loss group_zscore
+#   - RL-teacher old variants: group_zscore, no-normalization, GRPO-loss group_zscore
+#   - SFT-teacher dense-normalization GRPO-loss variants:
+#     token_zscore, action_dim_zscore, positive_clip, teacher_prob
 # for tasks 1 and 4.
 #
 # Preview:
@@ -31,21 +31,33 @@ FULL_EVAL="examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh"
 
 EVAL_CONFIG_NAME="${EVAL_CONFIG_NAME:-crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial}"
 EVAL_SEED="${EVAL_SEED:-184}"
-EVAL_STEPS="${EVAL_STEPS:-25,50,75}"
+EVAL_STEPS="${EVAL_STEPS:-25,50,75,100,125,150,175,200}"
 EVAL_ROLLOUTS_PER_TASK="${EVAL_ROLLOUTS_PER_TASK:-320}"
 INCLUDE_BASE="${INCLUDE_BASE:-0}"
 
 
 
 DEFAULT_TARGETS=(
-  "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps100_si25_task_1_seed4096_spatial"
-  "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps100_si25_task_4_seed4096_spatial"
-  "logs_spatial/sequential/opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_1_seed184_spatial"
-  "logs_spatial/sequential/opd_sftteacher_adv0_nonorm_rps32_steps100_si25_task_4_seed184_spatial"
-  "logs_spatial/sequential/opd_sftteacher_adv1_grpo_loss_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore"
-  "logs_spatial/sequential/opd_sftteacher_adv1_grpo_loss_rps32_steps100_si25_task_4_seed184_spatial_norm_group_zscore"
-  "logs_spatial/sequential/opd_sftteacher_adv1_rps32_steps100_si25_task_1_seed184_spatial_norm_group_zscore"
-  "logs_spatial/sequential/opd_sftteacher_adv1_rps32_steps100_si25_task_4_seed184_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_rps32_steps200_si25_task_1_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_rps32_steps200_si25_task_4_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv0_nonorm_rps32_steps200_si25_task_1_seed2_spatial"
+  "logs_spatial/sequential/opd_sftteacher_adv0_nonorm_rps32_steps200_si25_task_4_seed2_spatial"
+  "logs_spatial/sequential/opd_sftteacher_adv1_grpo_loss_rps32_steps200_si25_task_1_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_rlteacher_adv1_rps32_steps200_si25_task_1_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_rlteacher_adv1_rps32_steps200_si25_task_4_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_rlteacher_adv0_nonorm_rps32_steps200_si25_task_1_seed2_spatial"
+  "logs_spatial/sequential/opd_rlteacher_adv0_nonorm_rps32_steps200_si25_task_4_seed2_spatial"
+  "logs_spatial/sequential/opd_rlteacher_adv1_grpo_loss_rps32_steps200_si25_task_1_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_rlteacher_adv1_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_token_zscore_grpo_loss_rps32_steps200_si25_task_1_seed2_spatial_norm_token_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_token_zscore_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_token_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_action_dim_zscore_grpo_loss_rps32_steps200_si25_task_1_seed2_spatial_norm_action_dim_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_action_dim_zscore_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_action_dim_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_positive_clip_grpo_loss_rps32_steps200_si25_task_1_seed2_spatial_norm_positive_clip"
+  "logs_spatial/sequential/opd_sftteacher_adv1_positive_clip_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_positive_clip"
+  "logs_spatial/sequential/opd_sftteacher_adv1_teacher_prob_grpo_loss_rps32_steps200_si25_task_1_seed2_spatial_norm_teacher_prob"
+  "logs_spatial/sequential/opd_sftteacher_adv1_teacher_prob_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_teacher_prob"
 )
 
 TARGETS=()
