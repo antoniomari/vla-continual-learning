@@ -19,6 +19,31 @@ import torch
 from rlinf.algorithms.registry import register_advantage
 
 
+def _compute_embodied_trajectory_scores(
+    rewards: torch.Tensor,
+    dones: torch.Tensor,
+) -> torch.Tensor:
+    """Return one undiscounted env score per batch item, zeroing after terminal."""
+    n_chunk_step, actual_bsz, num_action_chunks = rewards.shape
+    flattened_rewards = rewards.transpose(1, 2).reshape(
+        n_chunk_step * num_action_chunks, -1
+    )
+    flattened_dones = dones.transpose(1, 2).reshape(
+        (n_chunk_step + 1) * num_action_chunks, -1
+    )
+    flattened_dones = flattened_dones[-(n_chunk_step * num_action_chunks + 1) :]
+
+    scores = torch.zeros(
+        actual_bsz,
+        device=rewards.device,
+        dtype=rewards.dtype,
+    )
+    for step in reversed(range(flattened_rewards.shape[0])):
+        scores = scores * ~flattened_dones[step + 1]
+        scores += flattened_rewards[step]
+    return scores
+
+
 @register_advantage("embodied_gae")
 def compute_embodied_gae_advantages_and_returns(
     **kwargs,
@@ -142,10 +167,7 @@ def compute_embodied_grpo_advantages(
     # Per-env scalar score = sum of rewards until episode end (backward pass).
     # `scores * ~dones` clears contribution after terminal; no gamma here.
     n_steps = flattened_rewards.shape[0]
-    scores = torch.zeros(actual_bsz)
-    for step in reversed(range(n_steps)):
-        scores = scores * ~flattened_dones[step + 1]
-        scores += flattened_rewards[step]
+    scores = _compute_embodied_trajectory_scores(rewards, dones)
 
     # Group-relative standardization: each group has `group_size` trajectories.
     if normalize_advantages:
@@ -198,8 +220,51 @@ def compute_embodied_opd_advantages(
     tanh_tau = float(kwargs.get("opd_reward_tanh_tau", 5.0))
     clip_c = float(kwargs.get("opd_reward_clip_c", 1.0))
     group_size = kwargs.get("group_size", 1)
+    loss_type = kwargs.get("loss_type", "embodied_opd")
+    success_gate_teacher_lambda = float(
+        kwargs.get("opd_success_gate_teacher_lambda", 1.0)
+    )
+    success_gate_threshold = float(
+        kwargs.get("opd_success_gate_reward_threshold", 0.0)
+    )
     single_action_dim = kwargs.get("single_action_dim", None)
     epsilon = kwargs.get("epsilon", 1e-6)
+
+    if loss_type == "embodied_opd_success_gate":
+        teacher_kwargs = dict(kwargs)
+        teacher_kwargs["loss_type"] = "embodied_opd"
+        teacher_advantages, _ = compute_embodied_opd_advantages(**teacher_kwargs)
+        env_advantages, _ = compute_embodied_grpo_advantages(
+            rewards=kwargs["rewards"],
+            dones=kwargs["dones"],
+            normalize_advantages=kwargs.get("normalize_advantages", True),
+            num_group_envs=kwargs.get("num_group_envs", 1),
+            group_size=group_size,
+            rollout_epoch=kwargs.get("rollout_epoch", 1),
+            loss_mask=None,
+            epsilon=epsilon,
+        )
+        env_advantages = env_advantages.expand_as(teacher_advantages)
+
+        success_scores = _compute_embodied_trajectory_scores(
+            kwargs["rewards"],
+            kwargs["dones"],
+        )
+        success_gate = (success_scores > success_gate_threshold).to(
+            dtype=teacher_advantages.dtype,
+            device=teacher_advantages.device,
+        )
+        success_gate = success_gate.view(1, -1, 1).expand_as(teacher_advantages)
+
+        adv_out = (
+            success_gate * env_advantages
+            + (1.0 - success_gate)
+            * success_gate_teacher_lambda
+            * teacher_advantages
+        )
+        if loss_mask is not None:
+            adv_out = adv_out * loss_mask
+        return adv_out, adv_out
 
     # Advantages are computed as VLA-OPD reward initially
     advantages = teacher_logprobs - student_logprobs
