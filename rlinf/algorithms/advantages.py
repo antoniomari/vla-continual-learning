@@ -244,7 +244,32 @@ def compute_embodied_opd_advantages(
             loss_mask=None,
             epsilon=epsilon,
         )
-        env_advantages = env_advantages.expand_as(teacher_advantages)
+        # GRPO env advantages are typically per action-chunk (e.g., 8), while OPD
+        # teacher advantages can be token/action-dim flattened (e.g., 8*7=56).
+        # Align shapes explicitly before mixing them in success-gated OPD.
+        if env_advantages.shape != teacher_advantages.shape:
+            if env_advantages.shape[:2] != teacher_advantages.shape[:2]:
+                raise ValueError(
+                    "embodied_opd_success_gate shape mismatch on [n_chunk, bsz]: "
+                    f"env_advantages={tuple(env_advantages.shape)} vs "
+                    f"teacher_advantages={tuple(teacher_advantages.shape)}"
+                )
+            env_last = int(env_advantages.shape[-1])
+            teacher_last = int(teacher_advantages.shape[-1])
+            if env_last <= 0 or teacher_last % env_last != 0:
+                raise ValueError(
+                    "embodied_opd_success_gate cannot align token dimension: "
+                    f"env_advantages last dim={env_last}, "
+                    f"teacher_advantages last dim={teacher_last}"
+                )
+            repeat_factor = teacher_last // env_last
+            env_advantages = env_advantages.repeat_interleave(
+                repeat_factor, dim=-1
+            )
+        env_advantages = env_advantages.to(
+            dtype=teacher_advantages.dtype,
+            device=teacher_advantages.device,
+        )
 
         success_scores = _compute_embodied_trajectory_scores(
             kwargs["rewards"],

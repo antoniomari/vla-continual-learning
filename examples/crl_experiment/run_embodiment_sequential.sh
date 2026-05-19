@@ -345,10 +345,10 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         OVERRIDES="$OVERRIDES ++algorithm.opd_reward_clip_c=${SWEEP_OPD_REWARD_CLIP_C}"
     fi
     if [ -n "${SWEEP_OPD_SUCCESS_GATE_TEACHER_LAMBDA:-}" ]; then
-        OVERRIDES="$OVERRIDES +algorithm.opd_success_gate_teacher_lambda=${SWEEP_OPD_SUCCESS_GATE_TEACHER_LAMBDA}"
+        OVERRIDES="$OVERRIDES ++algorithm.opd_success_gate_teacher_lambda=${SWEEP_OPD_SUCCESS_GATE_TEACHER_LAMBDA}"
     fi
     if [ -n "${SWEEP_OPD_SUCCESS_GATE_REWARD_THRESHOLD:-}" ]; then
-        OVERRIDES="$OVERRIDES +algorithm.opd_success_gate_reward_threshold=${SWEEP_OPD_SUCCESS_GATE_REWARD_THRESHOLD}"
+        OVERRIDES="$OVERRIDES ++algorithm.opd_success_gate_reward_threshold=${SWEEP_OPD_SUCCESS_GATE_REWARD_THRESHOLD}"
     fi
     if [ -n "${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE:-}" ]; then
         OVERRIDES="$OVERRIDES ++algorithm.opd_teacher_micro_batch_size=${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE}"

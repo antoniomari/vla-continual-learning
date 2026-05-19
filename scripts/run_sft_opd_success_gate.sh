@@ -5,7 +5,7 @@
 # Failed rollouts use lambda_teacher * SFT-teacher OPD advantage.
 #
 # W&B names include:
-#   opd_sftteacher_adv1_group_zscore_success_gate_lam{...}_thr0p0_rps8_
+#   opd_sftteacher_adv1_group_zscore_success_gate_lam{...}_thr0p0_rps32_
 
 set -euo pipefail
 
@@ -16,8 +16,12 @@ TRAIN_TASK_INPUTS_OVERRIDE="1 4" \
 TRAIN_MAX_EPOCHS_OVERRIDE=200 \
 TRAIN_SEEDS_OVERRIDE=2 \
 TRAIN_GROUP_SIZES_OVERRIDE=8 \
-TRAIN_NUM_GROUP_ENVS_OVERRIDE=1 \
+TRAIN_NUM_GROUP_ENVS_OVERRIDE=4 \
 TRAIN_ROLLOUT_EPOCHS_OVERRIDE=1 \
+# Never train/warmup teacher in this launcher: use mapped SFT teacher only.
+TRAIN_OPD_BC_STEPS_OVERRIDE=0 \
+TRAIN_OPD_RL_TEACHER=0 \
+OPD_TEACHER_MAPPING_GROUP=teacher_sft_by_task \
 TRAIN_OPD_LOSS_TYPES_OVERRIDE="embodied_opd_success_gate" \
 TRAIN_OPD_REWARD_NORMALIZATIONS_OVERRIDE="group_zscore" \
 TRAIN_OPD_SUCCESS_GATE_TEACHER_LAMBDAS_OVERRIDE="0.1 0.3 1.0" \
