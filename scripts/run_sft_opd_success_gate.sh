@@ -9,6 +9,7 @@
 
 set -euo pipefail
 
+# Never train/warmup teacher in this launcher: use mapped SFT teacher only.
 RUN_MODE=train \
 BASE_MODEL=1 \
 GRPO_HP_FROM_SWEEP=1 \
@@ -18,7 +19,6 @@ TRAIN_SEEDS_OVERRIDE=2 \
 TRAIN_GROUP_SIZES_OVERRIDE=8 \
 TRAIN_NUM_GROUP_ENVS_OVERRIDE=4 \
 TRAIN_ROLLOUT_EPOCHS_OVERRIDE=1 \
-# Never train/warmup teacher in this launcher: use mapped SFT teacher only.
 TRAIN_OPD_BC_STEPS_OVERRIDE=0 \
 TRAIN_OPD_RL_TEACHER=0 \
 OPD_TEACHER_MAPPING_GROUP=teacher_sft_by_task \
