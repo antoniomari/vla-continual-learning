@@ -495,7 +495,9 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
                 "normalize_advantages": self.cfg.algorithm.get(
                     "normalize_advantages", True
                 ),
+                "num_group_envs": num_group_envs_for_train,
                 "group_size": self.cfg.algorithm.get("group_size", 8),
+                "rollout_epoch": self.cfg.algorithm.get("rollout_epoch", 1),
                 "reward_type": self.cfg.algorithm.reward_type,
                 "loss_type": self.cfg.algorithm.get("loss_type", "embodied_opd"),
                 "opd_reward_normalization": self.cfg.algorithm.get(
@@ -507,6 +509,13 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
                 "opd_reward_clip_c": self.cfg.algorithm.get(
                     "opd_reward_clip_c", 1.0
                 ),
+                "opd_success_gate_teacher_lambda": self.cfg.algorithm.get(
+                    "opd_success_gate_teacher_lambda", 1.0
+                ),
+                "opd_success_gate_reward_threshold": self.cfg.algorithm.get(
+                    "opd_success_gate_reward_threshold", 0.0
+                ),
+                "single_action_dim": getattr(student_core, "action_dim", None),
             }
         else:
             kwargs = {

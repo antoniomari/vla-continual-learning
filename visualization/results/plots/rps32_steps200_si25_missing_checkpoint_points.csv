@@ -1,0 +1,2 @@
+training_task,run_name,checkpoint_step
+4,opd_sftteacher_adv1_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_group_zscore,25
