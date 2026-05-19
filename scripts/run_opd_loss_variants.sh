@@ -5,8 +5,8 @@
 #   - examples/crl_experiment/jobs/embodiment_slurm_sweep.sh for the GRPO baseline
 #   - examples/crl_experiment/jobs/embodiment_slurm_opd_sweep.sh for OPD variants
 #
-# By default this submits/previews the rps8 suite:
-#   - group_size=8, num_group_envs=1, rollout_epoch=1
+# By default this submits/previews the gs8_nge4 suite:
+#   - group_size=8, num_group_envs=4, rollout_epoch=1
 #   - RPS_MAX_EPOCH steps, save every 25
 #
 # The same loss/normalization variants are submitted for each enabled suite:
@@ -23,8 +23,8 @@
 #   TASKS="1" DRY_RUN=1 bash scripts/run_opd_loss_variants.sh
 #
 # Suite selection:
-#   RUN_CURRENT=1 RUN_RPS8_200=0 DRY_RUN=1 bash scripts/run_opd_loss_variants.sh
-#   RUN_CURRENT=1 RUN_RPS8_200=1 DRY_RUN=1 bash scripts/run_opd_loss_variants.sh
+#   RUN_CURRENT=1 RUN_RPS32=0 DRY_RUN=1 bash scripts/run_opd_loss_variants.sh
+#   RUN_CURRENT=1 RUN_RPS32=1 DRY_RUN=1 bash scripts/run_opd_loss_variants.sh
 
 set -euo pipefail
 
@@ -32,7 +32,7 @@ TASKS="${TASKS:-1 4}"
 OPD_SEED="${OPD_SEED:-184}"
 GRPO_SEED="${GRPO_SEED:-4096}"
 RUN_CURRENT="${RUN_CURRENT:-0}"
-RUN_RPS8_200="${RUN_RPS8_200:-1}"
+RUN_RPS32="${RUN_RPS32:-1}"
 SLURM_ACCOUNT="${SLURM_ACCOUNT:-a143}"
 RPS_MAX_EPOCH="${RPS_MAX_EPOCH:-100}"
 # OPD OOM-safety knobs (override per run if needed).
@@ -164,8 +164,8 @@ if [[ "${RUN_CURRENT}" == "1" ]]; then
   run_suite "current_rps128_steps60" 60 8 4 4 ""
 fi
 
-# Dense-normalization OPD settings with 8 rollouts/step:
-# group_size=8, num_group_envs=1, rollout_epoch=1.
-if [[ "${RUN_RPS8_200}" == "1" ]]; then
-  run_suite "rps8_steps${RPS_MAX_EPOCH}_si25" "${RPS_MAX_EPOCH}" 8 1 1 "steps${RPS_MAX_EPOCH}_si25" 25
+# Dense-normalization OPD settings:
+# group_size=8, num_group_envs=4, rollout_epoch=1.
+if [[ "${RUN_RPS32}" == "1" ]]; then
+  run_suite "gs8_nge4_steps${RPS_MAX_EPOCH}_si25" "${RPS_MAX_EPOCH}" 8 4 1 "steps${RPS_MAX_EPOCH}_si25" 25
 fi

@@ -334,13 +334,13 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
         OVERRIDES="$OVERRIDES algorithm.normalize_advantages=${SWEEP_OPD_NORMALIZE_ADVANTAGES}"
     fi
     if [ -n "${SWEEP_OPD_REWARD_NORMALIZATION:-}" ]; then
-        OVERRIDES="$OVERRIDES +algorithm.opd_reward_normalization=${SWEEP_OPD_REWARD_NORMALIZATION}"
+        OVERRIDES="$OVERRIDES ++algorithm.opd_reward_normalization=${SWEEP_OPD_REWARD_NORMALIZATION}"
     fi
     if [ -n "${SWEEP_OPD_REWARD_TANH_TAU:-}" ]; then
-        OVERRIDES="$OVERRIDES +algorithm.opd_reward_tanh_tau=${SWEEP_OPD_REWARD_TANH_TAU}"
+        OVERRIDES="$OVERRIDES ++algorithm.opd_reward_tanh_tau=${SWEEP_OPD_REWARD_TANH_TAU}"
     fi
     if [ -n "${SWEEP_OPD_REWARD_CLIP_C:-}" ]; then
-        OVERRIDES="$OVERRIDES +algorithm.opd_reward_clip_c=${SWEEP_OPD_REWARD_CLIP_C}"
+        OVERRIDES="$OVERRIDES ++algorithm.opd_reward_clip_c=${SWEEP_OPD_REWARD_CLIP_C}"
     fi
     if [ -n "${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE:-}" ]; then
         OVERRIDES="$OVERRIDES ++algorithm.opd_teacher_micro_batch_size=${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE}"
