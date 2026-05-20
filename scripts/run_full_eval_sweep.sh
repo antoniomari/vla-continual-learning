@@ -9,6 +9,8 @@
 #   - RL-teacher old variants: group_zscore, no-normalization, GRPO-loss group_zscore
 #   - SFT-teacher dense-normalization GRPO-loss variants:
 #     token_zscore, action_dim_zscore, positive_clip, teacher_prob
+#   - SFT-teacher success-gate rps128 variants:
+#     lambda 0.1, 0.3, 1.0 for tasks 1 and 4
 # for tasks 1 and 4.
 #
 # Preview:
@@ -32,6 +34,7 @@ FULL_EVAL="examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh"
 EVAL_CONFIG_NAME="${EVAL_CONFIG_NAME:-crl_experiment/libero_spatial_grpo_openvlaoft_eval_spatial}"
 EVAL_SEED="${EVAL_SEED:-184}"
 EVAL_STEPS="${EVAL_STEPS:-25,50,75,100,125,150,175,200}"
+EVAL_STEPS_RPS128="${EVAL_STEPS_RPS128:-20,40,60}"
 EVAL_ROLLOUTS_PER_TASK="${EVAL_ROLLOUTS_PER_TASK:-320}"
 INCLUDE_BASE="${INCLUDE_BASE:-0}"
 
@@ -58,6 +61,12 @@ DEFAULT_TARGETS=(
   "logs_spatial/sequential/opd_sftteacher_adv1_positive_clip_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_positive_clip"
   "logs_spatial/sequential/opd_sftteacher_adv1_teacher_prob_grpo_loss_rps32_steps200_si25_task_1_seed2_spatial_norm_teacher_prob"
   "logs_spatial/sequential/opd_sftteacher_adv1_teacher_prob_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_teacher_prob"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p1_thr0p0_rps128_task_1_seed184_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p1_thr0p0_rps128_task_4_seed184_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p3_thr0p0_rps128_task_1_seed184_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p3_thr0p0_rps128_task_4_seed184_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam1p0_thr0p0_rps128_task_1_seed184_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam1p0_thr0p0_rps128_task_4_seed184_spatial_norm_group_zscore"
 )
 
 TARGETS=()
@@ -76,6 +85,7 @@ echo "  eval helper: ${FULL_EVAL}"
 echo "  config: ${EVAL_CONFIG_NAME}"
 echo "  seed: ${EVAL_SEED}"
 echo "  steps: ${EVAL_STEPS}"
+echo "  rps128 steps: ${EVAL_STEPS_RPS128}"
 echo "  rollouts/task: ${EVAL_ROLLOUTS_PER_TASK}"
 echo "  targets: ${#TARGETS[@]}"
 echo "=================================="
@@ -84,6 +94,8 @@ job_group_count=0
 for TARGET in "${TARGETS[@]}"; do
   if [[ "${TARGET}" == "base" ]]; then
     TARGET_STEPS="0"
+  elif [[ "${TARGET}" == *"_rps128_"* ]]; then
+    TARGET_STEPS="${EVAL_STEPS_RPS128}"
   else
     TARGET_STEPS="${EVAL_STEPS}"
   fi
