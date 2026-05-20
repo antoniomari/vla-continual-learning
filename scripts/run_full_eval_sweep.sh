@@ -9,6 +9,8 @@
 #   - RL-teacher old variants: group_zscore, no-normalization, GRPO-loss group_zscore
 #   - SFT-teacher dense-normalization GRPO-loss variants:
 #     token_zscore, action_dim_zscore, positive_clip, teacher_prob
+#   - SFT-teacher success-gate rps32 variants:
+#     lambda 0.1, 0.3, 1.0 for tasks 1 and 4
 #   - SFT-teacher success-gate rps128 variants:
 #     lambda 0.1, 0.3, 1.0 for tasks 1 and 4
 # for tasks 1 and 4.
@@ -61,6 +63,12 @@ DEFAULT_TARGETS=(
   "logs_spatial/sequential/opd_sftteacher_adv1_positive_clip_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_positive_clip"
   "logs_spatial/sequential/opd_sftteacher_adv1_teacher_prob_grpo_loss_rps32_steps200_si25_task_1_seed2_spatial_norm_teacher_prob"
   "logs_spatial/sequential/opd_sftteacher_adv1_teacher_prob_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_teacher_prob"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p1_thr0p0_rps32_task_1_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p1_thr0p0_rps32_task_4_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p3_thr0p0_rps32_task_1_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p3_thr0p0_rps32_task_4_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam1p0_thr0p0_rps32_task_1_seed2_spatial_norm_group_zscore"
+  "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam1p0_thr0p0_rps32_task_4_seed2_spatial_norm_group_zscore"
   "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p1_thr0p0_rps128_task_1_seed184_spatial_norm_group_zscore"
   "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p1_thr0p0_rps128_task_4_seed184_spatial_norm_group_zscore"
   "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_success_gate_lam0p3_thr0p0_rps128_task_1_seed184_spatial_norm_group_zscore"
