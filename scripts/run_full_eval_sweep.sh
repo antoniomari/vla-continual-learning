@@ -5,6 +5,8 @@
 #   examples/crl_experiment/jobs/embodiment_slurm_full_eval.sh
 #
 # Defaults target the 20 OPD steps200 runs from the May 17 sweeps:
+#   - GRPO rps32/rps128 steps200 runs:
+#     seeds 1, 2, 3 for rps32; seed 2 for rps128
 #   - SFT-teacher old variants: group_zscore, no-normalization, GRPO-loss group_zscore
 #   - RL-teacher old variants: group_zscore, no-normalization, GRPO-loss group_zscore
 #   - SFT-teacher dense-normalization GRPO-loss variants:
@@ -43,6 +45,14 @@ INCLUDE_BASE="${INCLUDE_BASE:-0}"
 
 
 DEFAULT_TARGETS=(
+  "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps200_si25_task_1_seed1_spatial"
+  "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps200_si25_task_4_seed1_spatial"
+  "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps200_si25_task_1_seed2_spatial"
+  "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps200_si25_task_4_seed2_spatial"
+  "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps200_si25_task_1_seed3_spatial"
+  "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps200_si25_task_4_seed3_spatial"
+  "logs_spatial/sequential/grpo_rps128_gb8192_gs8_steps200_si25_task_1_seed2_spatial"
+  "logs_spatial/sequential/grpo_rps128_gb8192_gs8_steps200_si25_task_4_seed2_spatial"
   #"logs_spatial/sequential/opd_sftteacher_adv1_rps32_steps200_si25_task_1_seed2_spatial_norm_group_zscore"
   #"logs_spatial/sequential/opd_sftteacher_adv1_rps32_steps200_si25_task_4_seed2_spatial_norm_group_zscore"
   #"logs_spatial/sequential/opd_sftteacher_adv0_nonorm_rps32_steps200_si25_task_1_seed2_spatial"
@@ -102,6 +112,8 @@ job_group_count=0
 for TARGET in "${TARGETS[@]}"; do
   if [[ "${TARGET}" == "base" ]]; then
     TARGET_STEPS="0"
+  elif [[ "${TARGET}" == *"_rps128_"* && "${TARGET}" == *"steps200_si25"* ]]; then
+    TARGET_STEPS="${EVAL_STEPS}"
   elif [[ "${TARGET}" == *"_rps128_"* ]]; then
     TARGET_STEPS="${EVAL_STEPS_RPS128}"
   else
