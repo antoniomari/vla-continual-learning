@@ -1,11 +1,14 @@
 #!/bin/bash
 # Next Task-1 Hybrid OPD sweep.
 #
-# Runs:
-#   1. group z-score, lambda=1.0, extra seeds 1 and 3
-#   2. group z-score, lambda=2.0 and 5.0, one seed
-#   3. no reward normalization, lambda=0.1, 1.0, and 10.0, one seed
-#   4. no reward normalization, lambda=1.0, extra seeds 1 and 3
+# Delta runs after the first version of this script was already launched:
+#   1. no reward normalization, lambda=10.0, one seed
+#   2. no reward normalization, lambda=1.0, extra seeds 1 and 3
+#
+# Already launched in the previous script version, kept here as comments:
+#   - group z-score, lambda=1.0, extra seeds 1 and 3
+#   - group z-score, lambda=2.0 and 5.0, one seed
+#   - no reward normalization, lambda=0.1 and 1.0, one seed
 #
 # Preview:
 #   DRY_RUN=1 bash scripts/run_hybrid_opd_task1_next.sh
@@ -39,31 +42,40 @@ echo "  single_seed=${SINGLE_SEED}"
 echo "============================================================"
 
 echo ""
-echo "[1/3] Group z-score, lambda=1.0, extra seeds"
-run_hybrid \
-  "HYBRID_SEEDS=${EXTRA_SEEDS}" \
-  "NORMALIZE_ADVANTAGES=1" \
-  "REWARD_NORMALIZATIONS=group_zscore" \
-  "LAMBDAS=1.0"
+# Already launched:
+# echo ""
+# echo "[launched] Group z-score, lambda=1.0, extra seeds"
+# run_hybrid \
+#   "HYBRID_SEEDS=${EXTRA_SEEDS}" \
+#   "NORMALIZE_ADVANTAGES=1" \
+#   "REWARD_NORMALIZATIONS=group_zscore" \
+#   "LAMBDAS=1.0"
+#
+# echo ""
+# echo "[launched] Group z-score, lambda=2.0 and 5.0, one seed"
+# run_hybrid \
+#   "HYBRID_SEEDS=${SINGLE_SEED}" \
+#   "NORMALIZE_ADVANTAGES=1" \
+#   "REWARD_NORMALIZATIONS=group_zscore" \
+#   "LAMBDAS=2.0 5.0"
+#
+# echo ""
+# echo "[launched] No reward normalization, lambda=0.1 and 1.0, one seed"
+# run_hybrid \
+#   "HYBRID_SEEDS=${SINGLE_SEED}" \
+#   "NORMALIZE_ADVANTAGES=0" \
+#   "REWARD_NORMALIZATIONS=__empty__" \
+#   "LAMBDAS=0.1 1.0"
 
-echo ""
-echo "[2/3] Group z-score, lambda=2.0 and 5.0, one seed"
-run_hybrid \
-  "HYBRID_SEEDS=${SINGLE_SEED}" \
-  "NORMALIZE_ADVANTAGES=1" \
-  "REWARD_NORMALIZATIONS=group_zscore" \
-  "LAMBDAS=2.0 5.0"
-
-echo ""
-echo "[3/4] No reward normalization, lambda=0.1, 1.0, and 10.0, one seed"
+echo "[1/2] No reward normalization, lambda=10.0, one seed"
 run_hybrid \
   "HYBRID_SEEDS=${SINGLE_SEED}" \
   "NORMALIZE_ADVANTAGES=0" \
   "REWARD_NORMALIZATIONS=__empty__" \
-  "LAMBDAS=0.1 1.0 10.0"
+  "LAMBDAS=10.0"
 
 echo ""
-echo "[4/4] No reward normalization, lambda=1.0, extra seeds"
+echo "[2/2] No reward normalization, lambda=1.0, extra seeds"
 run_hybrid \
   "HYBRID_SEEDS=${EXTRA_SEEDS}" \
   "NORMALIZE_ADVANTAGES=0" \
