@@ -1,2 +1,3 @@
 training_task,run_name,checkpoint_step
+1,grpo_rps32_gb2048_gs8_steps200_si25_task_1_seed2_spatial,200
 4,opd_sftteacher_adv1_grpo_loss_rps32_steps200_si25_task_4_seed2_spatial_norm_group_zscore,25

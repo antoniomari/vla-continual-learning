@@ -1,4 +1,10 @@
 training_task,checkpoint_step,run_name,train_seed,same_task_success,heldout_success,method
+1,25,grpo_rps128_gb8192_gs8_steps200_si25_task_1_seed2_spatial,2,0.41875,0.43,GRPO
+1,50,grpo_rps128_gb8192_gs8_steps200_si25_task_1_seed2_spatial,2,0.703125,0.43374999999999997,GRPO
+1,75,grpo_rps128_gb8192_gs8_steps200_si25_task_1_seed2_spatial,2,0.875,0.42250000000000004,GRPO
+4,25,grpo_rps128_gb8192_gs8_steps200_si25_task_4_seed2_spatial,2,0.68125,0.399375,GRPO
+4,50,grpo_rps128_gb8192_gs8_steps200_si25_task_4_seed2_spatial,2,0.746875,0.35,GRPO
+4,75,grpo_rps128_gb8192_gs8_steps200_si25_task_4_seed2_spatial,2,0.821875,0.30375,GRPO
 1,20,grpo_rps128_gb8192_gs8_task_1_seed4096_spatial,4096,0.38125,0.41812499999999997,GRPO
 1,40,grpo_rps128_gb8192_gs8_task_1_seed4096_spatial,4096,0.6125,0.43562500000000004,GRPO
 1,60,grpo_rps128_gb8192_gs8_task_1_seed4096_spatial,4096,0.746875,0.43500000000000005,GRPO

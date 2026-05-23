@@ -219,6 +219,8 @@ TRAIN_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT=(0)
 TRAIN_OPD_NORMALIZE_ADVANTAGES=(1)
 # Select one or more OPD normalization modes. Override with e.g.
 #   TRAIN_OPD_REWARD_NORMALIZATIONS_OVERRIDE="group_zscore token_zscore action_dim_zscore positive_clip teacher_prob"
+# For no reward normalization, also set TRAIN_OPD_NORMALIZE_ADVANTAGES_OVERRIDE=0 and use:
+#   TRAIN_OPD_REWARD_NORMALIZATIONS_OVERRIDE="__empty__"
 TRAIN_OPD_REWARD_NORMALIZATIONS=("group_zscore")
 TRAIN_OPD_REWARD_TANH_TAU="${TRAIN_OPD_REWARD_TANH_TAU:-5.0}"
 TRAIN_OPD_REWARD_CLIP_C="${TRAIN_OPD_REWARD_CLIP_C:-1.0}"
