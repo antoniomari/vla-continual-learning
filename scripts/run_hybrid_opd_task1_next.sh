@@ -4,7 +4,8 @@
 # Runs:
 #   1. group z-score, lambda=1.0, extra seeds 1 and 3
 #   2. group z-score, lambda=2.0 and 5.0, one seed
-#   3. no reward normalization, lambda=0.1 and 1.0, one seed
+#   3. no reward normalization, lambda=0.1, 1.0, and 10.0, one seed
+#   4. no reward normalization, lambda=1.0, extra seeds 1 and 3
 #
 # Preview:
 #   DRY_RUN=1 bash scripts/run_hybrid_opd_task1_next.sh
@@ -54,9 +55,17 @@ run_hybrid \
   "LAMBDAS=2.0 5.0"
 
 echo ""
-echo "[3/3] No reward normalization, lambda=0.1 and 1.0, one seed"
+echo "[3/4] No reward normalization, lambda=0.1, 1.0, and 10.0, one seed"
 run_hybrid \
   "HYBRID_SEEDS=${SINGLE_SEED}" \
   "NORMALIZE_ADVANTAGES=0" \
   "REWARD_NORMALIZATIONS=__empty__" \
-  "LAMBDAS=0.1 1.0"
+  "LAMBDAS=0.1 1.0 10.0"
+
+echo ""
+echo "[4/4] No reward normalization, lambda=1.0, extra seeds"
+run_hybrid \
+  "HYBRID_SEEDS=${EXTRA_SEEDS}" \
+  "NORMALIZE_ADVANTAGES=0" \
+  "REWARD_NORMALIZATIONS=__empty__" \
+  "LAMBDAS=1.0"
