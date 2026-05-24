@@ -1,8 +1,9 @@
 #!/bin/bash
-# Next Task-1 Hybrid OPD sweep.
+# Next Hybrid OPD sweep.
 #
-# Delta runs to complete the no-normalization lambda=0.1 seed set:
-#   1. no reward normalization, lambda=0.1, extra seeds 1 and 3
+# Active delta runs:
+#   1. Task 1, no reward normalization, lambda=0.1, extra seeds 1 and 3
+#   2. Task 4, no reward normalization, lambdas=0.1 and 1.0, seeds 1, 2, and 3
 #
 # Already launched in the previous script version, kept here as comments:
 #   - group z-score, lambda=1.0, extra seeds 1 and 3
@@ -22,6 +23,7 @@ set -euo pipefail
 TASKS="1"
 SINGLE_SEED="${SINGLE_SEED:-2}"
 EXTRA_SEEDS="${EXTRA_SEEDS:-1 3}"
+ALL_SEEDS="${ALL_SEEDS:-1 2 3}"
 
 COMMON_ENV=(
   "TASKS=${TASKS}"
@@ -37,9 +39,10 @@ run_hybrid() {
 }
 
 echo "============================================================"
-echo "Task 1 Hybrid OPD next sweep"
+echo "Hybrid OPD next sweep"
 echo "  extra_seeds=${EXTRA_SEEDS}"
 echo "  single_seed=${SINGLE_SEED}"
+echo "  all_seeds=${ALL_SEEDS}"
 echo "============================================================"
 
 echo ""
@@ -68,9 +71,18 @@ echo ""
 #   "REWARD_NORMALIZATIONS=__empty__" \
 #   "LAMBDAS=0.1 1.0"
 
-echo "[1/1] No reward normalization, lambda=0.1, extra seeds"
+echo "[1/2] Task 1 no reward normalization, lambda=0.1, extra seeds"
 run_hybrid \
   "HYBRID_SEEDS=${EXTRA_SEEDS}" \
   "NORMALIZE_ADVANTAGES=0" \
   "REWARD_NORMALIZATIONS=__empty__" \
   "LAMBDAS=0.1"
+
+echo ""
+echo "[2/2] Task 4 no reward normalization, lambdas=0.1 and 1.0, three seeds"
+run_hybrid \
+  "TASKS=4" \
+  "HYBRID_SEEDS=${ALL_SEEDS}" \
+  "NORMALIZE_ADVANTAGES=0" \
+  "REWARD_NORMALIZATIONS=__empty__" \
+  "LAMBDAS=0.1 1.0"
