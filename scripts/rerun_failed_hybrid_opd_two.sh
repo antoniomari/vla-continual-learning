@@ -1,5 +1,5 @@
 #!/bin/bash
-# Rerun only the two Hybrid OPD jobs that crashed on the previous launch.
+# Rerun only the Hybrid OPD job that crashed again on the previous launch.
 #
 # Preview:
 #   DRY_RUN=1 bash scripts/rerun_failed_hybrid_opd_two.sh
@@ -24,20 +24,12 @@ run_hybrid() {
 }
 
 echo "============================================================"
-echo "Rerunning failed no-norm Hybrid OPD jobs only"
-echo "  1. task=1 seed=1 lambda=0.1"
-echo "  2. task=4 seed=3 lambda=1.0"
+echo "Rerunning failed no-norm Hybrid OPD job only"
+echo "  task=4 seed=3 lambda=1.0"
 echo "============================================================"
 
 echo ""
-echo "[1/2] Task 1, seed 1, lambda=0.1, no reward normalization"
-run_hybrid \
-  "TASKS=1" \
-  "HYBRID_SEEDS=1" \
-  "LAMBDAS=0.1"
-
-echo ""
-echo "[2/2] Task 4, seed 3, lambda=1.0, no reward normalization"
+echo "Task 4, seed 3, lambda=1.0, no reward normalization"
 run_hybrid \
   "TASKS=4" \
   "HYBRID_SEEDS=3" \
