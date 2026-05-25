@@ -230,14 +230,21 @@ def compute_embodied_opd_advantages(
     single_action_dim = kwargs.get("single_action_dim", None)
     epsilon = kwargs.get("epsilon", 1e-6)
 
-    if loss_type == "embodied_opd_success_gate":
+    if loss_type in (
+        "embodied_opd_success_gate",
+        "embodied_opd_grpo_plus_success_gate",
+    ):
         teacher_kwargs = dict(kwargs)
         teacher_kwargs["loss_type"] = "embodied_opd"
         teacher_advantages, _ = compute_embodied_opd_advantages(**teacher_kwargs)
+        env_normalize_advantages = kwargs.get(
+            "opd_success_gate_env_normalize_advantages",
+            kwargs.get("normalize_advantages", True),
+        )
         env_advantages, _ = compute_embodied_grpo_advantages(
             rewards=kwargs["rewards"],
             dones=kwargs["dones"],
-            normalize_advantages=kwargs.get("normalize_advantages", True),
+            normalize_advantages=env_normalize_advantages,
             num_group_envs=kwargs.get("num_group_envs", 1),
             group_size=group_size,
             rollout_epoch=kwargs.get("rollout_epoch", 1),
@@ -281,12 +288,22 @@ def compute_embodied_opd_advantages(
         )
         success_gate = success_gate.view(1, -1, 1).expand_as(teacher_advantages)
 
-        adv_out = (
-            success_gate * env_advantages
-            + (1.0 - success_gate)
-            * success_gate_teacher_lambda
-            * teacher_advantages
-        )
+        if loss_type == "embodied_opd_success_gate":
+            adv_out = (
+                success_gate * env_advantages
+                + (1.0 - success_gate)
+                * success_gate_teacher_lambda
+                * teacher_advantages
+            )
+        else:
+            # Always keep normalized env/GRPO credit assignment; only gate the
+            # additional teacher-imitation OPD signal on failed trajectories.
+            adv_out = (
+                env_advantages
+                + (1.0 - success_gate)
+                * success_gate_teacher_lambda
+                * teacher_advantages
+            )
         if loss_mask is not None:
             adv_out = adv_out * loss_mask
         return adv_out, adv_out

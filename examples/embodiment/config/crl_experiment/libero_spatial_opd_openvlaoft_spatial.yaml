@@ -82,6 +82,9 @@ algorithm:
   #   - embodied_opd_reinforce  : plain REINFORCE-style objective
   #   - embodied_opd_success_gate: clipped hybrid; successful rollouts use GRPO/env
   #                                advantages, failed rollouts use SFT-teacher OPD
+  #   - embodied_opd_grpo_plus_success_gate:
+  #                                clipped additive hybrid; GRPO/env advantage is always
+  #                                used, failed rollouts additionally use SFT-teacher OPD
   loss_type: embodied_opd
   loss_agg_func: "token-mean"
   kl_beta: 0.0
@@ -143,6 +146,10 @@ algorithm:
   # opd_success_gate_reward_threshold; failures get lambda_teacher * OPD advantage.
   opd_success_gate_teacher_lambda: 1.0
   opd_success_gate_reward_threshold: 0.0
+  # For additive hybrid loss_type=embodied_opd_grpo_plus_success_gate, keep the
+  # env/GRPO branch group-normalized even when normalize_advantages=False is used
+  # to leave the OPD teacher branch raw.
+  opd_success_gate_env_normalize_advantages: True
   # Teacher forward during compute_advantages (OPD): microbatch size; can exceed actor.micro_batch_size
   # if VRAM allows (teacher-only forward, no student grads).
   # opd_teacher_micro_batch_size: 32

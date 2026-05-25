@@ -31,6 +31,7 @@
 ###           SWEEP_OPD_REWARD_CLIP_C — override algorithm.opd_reward_clip_c.
 ###           SWEEP_OPD_SUCCESS_GATE_TEACHER_LAMBDA — override algorithm.opd_success_gate_teacher_lambda.
 ###           SWEEP_OPD_SUCCESS_GATE_REWARD_THRESHOLD — override algorithm.opd_success_gate_reward_threshold.
+###           SWEEP_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES — override algorithm.opd_success_gate_env_normalize_advantages.
 ###           SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE — override algorithm.opd_teacher_micro_batch_size
 ###               (rollout-side OPD teacher logprob microbatch; reduce this first on OOM).
 ###           SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT — override algorithm.opd_precompute_teacher_in_rollout (0/1).
@@ -349,6 +350,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     if [ -n "${SWEEP_OPD_SUCCESS_GATE_REWARD_THRESHOLD:-}" ]; then
         OVERRIDES="$OVERRIDES ++algorithm.opd_success_gate_reward_threshold=${SWEEP_OPD_SUCCESS_GATE_REWARD_THRESHOLD}"
+    fi
+    if [ -n "${SWEEP_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES:-}" ]; then
+        OVERRIDES="$OVERRIDES ++algorithm.opd_success_gate_env_normalize_advantages=${SWEEP_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES}"
     fi
     if [ -n "${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE:-}" ]; then
         OVERRIDES="$OVERRIDES ++algorithm.opd_teacher_micro_batch_size=${SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE}"

@@ -515,6 +515,10 @@ class EmbodiedFSDP2Actor(FSDP2ModelManager, Worker):
                 "opd_success_gate_reward_threshold": self.cfg.algorithm.get(
                     "opd_success_gate_reward_threshold", 0.0
                 ),
+                "opd_success_gate_env_normalize_advantages": self.cfg.algorithm.get(
+                    "opd_success_gate_env_normalize_advantages",
+                    self.cfg.algorithm.get("normalize_advantages", True),
+                ),
                 "single_action_dim": getattr(student_core, "action_dim", None),
             }
         else:

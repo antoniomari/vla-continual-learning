@@ -440,6 +440,21 @@ def compute_embodied_opd_success_gate_actor_loss_fn(
     return compute_embodied_grpo_actor_loss_fn(**kwargs)
 
 
+@register_policy_loss("embodied_opd_grpo_plus_success_gate")
+def compute_embodied_opd_grpo_plus_success_gate_actor_loss_fn(
+    **kwargs,
+) -> Tuple[torch.Tensor, Dict]:
+    """
+    Additive success-gated OPD/GRPO hybrid.
+
+    Advantage computation keeps normalized environment/GRPO credit assignment
+    for every rollout and adds lambda_teacher * OPD teacher advantage only for
+    failed trajectories. The actor update itself uses the same GRPO/PPO-style
+    clipped objective.
+    """
+    return compute_embodied_grpo_actor_loss_fn(**kwargs)
+
+
 @register_policy_loss("embodied_opd_reinforce")
 def compute_embodied_opd_reinforce_actor_loss_fn(**kwargs) -> Tuple[torch.Tensor, Dict]:
     """
