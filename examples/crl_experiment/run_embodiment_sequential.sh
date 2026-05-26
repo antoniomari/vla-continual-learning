@@ -264,12 +264,25 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
 
     if [ -n "$MAX_EPOCH" ]; then
-        if ! [[ "$MAX_EPOCH" =~ ^[0-9]+$ ]] || [ "$MAX_EPOCH" -le 0 ]; then
-            echo "  ERROR: MAX_EPOCH must be a positive integer, got: $MAX_EPOCH"
+        if ! [[ "$MAX_EPOCH" =~ ^[0-9]+$ ]]; then
+            echo "  ERROR: MAX_EPOCH must be a non-negative integer, got: $MAX_EPOCH"
             OVERALL_EXIT_CODE=1
             break
         fi
-        echo "  Max epochs: $MAX_EPOCH"
+        if [ "$MAX_EPOCH" -eq 0 ]; then
+            if ! [[ "${SWEEP_OPD_BC_STEPS:-0}" =~ ^[0-9]+$ ]] || [ "${SWEEP_OPD_BC_STEPS:-0}" -le 0 ]; then
+                echo "  ERROR: MAX_EPOCH=0 is only valid for OPD teacher-prep jobs with SWEEP_OPD_BC_STEPS>0"
+                OVERALL_EXIT_CODE=1
+                break
+            fi
+            echo "  Max epochs: 0 (OPD teacher-prep only; no student RL)"
+        elif [ "$MAX_EPOCH" -lt 0 ]; then
+            echo "  ERROR: MAX_EPOCH must be a non-negative integer, got: $MAX_EPOCH"
+            OVERALL_EXIT_CODE=1
+            break
+        else
+            echo "  Max epochs: $MAX_EPOCH"
+        fi
     fi
 
     echo "========================================="
