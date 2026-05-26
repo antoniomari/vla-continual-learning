@@ -17,7 +17,9 @@
 #   TASKS="1" HYBRID_SEEDS="1 3" LAMBDAS="1.0" bash scripts/run_sft_opd_success_gate.sh
 #   TASKS="4" HYBRID_SEEDS="1 3" LAMBDAS="0.1" bash scripts/run_sft_opd_success_gate.sh
 #
-# No-normalization Hybrid OPD:
+# Deprecated older Hybrid OPD: this leaves the environment/GRPO branch
+# unnormalized too. Keep only for reproducing old runs; prefer
+# scripts/run_sft_opd_rawopd_grponorm_gate.sh for new sweeps.
 #   NORMALIZE_ADVANTAGES=0 REWARD_NORMALIZATIONS=__empty__ LAMBDAS="1.0" TASKS="1" bash scripts/run_sft_opd_success_gate.sh
 #
 # Raw OPD + normalized GRPO additive Hybrid OPD:
