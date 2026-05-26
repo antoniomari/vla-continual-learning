@@ -315,6 +315,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ -n "${SWEEP_OPD_BC_STEPS:-}" ]; then
         OVERRIDES="$OVERRIDES algorithm.opd_bc_steps=${SWEEP_OPD_BC_STEPS}"
     fi
+    if [ -n "${SWEEP_OPD_BC_SAVE_STEPS:-}" ]; then
+        OVERRIDES="$OVERRIDES ++algorithm.opd_bc_save_steps=${SWEEP_OPD_BC_SAVE_STEPS}"
+    fi
     if [ -n "${SWEEP_OPD_TEACHER_LR:-}" ]; then
         OVERRIDES="$OVERRIDES actor.optim.opd_teacher_lr=${SWEEP_OPD_TEACHER_LR}"
     fi

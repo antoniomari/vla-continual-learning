@@ -14,14 +14,18 @@
 #   bash scripts/run_task5_9_grpo_and_sft_opd_grponorm.sh
 #
 # Useful overrides:
+#   RUN_TEACHER_PREP=0 bash scripts/run_task5_9_grpo_and_sft_opd_grponorm.sh
 #   RUN_GRPO=0 bash scripts/run_task5_9_grpo_and_sft_opd_grponorm.sh
-#   RUN_HYBRID=0 bash scripts/run_task5_9_grpo_and_sft_opd_grponorm.sh
+#   RUN_GRPO=0 RUN_TEACHER_PREP=0 RUN_HYBRID=1 bash scripts/run_task5_9_grpo_and_sft_opd_grponorm.sh
 #   HYBRID_LAMBDAS="1.0" SEEDS="1 2 3" bash scripts/run_task5_9_grpo_and_sft_opd_grponorm.sh
 
 set -euo pipefail
 
 TASKS="${TASKS:-5 9}"
 SEEDS="${SEEDS:-1 2 3}"
+TEACHER_SEED="${TEACHER_SEED:-0}"
+TEACHER_BC_STEPS="${TEACHER_BC_STEPS:-1000}"
+TEACHER_BC_SAVE_STEPS="${TEACHER_BC_SAVE_STEPS:-[250,500,750,1000]}"
 HYBRID_LAMBDAS="${HYBRID_LAMBDAS:-0.1 1.0}"
 MAX_EPOCH="${MAX_EPOCH:-200}"
 SAVE_INTERVAL="${SAVE_INTERVAL:-25}"
@@ -30,7 +34,8 @@ GROUP_SIZE="${GROUP_SIZE:-8}"
 NUM_GROUP_ENVS="${NUM_GROUP_ENVS:-4}"
 SLURM_ACCOUNT="${SLURM_ACCOUNT:-a143}"
 RUN_GRPO="${RUN_GRPO:-1}"
-RUN_HYBRID="${RUN_HYBRID:-1}"
+RUN_TEACHER_PREP="${RUN_TEACHER_PREP:-1}"
+RUN_HYBRID="${RUN_HYBRID:-0}"
 
 case "${RPS_MODE}" in
   rps32)
@@ -49,6 +54,9 @@ echo "============================================================"
 echo "Task 5/9 GRPO + current SFT-teacher Hybrid OPD launcher"
 echo "  tasks=${TASKS}"
 echo "  seeds=${SEEDS}"
+echo "  teacher_seed=${TEACHER_SEED}"
+echo "  teacher_bc_steps=${TEACHER_BC_STEPS}"
+echo "  teacher_bc_save_steps=${TEACHER_BC_SAVE_STEPS}"
 echo "  max_epoch=${MAX_EPOCH}"
 echo "  save_interval=${SAVE_INTERVAL}"
 echo "  rps_mode=${RPS_MODE}"
@@ -57,6 +65,7 @@ echo "  num_group_envs=${NUM_GROUP_ENVS}"
 echo "  rollout_epoch=${ROLLOUT_EPOCH}"
 echo "  hybrid_lambdas=${HYBRID_LAMBDAS}"
 echo "  run_grpo=${RUN_GRPO}"
+echo "  run_teacher_prep=${RUN_TEACHER_PREP}"
 echo "  run_hybrid=${RUN_HYBRID}"
 echo "============================================================"
 
@@ -72,6 +81,31 @@ if [[ "${RUN_GRPO}" == "1" ]]; then
   ROLLOUT_EPOCH="${ROLLOUT_EPOCH}" \
   SLURM_ACCOUNT="${SLURM_ACCOUNT}" \
   bash scripts/run_grpo_rps32_new_seeds.sh
+fi
+
+if [[ "${RUN_TEACHER_PREP}" == "1" ]]; then
+  echo "Launching seed-${TEACHER_SEED} SFT-teacher BC prep on tasks ${TASKS}"
+  echo "  checkpoints: ${TEACHER_BC_SAVE_STEPS}"
+  RUN_MODE=train \
+  BASE_MODEL=1 \
+  GRPO_HP_FROM_SWEEP=1 \
+  OPD_USE_TEACHER_MAPPING=0 \
+  TRAIN_TASK_INPUTS_OVERRIDE="${TASKS}" \
+  TRAIN_MAX_EPOCHS_OVERRIDE=0 \
+  TRAIN_SEEDS_OVERRIDE="${TEACHER_SEED}" \
+  TRAIN_GROUP_SIZES_OVERRIDE="${GROUP_SIZE}" \
+  TRAIN_NUM_GROUP_ENVS_OVERRIDE="${NUM_GROUP_ENVS}" \
+  TRAIN_ROLLOUT_EPOCHS_OVERRIDE="${ROLLOUT_EPOCH}" \
+  TRAIN_OPD_BC_STEPS_OVERRIDE="${TEACHER_BC_STEPS}" \
+  TRAIN_OPD_BC_SAVE_STEPS="${TEACHER_BC_SAVE_STEPS}" \
+  TRAIN_OPD_NORMALIZE_ADVANTAGES_OVERRIDE=1 \
+  TRAIN_OPD_REWARD_NORMALIZATIONS_OVERRIDE=group_zscore \
+  TRAIN_OPD_LOSS_TYPES_OVERRIDE=embodied_opd_reinforce \
+  SWEEP_WANDB_EXTRA_TAG="teacherprep_seed${TEACHER_SEED}" \
+  SWEEP_SAVE_INTERVAL="${SAVE_INTERVAL}" \
+  SLURM_ACCOUNT="${SLURM_ACCOUNT}" \
+  USE_MINIMAL_SBATCH_RESOURCES=1 \
+  bash examples/crl_experiment/jobs/embodiment_slurm_opd_sweep.sh
 fi
 
 if [[ "${RUN_HYBRID}" == "1" ]]; then

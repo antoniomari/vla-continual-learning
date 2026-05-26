@@ -32,6 +32,8 @@
 #   OPD BC warmup (always forwarded when training): TRAIN_OPD_BC_GLOBAL_BATCH_SIZES, TRAIN_OPD_BC_BATCH_SIZES,
 #       TRAIN_OPD_BC_STEPS, TRAIN_OPD_TEACHER_LRS — Cartesian product with the train grid; set as Hydra overrides via
 #       SWEEP_OPD_* env vars in run_embodiment_sequential.sh (algorithm.opd_bc_* and actor.optim.opd_teacher_lr).
+#       TRAIN_OPD_BC_SAVE_STEPS is optional and forwards algorithm.opd_bc_save_steps for intermediate
+#       teacher checkpoints, e.g. "[250,500,750,1000]".
 #   OPD SFT preprocessing toggles (Cartesian product too): TRAIN_OPD_SFT_FILTER_FIXED_TASK_IDS,
 #       TRAIN_OPD_SFT_MATCH_TASK_LANGUAGE,
 #       TRAIN_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT (each 0/1; wired to algorithm.sft_* overrides).
@@ -100,6 +102,8 @@ if [[ -z "${OPD_TEACHER_MAPPING_JSON:-}" ]]; then
   fi
 fi
 OPD_TEACHER_MAPPING_GROUP="${OPD_TEACHER_MAPPING_GROUP:-teacher_sft_by_task}"
+OPD_USE_TEACHER_MAPPING="${OPD_USE_TEACHER_MAPPING:-1}"
+OPD_REQUIRE_MAPPED_TEACHER="${OPD_REQUIRE_MAPPED_TEACHER:-0}"
 
 lookup_mapped_teacher_path() {
   local task_id="$1"
@@ -211,6 +215,7 @@ DEFAULT_ROLLOUTS_PER_STEP=$((TRAIN_GROUP_SIZES[0] * TRAIN_NUM_GROUP_ENVS[0] * TR
 TRAIN_OPD_BC_GLOBAL_BATCH_SIZES=(32)
 TRAIN_OPD_BC_BATCH_SIZES=(8)
 TRAIN_OPD_BC_STEPS=(1000)
+TRAIN_OPD_BC_SAVE_STEPS="${TRAIN_OPD_BC_SAVE_STEPS:-}"
 TRAIN_OPD_TEACHER_LRS=('1e-04')
 # SFT preprocessing toggles (0/1) for OPD BC dataset path.
 TRAIN_OPD_SFT_FILTER_FIXED_TASK_IDS=(1)
@@ -361,8 +366,8 @@ submit_job() {
 # Emit SWEEP_OPD_* exports for the sbatch wrapper (safe quoting for scientific lr strings).
 build_opd_sweep_exports() {
   # shellcheck disable=SC2312
-  printf 'SWEEP_OPD_BC_GLOBAL_BATCH_SIZE=%q SWEEP_OPD_BC_BATCH_SIZE=%q SWEEP_OPD_BC_STEPS=%q SWEEP_OPD_TEACHER_LR=%q SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS=%q SWEEP_OPD_SFT_MATCH_TASK_LANGUAGE=%q SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT=%q SWEEP_OPD_NORMALIZE_ADVANTAGES=%q SWEEP_OPD_REWARD_NORMALIZATION=%q SWEEP_OPD_REWARD_TANH_TAU=%q SWEEP_OPD_REWARD_CLIP_C=%q SWEEP_OPD_SUCCESS_GATE_TEACHER_LAMBDA=%q SWEEP_OPD_SUCCESS_GATE_REWARD_THRESHOLD=%q SWEEP_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES=%q SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE=%q SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT=%q SWEEP_OPD_TEACHER_STASH_LOGPROBS_ON_CPU=%q SWEEP_OPD_RL_TEACHER=%q SWEEP_OPD_MODE=%q SWEEP_OPD_TEACHER_HF_REPO=%q SWEEP_OPD_LOSS_TYPE=%q' \
-    "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" "${11}" "${12}" "${13}" "${14}" "${15}" "${16}" "${17}" "${18}" "${19}" "${20}" "${21}"
+  printf 'SWEEP_OPD_BC_GLOBAL_BATCH_SIZE=%q SWEEP_OPD_BC_BATCH_SIZE=%q SWEEP_OPD_BC_STEPS=%q SWEEP_OPD_BC_SAVE_STEPS=%q SWEEP_OPD_TEACHER_LR=%q SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS=%q SWEEP_OPD_SFT_MATCH_TASK_LANGUAGE=%q SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT=%q SWEEP_OPD_NORMALIZE_ADVANTAGES=%q SWEEP_OPD_REWARD_NORMALIZATION=%q SWEEP_OPD_REWARD_TANH_TAU=%q SWEEP_OPD_REWARD_CLIP_C=%q SWEEP_OPD_SUCCESS_GATE_TEACHER_LAMBDA=%q SWEEP_OPD_SUCCESS_GATE_REWARD_THRESHOLD=%q SWEEP_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES=%q SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE=%q SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT=%q SWEEP_OPD_TEACHER_STASH_LOGPROBS_ON_CPU=%q SWEEP_OPD_RL_TEACHER=%q SWEEP_OPD_MODE=%q SWEEP_OPD_TEACHER_HF_REPO=%q SWEEP_OPD_LOSS_TYPE=%q' \
+    "$1" "$2" "$3" "${TRAIN_OPD_BC_SAVE_STEPS}" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" "${11}" "${12}" "${13}" "${14}" "${15}" "${16}" "${17}" "${18}" "${19}" "${20}" "${21}"
 }
 
 opd_variant_tag() {
@@ -411,6 +416,8 @@ echo "SLURM_LOG_DIR=${SLURM_LOG_DIR}"
 echo "PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF}"
 echo "OPD_TEACHER_MAPPING_JSON=${OPD_TEACHER_MAPPING_JSON}"
 echo "OPD_TEACHER_MAPPING_GROUP=${OPD_TEACHER_MAPPING_GROUP}"
+echo "OPD_USE_TEACHER_MAPPING=${OPD_USE_TEACHER_MAPPING}"
+echo "OPD_REQUIRE_MAPPED_TEACHER=${OPD_REQUIRE_MAPPED_TEACHER}"
 if [[ -n "${LIBERO_REPO_PATH}" ]]; then
   echo "LIBERO_REPO_PATH (in jobs)=${LIBERO_REPO_PATH}"
 else
@@ -427,7 +434,10 @@ job_count=0
 
 if [[ "${RUN_MODE}" == "train" ]]; then
   for TASK in "${TRAIN_TASK_INPUTS[@]}"; do
-    TASK_MAPPED_TEACHER_PATH="$(lookup_mapped_teacher_path "${TASK}")"
+    TASK_MAPPED_TEACHER_PATH=""
+    if [[ "${OPD_USE_TEACHER_MAPPING}" == "1" ]]; then
+      TASK_MAPPED_TEACHER_PATH="$(lookup_mapped_teacher_path "${TASK}")"
+    fi
     TASK_MAPPED_TEACHER_EX=""
     if [[ -n "${TASK_MAPPED_TEACHER_PATH}" ]]; then
       if [[ -d "${TASK_MAPPED_TEACHER_PATH}" ]]; then
@@ -435,6 +445,10 @@ if [[ "${RUN_MODE}" == "train" ]]; then
         echo "Task ${TASK}: mapped SFT teacher -> ${TASK_MAPPED_TEACHER_PATH}"
       else
         echo "WARN: Task ${TASK} has mapped teacher path but directory is missing: ${TASK_MAPPED_TEACHER_PATH}"
+        if [[ "${OPD_REQUIRE_MAPPED_TEACHER}" == "1" ]]; then
+          echo "ERROR: OPD_REQUIRE_MAPPED_TEACHER=1, refusing to submit OPD without this teacher."
+          exit 1
+        fi
       fi
     else
       echo "Task ${TASK}: no mapped SFT teacher found; using existing default OPD flow."

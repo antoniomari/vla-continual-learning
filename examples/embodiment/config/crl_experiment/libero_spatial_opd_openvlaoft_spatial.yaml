@@ -107,6 +107,9 @@ algorithm:
   # Checkpoint after BC: teacher log_path/opd_bc_teacher/actor. If MuJoCo/EGL segfaults on env init, try
   # RLINF_LIBERO_USE_OSMESA=1 (see examples/embodiment/run_embodiment.sh).
   opd_bc_steps: 600
+  # Optional intermediate BC teacher checkpoints, saved as
+  # log_path/opd_bc_teacher/checkpoints/step_<N>/actor.
+  opd_bc_save_steps: []
   # <=0 uses all demos per task in LiberoSFTDataset (full data per task).
   opd_sft_demos_per_task: 0
   # Use preprocessed RLDS->HDF5 demos for OPD BC warmup (under LIBERO/libero/datasets/<name>).

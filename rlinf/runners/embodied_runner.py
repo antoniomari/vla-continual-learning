@@ -313,32 +313,86 @@ class EmbodiedRunner:
                 flush=True,
             )
 
-        with self.timer("opd_bc_warmup"):
-            bc_futures = self.actor.run_opd_bc_warmup(opd_bc_steps)
-            bc_metrics_list = bc_futures.wait()
-            bc_pack = bc_metrics_list[0]
-            if isinstance(bc_pack, dict) and "per_step" in bc_pack:
-                for step_i, step_m in enumerate(bc_pack["per_step"]):
-                    self.metric_logger.log(
-                        {f"opd_bc/{k}": v for k, v in step_m.items()},
-                        step=step_i,
-                    )
-                n_bc = len(bc_pack["per_step"])
-                self._opd_bc_wandb_step_cursor = n_bc if n_bc > 0 else 1
+        def _parse_bc_save_steps() -> list[int]:
+            raw = self.cfg.algorithm.get("opd_bc_save_steps", None)
+            if raw is None:
+                return []
+            if isinstance(raw, str):
+                values = raw.strip("[]").replace(",", " ").split()
             else:
-                self.metric_logger.log(
-                    {f"opd_bc/{k}": v for k, v in bc_pack.items()},
-                    step=0,
-                )
-                self._opd_bc_wandb_step_cursor = 1
+                values = list(raw)
+            steps = sorted({int(v) for v in values if int(v) > 0})
+            return [step for step in steps if step <= opd_bc_steps]
+
         teacher_root = os.path.join(
             self.cfg.runner.logger.log_path,
             "opd_bc_teacher",
         )
         os.makedirs(teacher_root, exist_ok=True)
-        teacher_actor_path = os.path.join(teacher_root, "actor")
-        save_futures = self.actor.save_checkpoint(teacher_actor_path, 0)
-        save_futures.wait()
+
+        def _save_teacher_checkpoint(step: int, final_alias: bool = False) -> str:
+            if final_alias:
+                teacher_actor_path = os.path.join(teacher_root, "actor")
+            else:
+                teacher_actor_path = os.path.join(
+                    teacher_root,
+                    "checkpoints",
+                    f"step_{step}",
+                    "actor",
+                )
+            print(
+                f"[OPD] Saving BC teacher checkpoint at step {step} -> {teacher_actor_path}",
+                flush=True,
+            )
+            self.actor.save_checkpoint(teacher_actor_path, step).wait()
+            return teacher_actor_path
+
+        save_steps = _parse_bc_save_steps()
+        run_targets = list(save_steps)
+        if not run_targets or run_targets[-1] < opd_bc_steps:
+            run_targets.append(opd_bc_steps)
+
+        bc_packs = []
+        steps_done = 0
+        with self.timer("opd_bc_warmup"):
+            for target_step in run_targets:
+                chunk_steps = target_step - steps_done
+                if chunk_steps <= 0:
+                    continue
+                bc_metrics_list = self.actor.run_opd_bc_warmup(chunk_steps).wait()
+                bc_pack_chunk = bc_metrics_list[0]
+                bc_packs.append(bc_pack_chunk)
+                steps_done = target_step
+                if target_step in save_steps:
+                    _save_teacher_checkpoint(target_step)
+
+            per_step = []
+            for bc_pack_chunk in bc_packs:
+                if isinstance(bc_pack_chunk, dict) and "per_step" in bc_pack_chunk:
+                    per_step.extend(bc_pack_chunk["per_step"])
+            if per_step:
+                bc_pack = {"per_step": per_step, "mean": {}}
+                keys = per_step[0].keys()
+                bc_pack["mean"] = {
+                    k: sum(float(d[k]) for d in per_step) / len(per_step)
+                    for k in keys
+                }
+                for step_i, step_m in enumerate(per_step):
+                    self.metric_logger.log(
+                        {f"opd_bc/{k}": v for k, v in step_m.items()},
+                        step=step_i,
+                    )
+                n_bc = len(per_step)
+                self._opd_bc_wandb_step_cursor = n_bc if n_bc > 0 else 1
+            else:
+                bc_pack = bc_packs[-1] if bc_packs else {}
+                self.metric_logger.log(
+                    {f"opd_bc/{k}": v for k, v in bc_pack.items()},
+                    step=0,
+                )
+                self._opd_bc_wandb_step_cursor = 1
+
+        teacher_actor_path = _save_teacher_checkpoint(opd_bc_steps, final_alias=True)
         self.actor.set_opd_teacher_model_path(teacher_actor_path).wait()
         self.rollout.set_opd_teacher_model_path(teacher_actor_path).wait()
         with open_dict(self.cfg.algorithm):
