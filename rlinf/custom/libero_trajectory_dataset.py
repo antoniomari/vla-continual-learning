@@ -155,7 +155,7 @@ class LiberoSFTDataset(Dataset):
             cfg.algorithm.get("sft_match_rollout_task_language", match_rollout_format)
         )
         self._match_rollout_image_rotation = bool(
-            cfg.algorithm.get("sft_match_rollout_image_rotation", match_rollout_format)
+            cfg.algorithm.get("sft_match_rollout_image_rotation", True)
         )
         self._match_rollout_obs_action_alignment = bool(
             cfg.algorithm.get(
