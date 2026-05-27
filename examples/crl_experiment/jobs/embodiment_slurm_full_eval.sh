@@ -38,6 +38,8 @@
 #   EVAL_STEPS               -> optional step set, e.g. "10,20,30" (same as STEP_OR_STEP_SET arg)
 #   OPD_TEACHER_MAPPING_JSON -> task->teacher adapter map JSON (default: jobs/opd_teacher_mapping.json)
 #   SFT_MODEL_EVAL_TASK      -> task id to evaluate mapped SFT teacher adapter (same as positional arg 5)
+#   SFT_TEACHER_PATH         -> explicit SFT teacher adapter path to evaluate instead of JSON lookup
+#   SFT_TEACHER_NAME         -> optional W&B target stem for SFT_TEACHER_PATH eval jobs
 #
 set -euo pipefail
 
@@ -72,6 +74,8 @@ CONFIG_NAME="${3:-${EVAL_CONFIG_NAME:-crl_experiment/libero_spatial_grpo_openvla
 SEED="${4:-${EVAL_SEED:-1234}}"
 SFT_MODEL_EVAL_TASK="${5:-${SFT_MODEL_EVAL_TASK:-}}"
 OPD_TEACHER_MAPPING_JSON="${OPD_TEACHER_MAPPING_JSON:-${SCRIPT_DIR}/opd_teacher_mapping.json}"
+SFT_TEACHER_PATH="${SFT_TEACHER_PATH:-}"
+SFT_TEACHER_NAME="${SFT_TEACHER_NAME:-}"
 
 if ! [[ "${SEED}" =~ ^[0-9]+$ ]]; then
   echo "ERROR: SEED must be a non-negative integer, got: ${SEED}"
@@ -126,8 +130,9 @@ PY
 }
 
 SFT_TEACHER_MODE=0
-SFT_TEACHER_PATH=""
-if [[ -n "${SFT_MODEL_EVAL_TASK}" ]]; then
+if [[ -n "${SFT_TEACHER_PATH}" ]]; then
+  SFT_TEACHER_MODE=1
+elif [[ -n "${SFT_MODEL_EVAL_TASK}" ]]; then
   if ! [[ "${SFT_MODEL_EVAL_TASK}" =~ ^[0-9]+$ ]]; then
     echo "ERROR: SFT_MODEL_EVAL_TASK must be a non-negative integer, got: ${SFT_MODEL_EVAL_TASK}"
     exit 1
@@ -142,6 +147,10 @@ if [[ -n "${SFT_MODEL_EVAL_TASK}" ]]; then
     exit 1
   fi
   SFT_TEACHER_MODE=1
+fi
+if [[ "${SFT_TEACHER_MODE}" == "1" && ! -d "${SFT_TEACHER_PATH}" && "${DRY_RUN:-0}" != "1" ]]; then
+  echo "ERROR: SFT teacher path does not exist: ${SFT_TEACHER_PATH}"
+  exit 1
 fi
 
 STEP_SET_NORMALIZED="${STEP_SET_RAW//,/ }"
@@ -235,7 +244,7 @@ echo "SEED=${SEED}"
 echo "CONFIG=${CONFIG_NAME}"
 echo "OPD_TEACHER_MAPPING_JSON=${OPD_TEACHER_MAPPING_JSON}"
 if [[ "${SFT_TEACHER_MODE}" == "1" ]]; then
-  echo "SFT teacher eval mode: task=${SFT_MODEL_EVAL_TASK}"
+  echo "SFT teacher eval mode: task=${SFT_MODEL_EVAL_TASK:-explicit}"
   echo "SFT teacher path=${SFT_TEACHER_PATH}"
 fi
 echo "EVAL_NUM_ENVS_TOTAL(assumed from OPD eval config)=${EVAL_NUM_ENVS_TOTAL}"
@@ -249,7 +258,11 @@ echo "=================================="
 job_count=0
 for STEP in "${STEP_LIST[@]}"; do
   if [[ "${SFT_TEACHER_MODE}" == "1" ]]; then
-    TARGET_STEM="sft_teacher_task_${SFT_MODEL_EVAL_TASK}"
+    if [[ -n "${SFT_TEACHER_NAME}" ]]; then
+      TARGET_STEM="${SFT_TEACHER_NAME}"
+    else
+      TARGET_STEM="sft_teacher_task_${SFT_MODEL_EVAL_TASK:-explicit}"
+    fi
   else
     TARGET_STEM="$(basename "${TARGET%/}")"
   fi
