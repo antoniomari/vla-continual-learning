@@ -43,6 +43,8 @@
 ###           and runner.logger.experiment_name=eval_<train_name>_step_<N>. Training still uses one task per stage.
 ### Optional: EVAL_HYDRA_OVERRIDES is consumed by eval_embodiment.sh (do not set manually unless extending).
 ### Optional: SKIP_POST_TRAIN_EVAL=1 skips automatic eval_embodiment.sh call after each successful task.
+### Optional: OPD_SFT_PREFLIGHT_CHECK=0 disables the lightweight SFT HDF5 action-convention
+###           check that runs before OPD BC teacher training.
 
 TASK_INPUT=${1:-0}
 MANUAL_CHECKPOINT_PATH=$2
@@ -349,6 +351,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ -n "${SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT:-}" ]; then
         OVERRIDES="$OVERRIDES +algorithm.sft_match_rollout_obs_action_alignment=${SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT}"
     fi
+    if [ -n "${SWEEP_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1:-}" ]; then
+        OVERRIDES="$OVERRIDES +algorithm.sft_gripper_from_neg1_0_to_0_1=${SWEEP_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1}"
+    fi
     if [ -n "${SWEEP_OPD_NORMALIZE_ADVANTAGES:-}" ]; then
         OVERRIDES="$OVERRIDES algorithm.normalize_advantages=${SWEEP_OPD_NORMALIZE_ADVANTAGES}"
     fi
@@ -384,6 +389,32 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     if [ -n "${SWEEP_OPD_LOSS_TYPE:-}" ]; then
         OVERRIDES="$OVERRIDES algorithm.loss_type=${SWEEP_OPD_LOSS_TYPE}"
+    fi
+
+    if [[ "${OPD_SFT_PREFLIGHT_CHECK:-1}" == "1" && "${SWEEP_OPD_BC_STEPS:-0}" =~ ^[0-9]+$ && "${SWEEP_OPD_BC_STEPS:-0}" -gt 0 ]]; then
+        LIBERO_ROOT_FOR_PREFLIGHT="${LIBERO_REPO_PATH:-${REPO_ROOT}/LIBERO}"
+        PREFLIGHT_ARGS=(
+            python scripts/debug_libero_sft_actions.py
+            --libero-root "${LIBERO_ROOT_FOR_PREFLIGHT}"
+            --tasks "${TASK_ID}"
+            --preflight
+        )
+        if [[ "${SWEEP_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1:-0}" == "1" ]]; then
+            PREFLIGHT_ARGS+=(--gripper-from-neg1-0-to-0-1)
+        fi
+        echo ""
+        echo "Running OPD SFT preflight checks before training:"
+        printf '  %q' "${PREFLIGHT_ARGS[@]}"
+        echo ""
+        "${PREFLIGHT_ARGS[@]}"
+        PREFLIGHT_EXIT=$?
+        if [ ${PREFLIGHT_EXIT} -ne 0 ]; then
+            echo "  ERROR: OPD SFT preflight checks failed for task ${TASK_ID}; aborting before training."
+            OVERALL_EXIT_CODE=${PREFLIGHT_EXIT}
+            break
+        fi
+        echo "OPD SFT preflight checks passed."
+        echo ""
     fi
 
     echo "Running with Hydra overrides:"

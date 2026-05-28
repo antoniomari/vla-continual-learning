@@ -162,6 +162,9 @@ class LiberoSFTDataset(Dataset):
                 "sft_match_rollout_obs_action_alignment", match_rollout_format
             )
         )
+        self._gripper_from_neg1_0_to_0_1 = bool(
+            cfg.algorithm.get("sft_gripper_from_neg1_0_to_0_1", False)
+        )
         # Match raw SFT obs resolution to env camera resolution (e.g., 256x256 in OPD configs).
         self._sft_resize_to_env_resolution = bool(
             cfg.algorithm.get(
@@ -349,6 +352,9 @@ class LiberoSFTDataset(Dataset):
         actions = np.array(
             demo["actions"][timestep : timestep + self.num_action_chunks]
         )
+        if self._gripper_from_neg1_0_to_0_1:
+            actions = actions.copy()
+            actions[..., -1] = np.clip(actions[..., -1] + 1.0, 0.0, 1.0)
 
         assert actions.shape[0] == self.num_action_chunks, (
             f"Expected {self.num_action_chunks} actions, got {actions.shape[0]}"

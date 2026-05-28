@@ -53,6 +53,65 @@ def _summarize_actions(name: str, actions: np.ndarray) -> None:
     print(f"    after prepare_actions_for_libero gripper values: {dict(zip(vals.tolist(), counts.tolist()))}")
 
 
+def _apply_sft_action_preprocessing(
+    actions: np.ndarray,
+    gripper_from_neg1_0_to_0_1: bool,
+) -> np.ndarray:
+    processed = actions.copy()
+    if gripper_from_neg1_0_to_0_1:
+        processed[..., -1] = np.clip(processed[..., -1] + 1.0, 0.0, 1.0)
+    return processed
+
+
+def _preflight_actions(
+    task_id: int,
+    actions: np.ndarray,
+    gripper_from_neg1_0_to_0_1: bool,
+) -> list[str]:
+    errors = []
+    processed = _apply_sft_action_preprocessing(
+        actions,
+        gripper_from_neg1_0_to_0_1=gripper_from_neg1_0_to_0_1,
+    )
+    flat = processed.reshape(-1, processed.shape[-1])
+    grip = flat[:, -1]
+
+    if processed.shape[-1] != 7:
+        errors.append(f"task {task_id}: expected action_dim=7, got {processed.shape[-1]}")
+    if np.any(~np.isfinite(flat)):
+        errors.append(f"task {task_id}: actions contain non-finite values after preprocessing")
+    outside = ((flat < -1.0001) | (flat > 1.0001)).mean(axis=0)
+    if np.any(outside > 0):
+        errors.append(
+            f"task {task_id}: actions outside [-1,1] after preprocessing per dim "
+            f"{np.array2string(outside, precision=5)}"
+        )
+    if grip.min() < -1e-6 or grip.max() > 1.0 + 1e-6:
+        errors.append(
+            f"task {task_id}: SFT gripper must be in [0,1] before LIBERO env conversion; "
+            f"got min={grip.min():.6f}, max={grip.max():.6f}. "
+            "Use --gripper-from-neg1-0-to-0-1 for datasets with {-1,0} labels."
+        )
+
+    has_close = np.any(grip < 0.5)
+    has_open = np.any(grip > 0.5)
+    if not (has_close and has_open):
+        errors.append(
+            f"task {task_id}: preprocessed gripper should contain both close(<0.5) "
+            f"and open(>0.5); got min={grip.min():.6f}, max={grip.max():.6f}"
+        )
+
+    env_grip = np.sign(2 * grip - 1) * -1.0
+    unique_env = np.unique(env_grip)
+    if unique_env.size < 2:
+        errors.append(
+            f"task {task_id}: LIBERO env gripper conversion collapses to one command "
+            f"{unique_env.tolist()}; raw/preprocessed gripper convention is likely wrong"
+        )
+
+    return errors
+
+
 def _read_task_actions(path: Path, max_demos: int | None) -> tuple[np.ndarray, list[str]]:
     actions = []
     demo_names = []
@@ -156,6 +215,16 @@ def main() -> int:
     parser.add_argument("--model-dir", default=None)
     parser.add_argument("--unnorm-key", default="libero_spatial_no_noops")
     parser.add_argument("--roundtrip", action="store_true")
+    parser.add_argument(
+        "--gripper-from-neg1-0-to-0-1",
+        action="store_true",
+        help="Apply the OPD SFT BC gripper fix: {-1,0} -> {0,1} before checks.",
+    )
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Exit non-zero if action preprocessing invariants needed before training fail.",
+    )
     args = parser.parse_args()
 
     repo = _repo_root()
@@ -178,7 +247,28 @@ def main() -> int:
         actions, demos = _read_task_actions(path, args.max_demos)
         print(f"  demos={len(demos)} first_demos={demos[:3]}")
         _summarize_actions(f"Task {task_id} actions", actions)
+        if args.gripper_from_neg1_0_to_0_1:
+            processed = _apply_sft_action_preprocessing(
+                actions,
+                gripper_from_neg1_0_to_0_1=True,
+            )
+            _summarize_actions(
+                f"Task {task_id} actions after SFT gripper -1/0 -> 0/1",
+                processed,
+            )
         _print_examples(path, args.examples)
+        if args.preflight:
+            errors = _preflight_actions(
+                task_id,
+                actions,
+                gripper_from_neg1_0_to_0_1=args.gripper_from_neg1_0_to_0_1,
+            )
+            if errors:
+                print("\n[PREFLIGHT FAILED]")
+                for err in errors:
+                    print(f"  - {err}")
+                return 2
+            print(f"\n[PREFLIGHT OK] task {task_id} action preprocessing checks passed")
         all_task_actions[task_id] = actions
 
     if len(all_task_actions) > 1:

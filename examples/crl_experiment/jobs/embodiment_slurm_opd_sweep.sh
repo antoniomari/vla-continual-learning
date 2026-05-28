@@ -36,7 +36,8 @@
 #       teacher checkpoints, e.g. "[250,500,750,1000]".
 #   OPD SFT preprocessing toggles (Cartesian product too): TRAIN_OPD_SFT_FILTER_FIXED_TASK_IDS,
 #       TRAIN_OPD_SFT_MATCH_TASK_LANGUAGE,
-#       TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION, TRAIN_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT
+#       TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION, TRAIN_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT,
+#       TRAIN_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1
 #       (each 0/1; wired to algorithm.sft_* overrides).
 #   OPD advantage normalization toggle: TRAIN_OPD_NORMALIZE_ADVANTAGES (0/1), wired to
 #       algorithm.normalize_advantages.
@@ -223,6 +224,7 @@ TRAIN_OPD_SFT_FILTER_FIXED_TASK_IDS=(1)
 TRAIN_OPD_SFT_MATCH_TASK_LANGUAGE=(1)
 TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION="${TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION:-1}"
 TRAIN_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT=(0)
+TRAIN_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1="${TRAIN_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1:-0}"
 TRAIN_OPD_NORMALIZE_ADVANTAGES=(1)
 # Select one or more OPD normalization modes. Override with e.g.
 #   TRAIN_OPD_REWARD_NORMALIZATIONS_OVERRIDE="group_zscore token_zscore action_dim_zscore positive_clip teacher_prob"
@@ -368,8 +370,8 @@ submit_job() {
 # Emit SWEEP_OPD_* exports for the sbatch wrapper (safe quoting for scientific lr strings).
 build_opd_sweep_exports() {
   # shellcheck disable=SC2312
-  printf 'SWEEP_OPD_BC_GLOBAL_BATCH_SIZE=%q SWEEP_OPD_BC_BATCH_SIZE=%q SWEEP_OPD_BC_STEPS=%q SWEEP_OPD_BC_SAVE_STEPS=%q SWEEP_OPD_TEACHER_LR=%q SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS=%q SWEEP_OPD_SFT_MATCH_TASK_LANGUAGE=%q SWEEP_OPD_SFT_MATCH_IMAGE_ROTATION=%q SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT=%q SWEEP_OPD_NORMALIZE_ADVANTAGES=%q SWEEP_OPD_REWARD_NORMALIZATION=%q SWEEP_OPD_REWARD_TANH_TAU=%q SWEEP_OPD_REWARD_CLIP_C=%q SWEEP_OPD_SUCCESS_GATE_TEACHER_LAMBDA=%q SWEEP_OPD_SUCCESS_GATE_REWARD_THRESHOLD=%q SWEEP_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES=%q SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE=%q SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT=%q SWEEP_OPD_TEACHER_STASH_LOGPROBS_ON_CPU=%q SWEEP_OPD_RL_TEACHER=%q SWEEP_OPD_MODE=%q SWEEP_OPD_TEACHER_HF_REPO=%q SWEEP_OPD_LOSS_TYPE=%q' \
-    "$1" "$2" "$3" "${TRAIN_OPD_BC_SAVE_STEPS}" "$4" "$5" "$6" "${TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION}" "$7" "$8" "$9" "${10}" "${11}" "${12}" "${13}" "${14}" "${15}" "${16}" "${17}" "${18}" "${19}" "${20}" "${21}"
+  printf 'SWEEP_OPD_BC_GLOBAL_BATCH_SIZE=%q SWEEP_OPD_BC_BATCH_SIZE=%q SWEEP_OPD_BC_STEPS=%q SWEEP_OPD_BC_SAVE_STEPS=%q SWEEP_OPD_TEACHER_LR=%q SWEEP_OPD_SFT_FILTER_FIXED_TASK_IDS=%q SWEEP_OPD_SFT_MATCH_TASK_LANGUAGE=%q SWEEP_OPD_SFT_MATCH_IMAGE_ROTATION=%q SWEEP_OPD_SFT_MATCH_OBS_ACTION_ALIGNMENT=%q SWEEP_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1=%q SWEEP_OPD_NORMALIZE_ADVANTAGES=%q SWEEP_OPD_REWARD_NORMALIZATION=%q SWEEP_OPD_REWARD_TANH_TAU=%q SWEEP_OPD_REWARD_CLIP_C=%q SWEEP_OPD_SUCCESS_GATE_TEACHER_LAMBDA=%q SWEEP_OPD_SUCCESS_GATE_REWARD_THRESHOLD=%q SWEEP_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES=%q SWEEP_OPD_TEACHER_MICRO_BATCH_SIZE=%q SWEEP_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT=%q SWEEP_OPD_TEACHER_STASH_LOGPROBS_ON_CPU=%q SWEEP_OPD_RL_TEACHER=%q SWEEP_OPD_MODE=%q SWEEP_OPD_TEACHER_HF_REPO=%q SWEEP_OPD_LOSS_TYPE=%q' \
+    "$1" "$2" "$3" "${TRAIN_OPD_BC_SAVE_STEPS}" "$4" "$5" "$6" "${TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION}" "$7" "${TRAIN_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1}" "$8" "$9" "${10}" "${11}" "${12}" "${13}" "${14}" "${15}" "${16}" "${17}" "${18}" "${19}" "${20}" "${21}"
 }
 
 opd_variant_tag() {
@@ -421,6 +423,7 @@ echo "OPD_TEACHER_MAPPING_GROUP=${OPD_TEACHER_MAPPING_GROUP}"
 echo "OPD_USE_TEACHER_MAPPING=${OPD_USE_TEACHER_MAPPING}"
 echo "OPD_REQUIRE_MAPPED_TEACHER=${OPD_REQUIRE_MAPPED_TEACHER}"
 echo "TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION=${TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION} (default 1 = rotate SFT images to match rollout preprocessing)"
+echo "TRAIN_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1=${TRAIN_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1}"
 if [[ -n "${LIBERO_REPO_PATH}" ]]; then
   echo "LIBERO_REPO_PATH (in jobs)=${LIBERO_REPO_PATH}"
 else
@@ -505,7 +508,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                             WANDB_PREFIX="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}${VARIANT_TAG}_rps${ROLLOUTS_PER_STEP}_"
                             WANDB_PREFIX="$(append_wandb_extra_tag "${WANDB_PREFIX}")"
                             CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 ${TASK_MAPPED_TEACHER_EX} ${OPD_EX} SWEEP_GROUP_SIZE=${GS} SWEEP_NUM_GROUP_ENVS=${NGE} SWEEP_ROLLOUT_EPOCH=${RE} SWEEP_GLOBAL_BATCH_SIZE=${G_BATCH} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
-                            echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH} rollouts_per_step=${ROLLOUTS_PER_STEP} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_teacher_model_path=${TASK_MAPPED_TEACHER_PATH:-auto} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_success_gate_lambda=${OPD_SG_LAMBDA} opd_success_gate_threshold=${OPD_SG_THRESHOLD} opd_success_gate_env_norm=${TRAIN_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES:-default} opd_teacher_micro_batch=${OPD_TMB} opd_precompute_teacher_in_rollout=${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT} opd_teacher_stash_logprobs_on_cpu=${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_rot=${TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION} sft_align=${OPD_SFT_ALIGN}"
+                            echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} group_size=${GS} num_group_envs=${NGE} rollout_epoch=${RE} global_batch_size=${G_BATCH} rollouts_per_step=${ROLLOUTS_PER_STEP} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_teacher_model_path=${TASK_MAPPED_TEACHER_PATH:-auto} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_success_gate_lambda=${OPD_SG_LAMBDA} opd_success_gate_threshold=${OPD_SG_THRESHOLD} opd_success_gate_env_norm=${TRAIN_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES:-default} opd_teacher_micro_batch=${OPD_TMB} opd_precompute_teacher_in_rollout=${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT} opd_teacher_stash_logprobs_on_cpu=${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_rot=${TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION} sft_align=${OPD_SFT_ALIGN} sft_grip01=${TRAIN_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1}"
 
                             submit_job "${JOB_NAME}" "${CMD}"
                             job_count=$((job_count + 1))
@@ -568,7 +571,7 @@ if [[ "${RUN_MODE}" == "train" ]]; then
                       WANDB_PREFIX="opd_${TEACHER_TAG}_adv${OPD_NORM_ADV}${VARIANT_TAG}_rps${DEFAULT_ROLLOUTS_PER_STEP}_"
                       WANDB_PREFIX="$(append_wandb_extra_tag "${WANDB_PREFIX}")"
                       CMD="EXPERIMENT_NAME_PREFIX=${WANDB_PREFIX} SKIP_POST_TRAIN_EVAL=1 ${TASK_MAPPED_TEACHER_EX} ${OPD_EX} SWEEP_SAVE_INTERVAL=${SAVE_INTERVAL_OVERRIDE} $(printf '%q ' "${ARGS[@]}")"
-                      echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} rollouts_per_step=${DEFAULT_ROLLOUTS_PER_STEP} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_teacher_model_path=${TASK_MAPPED_TEACHER_PATH:-auto} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_success_gate_lambda=${OPD_SG_LAMBDA} opd_success_gate_threshold=${OPD_SG_THRESHOLD} opd_success_gate_env_norm=${TRAIN_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES:-default} opd_teacher_micro_batch=${OPD_TMB} opd_precompute_teacher_in_rollout=${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT} opd_teacher_stash_logprobs_on_cpu=${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_rot=${TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION} sft_align=${OPD_SFT_ALIGN}"
+                      echo "Submit OPD train: task=${TASK} seed=${SEED} cfg=${CFG} max_epoch=${MAX_EP:-default} ckpt=${CKPT:-none} rollouts_per_step=${DEFAULT_ROLLOUTS_PER_STEP} opd_mode=${TRAIN_OPD_MODE} opd_teacher_repo=${TRAIN_OPD_TEACHER_HF_REPO} opd_teacher_model_path=${TASK_MAPPED_TEACHER_PATH:-auto} opd_loss=${OPD_LOSS} opd_norm_adv=${OPD_NORM_ADV} opd_reward_norm=${OPD_REWARD_NORM} opd_reward_tanh_tau=${TRAIN_OPD_REWARD_TANH_TAU} opd_reward_clip_c=${TRAIN_OPD_REWARD_CLIP_C} opd_success_gate_lambda=${OPD_SG_LAMBDA} opd_success_gate_threshold=${OPD_SG_THRESHOLD} opd_success_gate_env_norm=${TRAIN_OPD_SUCCESS_GATE_ENV_NORMALIZE_ADVANTAGES:-default} opd_teacher_micro_batch=${OPD_TMB} opd_precompute_teacher_in_rollout=${TRAIN_OPD_PRECOMPUTE_TEACHER_IN_ROLLOUT} opd_teacher_stash_logprobs_on_cpu=${TRAIN_OPD_TEACHER_STASH_LOGPROBS_ON_CPU} opd_bc_gbs=${OPD_GBS} opd_bc_bs=${OPD_MBS} opd_bc_steps=${OPD_STEPS} opd_teacher_lr=${OPD_TLR} sft_filter=${OPD_SFT_FILTER} sft_lang=${OPD_SFT_LANG} sft_rot=${TRAIN_OPD_SFT_MATCH_IMAGE_ROTATION} sft_align=${OPD_SFT_ALIGN} sft_grip01=${TRAIN_OPD_SFT_GRIPPER_FROM_NEG1_0_TO_0_1}"
 
                       submit_job "${JOB_NAME}" "${CMD}"
                       job_count=$((job_count + 1))
