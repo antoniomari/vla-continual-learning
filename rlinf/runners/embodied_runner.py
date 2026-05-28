@@ -113,6 +113,14 @@ class EmbodiedRunner:
         If an OPD teacher checkpoint already exists in the run log dir, reuse it and
         skip warmup. Returns True when resume path is used.
         """
+        if bool(self.cfg.algorithm.get("opd_force_retrain_teacher", False)):
+            print(
+                "[OPD] opd_force_retrain_teacher=True: ignoring any existing "
+                "opd_bc_teacher checkpoint and rerunning teacher warmup.",
+                flush=True,
+            )
+            return False
+
         teacher_actor_path = os.path.join(
             self.cfg.runner.logger.log_path,
             "opd_bc_teacher",
