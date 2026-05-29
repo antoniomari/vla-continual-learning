@@ -333,6 +333,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     if [ -n "${SWEEP_OPD_BC_SAVE_STEPS:-}" ]; then
         OVERRIDES="$OVERRIDES ++algorithm.opd_bc_save_steps=${SWEEP_OPD_BC_SAVE_STEPS}"
     fi
+    if [ -n "${SWEEP_OPD_BC_LOG_INTERVAL_STEPS:-}" ]; then
+        OVERRIDES="$OVERRIDES ++algorithm.opd_bc_log_interval_steps=${SWEEP_OPD_BC_LOG_INTERVAL_STEPS}"
+    fi
     if [ -n "${SWEEP_OPD_FORCE_RETRAIN_TEACHER:-}" ]; then
         OVERRIDES="$OVERRIDES ++algorithm.opd_force_retrain_teacher=${SWEEP_OPD_FORCE_RETRAIN_TEACHER}"
     fi

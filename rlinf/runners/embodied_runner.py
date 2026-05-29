@@ -356,28 +356,38 @@ class EmbodiedRunner:
             return teacher_actor_path
 
         save_steps = _parse_bc_save_steps()
-        run_targets = list(save_steps)
+        log_interval = int(self.cfg.algorithm.get("opd_bc_log_interval_steps", 0) or 0)
+        log_steps = (
+            list(range(log_interval, opd_bc_steps + 1, log_interval))
+            if log_interval > 0
+            else []
+        )
+        run_targets = sorted(set(save_steps + log_steps))
         if not run_targets or run_targets[-1] < opd_bc_steps:
             run_targets.append(opd_bc_steps)
 
-        bc_packs = []
+        per_step = []
         steps_done = 0
         with self.timer("opd_bc_warmup"):
             for target_step in run_targets:
                 chunk_steps = target_step - steps_done
                 if chunk_steps <= 0:
                     continue
+                chunk_start = steps_done
                 bc_metrics_list = self.actor.run_opd_bc_warmup(chunk_steps).wait()
                 bc_pack_chunk = bc_metrics_list[0]
-                bc_packs.append(bc_pack_chunk)
+                if isinstance(bc_pack_chunk, dict) and "per_step" in bc_pack_chunk:
+                    chunk_per_step = list(bc_pack_chunk["per_step"])
+                    per_step.extend(chunk_per_step)
+                    for local_i, step_m in enumerate(chunk_per_step):
+                        self.metric_logger.log(
+                            {f"opd_bc/{k}": v for k, v in step_m.items()},
+                            step=chunk_start + local_i,
+                        )
                 steps_done = target_step
                 if target_step in save_steps:
                     _save_teacher_checkpoint(target_step)
 
-            per_step = []
-            for bc_pack_chunk in bc_packs:
-                if isinstance(bc_pack_chunk, dict) and "per_step" in bc_pack_chunk:
-                    per_step.extend(bc_pack_chunk["per_step"])
             if per_step:
                 bc_pack = {"per_step": per_step, "mean": {}}
                 keys = per_step[0].keys()
@@ -385,15 +395,10 @@ class EmbodiedRunner:
                     k: sum(float(d[k]) for d in per_step) / len(per_step)
                     for k in keys
                 }
-                for step_i, step_m in enumerate(per_step):
-                    self.metric_logger.log(
-                        {f"opd_bc/{k}": v for k, v in step_m.items()},
-                        step=step_i,
-                    )
                 n_bc = len(per_step)
                 self._opd_bc_wandb_step_cursor = n_bc if n_bc > 0 else 1
             else:
-                bc_pack = bc_packs[-1] if bc_packs else {}
+                bc_pack = {}
                 self.metric_logger.log(
                     {f"opd_bc/{k}": v for k, v in bc_pack.items()},
                     step=0,
