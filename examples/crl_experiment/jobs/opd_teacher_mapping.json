@@ -2,8 +2,8 @@
   "teacher_sft_by_task": {
     "1": "logs_spatial/sequential/task_1_seed184/opd_bc_teacher/actor",
     "4": "logs_spatial/sequential/task_4_seed184/opd_bc_teacher/actor",
-    "5": "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_rps32_teacherprep_seed0_task_5_seed0_spatial_norm_group_zscore/opd_bc_teacher/actor",
-    "9": "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_rps32_teacherprep_seed0_task_9_seed0_spatial_norm_group_zscore/opd_bc_teacher/actor"
+    "5": "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_rps32_teacherprep_seed0_task_5_seed0_spatial_norm_group_zscore/opd_bc_teacher/checkpoints/step_1000/actor",
+    "9": "logs_spatial/sequential/opd_sftteacher_adv1_group_zscore_rps32_teacherprep_seed0_task_9_seed0_spatial_norm_group_zscore/opd_bc_teacher/checkpoints/step_1000/actor"
   },
   "teacher_rl_by_task": {
     "1": "logs_spatial/sequential/task_1_seed4096/checkpoints/global_step_60/actor",

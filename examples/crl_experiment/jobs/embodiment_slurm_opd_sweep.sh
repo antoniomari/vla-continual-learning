@@ -137,20 +137,47 @@ if not path:
     raise SystemExit(0)
 
 p = Path(path)
+
+def teacher_path_variants(path: Path) -> list[Path]:
+    variants = [path]
+    parts = list(path.parts)
+    if "opd_bc_teacher" in parts:
+        idx = parts.index("opd_bc_teacher")
+        root = Path(*parts[: idx + 1])
+        variants.append(root / "checkpoints" / "step_1000" / "actor")
+        variants.append(root / "actor")
+    deduped = []
+    seen = set()
+    for item in variants:
+        key = str(item)
+        if key not in seen:
+            seen.add(key)
+            deduped.append(item)
+    return deduped
+
+relative_candidates = teacher_path_variants(p)
+
 if p.is_absolute():
-    print(str(p))
+    for candidate in relative_candidates:
+        if candidate.exists():
+            print(str(candidate.resolve()))
+            raise SystemExit(0)
+    print(str(relative_candidates[0]))
     raise SystemExit(0)
 
-# Relative mapping entries are resolved from SCRATCH repo mirror first, then PROJECT_ROOT.
+root_dirs = []
 if scratch_base:
-    scratch_repo = Path(scratch_base) / "vla-continual-learning"
-    scratch_candidate = (scratch_repo / p).resolve()
-    if scratch_candidate.exists():
-        print(str(scratch_candidate))
-        raise SystemExit(0)
+    root_dirs.append(Path(scratch_base) / "vla-continual-learning")
+root_dirs.append(Path(project_root))
 
-project_candidate = (Path(project_root) / p).resolve()
-print(str(project_candidate))
+for root_dir in root_dirs:
+    for candidate in relative_candidates:
+        resolved = (root_dir / candidate).resolve()
+        if resolved.exists():
+            print(str(resolved))
+            raise SystemExit(0)
+
+print(str((Path(project_root) / relative_candidates[0]).resolve()))
 PY
 }
 
