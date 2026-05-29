@@ -99,15 +99,7 @@ NEW_CLUSTER_ACCOUNT="${SLURM_ACCOUNT:-a143}"
 LIBERO_REPO_PATH="${LIBERO_REPO_PATH:-}"
 LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-}"
 if [[ -z "${OPD_TEACHER_MAPPING_JSON:-}" ]]; then
-  SCRATCH_MAPPING_JSON=""
-  if [[ -n "${SCRATCH:-}" ]]; then
-    SCRATCH_MAPPING_JSON="${SCRATCH%/}/vla-continual-learning/examples/crl_experiment/jobs/opd_teacher_mapping.json"
-  fi
-  if [[ -n "${SCRATCH_MAPPING_JSON}" && -f "${SCRATCH_MAPPING_JSON}" ]]; then
-    OPD_TEACHER_MAPPING_JSON="${SCRATCH_MAPPING_JSON}"
-  else
-    OPD_TEACHER_MAPPING_JSON="${SCRIPT_DIR}/opd_teacher_mapping.json"
-  fi
+  OPD_TEACHER_MAPPING_JSON="${SCRIPT_DIR}/opd_teacher_mapping.json"
 fi
 OPD_TEACHER_MAPPING_GROUP="${OPD_TEACHER_MAPPING_GROUP:-teacher_sft_by_task}"
 OPD_USE_TEACHER_MAPPING="${OPD_USE_TEACHER_MAPPING:-1}"
