@@ -462,6 +462,12 @@ if [[ "${RUN_MODE}" == "train" ]]; then
       fi
     else
       echo "Task ${TASK}: no mapped SFT teacher found; using existing default OPD flow."
+      if [[ "${OPD_REQUIRE_MAPPED_TEACHER}" == "1" ]]; then
+        echo "ERROR: OPD_REQUIRE_MAPPED_TEACHER=1, refusing to submit OPD without a mapped teacher."
+        echo "       Check OPD_TEACHER_MAPPING_JSON=${OPD_TEACHER_MAPPING_JSON}"
+        echo "       Check OPD_TEACHER_MAPPING_GROUP=${OPD_TEACHER_MAPPING_GROUP} and task=${TASK}"
+        exit 1
+      fi
     fi
     for CKPT in "${TRAIN_MANUAL_CHECKPOINT[@]}"; do
       for MAX_EP in "${TRAIN_MAX_EPOCHS[@]}"; do
