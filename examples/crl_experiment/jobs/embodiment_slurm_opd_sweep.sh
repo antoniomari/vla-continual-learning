@@ -99,7 +99,11 @@ NEW_CLUSTER_ACCOUNT="${SLURM_ACCOUNT:-a143}"
 LIBERO_REPO_PATH="${LIBERO_REPO_PATH:-}"
 LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-}"
 if [[ -z "${OPD_TEACHER_MAPPING_JSON:-}" ]]; then
-  OPD_TEACHER_MAPPING_JSON="${SCRIPT_DIR}/opd_teacher_mapping.json"
+  if [[ -n "${SCRATCH:-}" ]]; then
+    OPD_TEACHER_MAPPING_JSON="${SCRATCH%/}/vla-continual-learning/examples/crl_experiment/jobs/opd_teacher_mapping.json"
+  else
+    OPD_TEACHER_MAPPING_JSON="${SCRIPT_DIR}/opd_teacher_mapping.json"
+  fi
 fi
 OPD_TEACHER_MAPPING_GROUP="${OPD_TEACHER_MAPPING_GROUP:-teacher_sft_by_task}"
 OPD_USE_TEACHER_MAPPING="${OPD_USE_TEACHER_MAPPING:-1}"
@@ -137,47 +141,20 @@ if not path:
     raise SystemExit(0)
 
 p = Path(path)
-
-def teacher_path_variants(path: Path) -> list[Path]:
-    variants = [path]
-    parts = list(path.parts)
-    if "opd_bc_teacher" in parts:
-        idx = parts.index("opd_bc_teacher")
-        root = Path(*parts[: idx + 1])
-        variants.append(root / "checkpoints" / "step_1000" / "actor")
-        variants.append(root / "actor")
-    deduped = []
-    seen = set()
-    for item in variants:
-        key = str(item)
-        if key not in seen:
-            seen.add(key)
-            deduped.append(item)
-    return deduped
-
-relative_candidates = teacher_path_variants(p)
-
 if p.is_absolute():
-    for candidate in relative_candidates:
-        if candidate.exists():
-            print(str(candidate.resolve()))
-            raise SystemExit(0)
-    print(str(relative_candidates[0]))
+    print(str(p))
     raise SystemExit(0)
 
-root_dirs = []
+# Relative mapping entries are resolved from SCRATCH repo mirror first, then PROJECT_ROOT.
 if scratch_base:
-    root_dirs.append(Path(scratch_base) / "vla-continual-learning")
-root_dirs.append(Path(project_root))
+    scratch_repo = Path(scratch_base) / "vla-continual-learning"
+    scratch_candidate = (scratch_repo / p).resolve()
+    if scratch_candidate.exists():
+        print(str(scratch_candidate))
+        raise SystemExit(0)
 
-for root_dir in root_dirs:
-    for candidate in relative_candidates:
-        resolved = (root_dir / candidate).resolve()
-        if resolved.exists():
-            print(str(resolved))
-            raise SystemExit(0)
-
-print(str((Path(project_root) / relative_candidates[0]).resolve()))
+project_candidate = (Path(project_root) / p).resolve()
+print(str(project_candidate))
 PY
 }
 
@@ -485,12 +462,6 @@ if [[ "${RUN_MODE}" == "train" ]]; then
       fi
     else
       echo "Task ${TASK}: no mapped SFT teacher found; using existing default OPD flow."
-      if [[ "${OPD_REQUIRE_MAPPED_TEACHER}" == "1" ]]; then
-        echo "ERROR: OPD_REQUIRE_MAPPED_TEACHER=1, refusing to submit OPD without a mapped teacher."
-        echo "       Check OPD_TEACHER_MAPPING_JSON=${OPD_TEACHER_MAPPING_JSON}"
-        echo "       Check OPD_TEACHER_MAPPING_GROUP=${OPD_TEACHER_MAPPING_GROUP} and task=${TASK}"
-        exit 1
-      fi
     fi
     for CKPT in "${TRAIN_MANUAL_CHECKPOINT[@]}"; do
       for MAX_EP in "${TRAIN_MAX_EPOCHS[@]}"; do
