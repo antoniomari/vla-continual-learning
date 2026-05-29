@@ -354,7 +354,10 @@ class LiberoSFTDataset(Dataset):
         )
         if self._gripper_from_neg1_0_to_0_1:
             actions = actions.copy()
-            actions[..., -1] = np.clip(actions[..., -1] + 1.0, 0.0, 1.0)
+            # Converted RLDS HDF5 can store gripper as -1=open, 0=close after
+            # the converter's last-dim flip. OpenVLA action tokens expect
+            # 1=open, 0=close, so this is a semantic inversion, not +1.
+            actions[..., -1] = np.clip(-actions[..., -1], 0.0, 1.0)
 
         assert actions.shape[0] == self.num_action_chunks, (
             f"Expected {self.num_action_chunks} actions, got {actions.shape[0]}"

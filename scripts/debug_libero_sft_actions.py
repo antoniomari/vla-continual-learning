@@ -59,7 +59,9 @@ def _apply_sft_action_preprocessing(
 ) -> np.ndarray:
     processed = actions.copy()
     if gripper_from_neg1_0_to_0_1:
-        processed[..., -1] = np.clip(processed[..., -1] + 1.0, 0.0, 1.0)
+        # Converted RLDS HDF5 can store gripper as -1=open, 0=close after
+        # the converter's last-dim flip. OpenVLA expects 1=open, 0=close.
+        processed[..., -1] = np.clip(-processed[..., -1], 0.0, 1.0)
     return processed
 
 
@@ -218,7 +220,10 @@ def main() -> int:
     parser.add_argument(
         "--gripper-from-neg1-0-to-0-1",
         action="store_true",
-        help="Apply the OPD SFT BC gripper fix: {-1,0} -> {0,1} before checks.",
+        help=(
+            "Apply the OPD SFT BC gripper fix for converted RLDS HDF5: "
+            "-1=open,0=close -> 1=open,0=close before checks."
+        ),
     )
     parser.add_argument(
         "--preflight",
@@ -253,7 +258,7 @@ def main() -> int:
                 gripper_from_neg1_0_to_0_1=True,
             )
             _summarize_actions(
-                f"Task {task_id} actions after SFT gripper -1/0 -> 0/1",
+                f"Task {task_id} actions after SFT gripper -1=open,0=close -> 1=open,0=close",
                 processed,
             )
         _print_examples(path, args.examples)
