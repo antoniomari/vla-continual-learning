@@ -471,6 +471,9 @@ if [[ "${RUN_MODE}" == "train" ]]; then
         echo "WARN: Task ${TASK} has mapped teacher path but directory is missing: ${TASK_MAPPED_TEACHER_PATH}"
         if [[ "${OPD_REQUIRE_MAPPED_TEACHER}" == "1" ]]; then
           echo "ERROR: OPD_REQUIRE_MAPPED_TEACHER=1, refusing to submit OPD without this teacher."
+          echo "       OPD_TEACHER_MAPPING_JSON=${OPD_TEACHER_MAPPING_JSON}"
+          echo "       OPD_TEACHER_MODEL_ROOT=${OPD_TEACHER_MODEL_ROOT}"
+          echo "       Mapped task=${TASK} group=${OPD_TEACHER_MAPPING_GROUP}"
           exit 1
         fi
       fi
