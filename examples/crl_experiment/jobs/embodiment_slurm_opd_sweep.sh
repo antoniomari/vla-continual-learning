@@ -101,6 +101,15 @@ LIBERO_CONFIG_PATH="${LIBERO_CONFIG_PATH:-}"
 if [[ -z "${OPD_TEACHER_MAPPING_JSON:-}" ]]; then
   OPD_TEACHER_MAPPING_JSON="${SCRIPT_DIR}/opd_teacher_mapping.json"
 fi
+if [[ -z "${OPD_TEACHER_MODEL_ROOT:-}" ]]; then
+  if [[ -n "${SCRATCH:-}" && -d "${SCRATCH%/}/vla-continual-learning" ]]; then
+    OPD_TEACHER_MODEL_ROOT="${SCRATCH%/}/vla-continual-learning"
+  elif [[ -d "/iopsstor/scratch/cscs/${USER}/vla-continual-learning" ]]; then
+    OPD_TEACHER_MODEL_ROOT="/iopsstor/scratch/cscs/${USER}/vla-continual-learning"
+  else
+    OPD_TEACHER_MODEL_ROOT="${PROJECT_ROOT}"
+  fi
+fi
 OPD_TEACHER_MAPPING_GROUP="${OPD_TEACHER_MAPPING_GROUP:-teacher_sft_by_task}"
 OPD_USE_TEACHER_MAPPING="${OPD_USE_TEACHER_MAPPING:-1}"
 OPD_REQUIRE_MAPPED_TEACHER="${OPD_REQUIRE_MAPPED_TEACHER:-0}"
@@ -110,7 +119,7 @@ lookup_mapped_teacher_path() {
   if [[ ! -f "${OPD_TEACHER_MAPPING_JSON}" ]]; then
     return 0
   fi
-  python3 - "${OPD_TEACHER_MAPPING_JSON}" "${task_id}" "${PROJECT_ROOT}" "${SCRATCH:-}" "${OPD_TEACHER_MAPPING_GROUP}" <<'PY'
+  python3 - "${OPD_TEACHER_MAPPING_JSON}" "${task_id}" "${PROJECT_ROOT}" "${SCRATCH:-}" "${OPD_TEACHER_MODEL_ROOT}" "${OPD_TEACHER_MAPPING_GROUP}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -119,7 +128,8 @@ mapping_path = sys.argv[1]
 task_id = str(sys.argv[2])
 project_root = sys.argv[3]
 scratch_base = sys.argv[4]
-mapping_group = sys.argv[5]
+model_root = sys.argv[5]
+mapping_group = sys.argv[6]
 try:
     with open(mapping_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -141,7 +151,13 @@ if p.is_absolute():
     print(str(p))
     raise SystemExit(0)
 
-# Relative mapping entries are resolved from SCRATCH repo mirror first, then PROJECT_ROOT.
+if model_root:
+    model_root_candidate = (Path(model_root) / p).resolve()
+    if model_root_candidate.exists():
+        print(str(model_root_candidate))
+        raise SystemExit(0)
+
+# Relative mapping entries are resolved from SCRATCH repo mirror next, then PROJECT_ROOT.
 if scratch_base:
     scratch_repo = Path(scratch_base) / "vla-continual-learning"
     scratch_candidate = (scratch_repo / p).resolve()
@@ -419,6 +435,7 @@ echo "PROJECT_ROOT=${PROJECT_ROOT}"
 echo "SLURM_LOG_DIR=${SLURM_LOG_DIR}"
 echo "PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF}"
 echo "OPD_TEACHER_MAPPING_JSON=${OPD_TEACHER_MAPPING_JSON}"
+echo "OPD_TEACHER_MODEL_ROOT=${OPD_TEACHER_MODEL_ROOT}"
 echo "OPD_TEACHER_MAPPING_GROUP=${OPD_TEACHER_MAPPING_GROUP}"
 echo "OPD_USE_TEACHER_MAPPING=${OPD_USE_TEACHER_MAPPING}"
 echo "OPD_REQUIRE_MAPPED_TEACHER=${OPD_REQUIRE_MAPPED_TEACHER}"
