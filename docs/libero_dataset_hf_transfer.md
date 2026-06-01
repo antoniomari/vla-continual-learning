@@ -31,7 +31,7 @@ source .venv/bin/activate
 python -m pip install -U huggingface_hub hf_transfer
 hf auth login
 
-HF_DATASET_REPO_ID="your-user-or-org/libero-spatial-256-from-rlds-reverted" \
+HF_DATASET_REPO_ID="antoniomari/libero-spatial-256-from-rlds-reverted" \
 HF_PRIVATE=1 \
 bash scripts/upload_libero_dataset_to_hf.sh
 ```
@@ -39,7 +39,7 @@ bash scripts/upload_libero_dataset_to_hf.sh
 Use `DRY_RUN=1` to print the resolved paths without uploading:
 
 ```bash
-HF_DATASET_REPO_ID="your-user-or-org/libero-spatial-256-from-rlds-reverted" \
+HF_DATASET_REPO_ID="antoniomari/libero-spatial-256-from-rlds-reverted" \
 DRY_RUN=1 \
 bash scripts/upload_libero_dataset_to_hf.sh
 ```
@@ -54,14 +54,14 @@ source .venv/bin/activate
 python -m pip install -U huggingface_hub hf_transfer
 hf auth login
 
-HF_DATASET_REPO_ID="your-user-or-org/libero-spatial-256-from-rlds-reverted" \
+HF_DATASET_REPO_ID="antoniomari/libero-spatial-256-from-rlds-reverted" \
 bash scripts/download_libero_dataset_from_hf.sh
 ```
 
 If the target folder already exists and should be replaced:
 
 ```bash
-HF_DATASET_REPO_ID="your-user-or-org/libero-spatial-256-from-rlds-reverted" \
+HF_DATASET_REPO_ID="antoniomari/libero-spatial-256-from-rlds-reverted" \
 OVERWRITE=1 \
 bash scripts/download_libero_dataset_from_hf.sh
 ```

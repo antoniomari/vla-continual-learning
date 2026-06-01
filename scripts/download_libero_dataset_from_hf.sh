@@ -5,7 +5,7 @@
 #   cd /path/to/vla-continual-learning
 #   source .venv/bin/activate
 #   hf auth login   # for private repos, or export HF_TOKEN=...
-#   HF_DATASET_REPO_ID="your-user-or-org/libero-spatial-256-from-rlds-reverted" \
+#   HF_DATASET_REPO_ID="antoniomari/libero-spatial-256-from-rlds-reverted" \
 #     bash scripts/download_libero_dataset_from_hf.sh
 
 set -euo pipefail
@@ -17,7 +17,7 @@ source "${REPO_ROOT}/configs/libero_dataset_paths.env"
 if [[ -z "${HF_DATASET_REPO_ID}" ]]; then
   echo "ERROR: HF_DATASET_REPO_ID is unset."
   echo "Example:"
-  echo "  HF_DATASET_REPO_ID=\"your-user-or-org/libero-spatial-256-from-rlds-reverted\" bash scripts/download_libero_dataset_from_hf.sh"
+  echo "  HF_DATASET_REPO_ID=\"antoniomari/libero-spatial-256-from-rlds-reverted\" bash scripts/download_libero_dataset_from_hf.sh"
   exit 2
 fi
 
