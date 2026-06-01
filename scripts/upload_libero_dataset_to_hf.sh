@@ -54,11 +54,18 @@ if [[ "${DRY_RUN:-0}" == "1" ]]; then
   DRY_RUN_FLAG+=(--dry-run)
 fi
 
-python "${REPO_ROOT}/scripts/libero_hf_dataset_transfer.py" upload \
-  --repo-id "${HF_DATASET_REPO_ID}" \
-  --repo-type "${HF_REPO_TYPE}" \
-  --path-in-repo "${HF_PATH_IN_REPO}" \
-  --dataset-dir "${LIBERO_DATASET_DIR}" \
-  --commit-message "Upload ${LIBERO_DATASET_NAME}" \
-  "${PRIVATE_FLAG[@]}" \
-  "${DRY_RUN_FLAG[@]}"
+CMD=(
+  python "${REPO_ROOT}/scripts/libero_hf_dataset_transfer.py" upload
+  --repo-id "${HF_DATASET_REPO_ID}"
+  --repo-type "${HF_REPO_TYPE}"
+  --path-in-repo "${HF_PATH_IN_REPO}"
+  --dataset-dir "${LIBERO_DATASET_DIR}"
+  --commit-message "Upload ${LIBERO_DATASET_NAME}"
+)
+if ((${#PRIVATE_FLAG[@]})); then
+  CMD+=("${PRIVATE_FLAG[@]}")
+fi
+if ((${#DRY_RUN_FLAG[@]})); then
+  CMD+=("${DRY_RUN_FLAG[@]}")
+fi
+"${CMD[@]}"
