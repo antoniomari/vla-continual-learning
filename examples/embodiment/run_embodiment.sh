@@ -124,8 +124,10 @@ if [[ -n "${SCRATCH_BASE}" ]]; then
     SCRATCH_REPO_ROOT="${SCRATCH_BASE%/}/vla-continual-learning"
 fi
 
-ensure_scratch_checkpoint_symlink() {
+ensure_scratch_subdir_symlink() {
     local abs_log_dir="$1"
+    local subdir_name="$2"
+    local label="$3"
 
     # Only mirror under SCRATCH when log dir is inside this repo.
     case "$abs_log_dir" in
@@ -142,28 +144,45 @@ ensure_scratch_checkpoint_symlink() {
 
     local rel_log_dir="${abs_log_dir#${REPO_PATH}/}"
     local scratch_log_dir="${SCRATCH_REPO_ROOT}/${rel_log_dir}"
-    local local_ckpt_dir="${abs_log_dir}/checkpoints"
-    local scratch_ckpt_dir="${scratch_log_dir}/checkpoints"
+    local local_subdir="${abs_log_dir}/${subdir_name}"
+    local scratch_subdir="${scratch_log_dir}/${subdir_name}"
 
     mkdir -p "$abs_log_dir" "$scratch_log_dir"
 
-    # If checkpoints already exist locally (legacy runs), move once.
-    if [[ -d "$local_ckpt_dir" && ! -L "$local_ckpt_dir" ]]; then
-        if [[ ! -e "$scratch_ckpt_dir" ]]; then
-            mv "$local_ckpt_dir" "$scratch_ckpt_dir"
+    # If the heavy subdir already exists locally (legacy runs), move it once.
+    if [[ -d "$local_subdir" && ! -L "$local_subdir" ]]; then
+        if [[ ! -e "$scratch_subdir" ]]; then
+            mv "$local_subdir" "$scratch_subdir"
+        elif [[ -d "$scratch_subdir" ]]; then
+            echo "WARNING: local ${label} exists but scratch target already exists:"
+            echo "  local:   $local_subdir"
+            echo "  scratch: $scratch_subdir"
+            echo "Keeping local directory in place to avoid overwriting data."
+            return 0
         fi
     fi
 
-    mkdir -p "$scratch_ckpt_dir"
-    ln -sfn "$scratch_ckpt_dir" "$local_ckpt_dir"
+    mkdir -p "$scratch_subdir"
+    ln -sfn "$scratch_subdir" "$local_subdir"
 
-    echo "Checkpoint mirror:"
-    echo "  local:   $local_ckpt_dir"
-    echo "  scratch: $scratch_ckpt_dir"
+    echo "${label} mirror:"
+    echo "  local:   $local_subdir"
+    echo "  scratch: $scratch_subdir"
+}
+
+ensure_scratch_checkpoint_symlink() {
+    local abs_log_dir="$1"
+    ensure_scratch_subdir_symlink "$abs_log_dir" "checkpoints" "Checkpoint"
+}
+
+ensure_scratch_opd_teacher_symlink() {
+    local abs_log_dir="$1"
+    ensure_scratch_subdir_symlink "$abs_log_dir" "opd_bc_teacher" "OPD BC teacher"
 }
 
 LOG_DIR="$(resolve_abs_log_dir "$LOG_DIR")"
 ensure_scratch_checkpoint_symlink "$LOG_DIR"
+ensure_scratch_opd_teacher_symlink "$LOG_DIR"
 MEGA_LOG_FILE="${LOG_DIR}/run_embodiment.log"
 mkdir -p "${LOG_DIR}"
 # -u: unbuffered stdout/stderr so [train_embodied_agent] lines keep order vs Ray logs when piped to tee
