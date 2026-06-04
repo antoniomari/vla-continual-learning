@@ -4,6 +4,7 @@ task_suite_name: libero_spatial
 auto_reset: True
 ignore_terminations: True
 max_episode_steps: 512
+settle_steps: 10
 
 use_rel_reward: True
 reward_coef: 5.0

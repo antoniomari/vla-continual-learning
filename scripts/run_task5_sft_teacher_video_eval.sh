@@ -26,6 +26,7 @@ CONFIG_NAME="${CONFIG_NAME:-crl_experiment/libero_spatial_grpo_openvlaoft_eval_s
 EVAL_SEED="${EVAL_SEED:-184}"
 EVAL_NUM_ENVS="${EVAL_NUM_ENVS:-8}"
 EVAL_ROLLOUT_EPOCH="${EVAL_ROLLOUT_EPOCH:-4}"
+EVAL_SETTLE_STEPS="${EVAL_SETTLE_STEPS:-50}"
 USE_GREEDY="${USE_GREEDY:-0}"
 TIME="${TIME:-04:00:00}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-8}"
@@ -42,7 +43,7 @@ if [[ "${DRY_RUN:-0}" != "1" && ! -d "${PROJECT_ROOT}/${TEACHER_PATH}" && ! -d "
   exit 1
 fi
 
-W_NAME="video_sft_teacher_task_${TASK_ID}_bc_step_${TEACHER_STEP}_seed_${EVAL_SEED}"
+W_NAME="video_sft_teacher_task_${TASK_ID}_bc_step_${TEACHER_STEP}_settle${EVAL_SETTLE_STEPS}_seed_${EVAL_SEED}"
 JOB_NAME="${W_NAME}"
 if ((${#JOB_NAME} > 40)); then
   JOB_NAME="${JOB_NAME:0:40}"
@@ -55,6 +56,7 @@ HYDRA_OVERRIDES=(
   "env.eval.fixed_task_ids=[${TASK_ID}]"
   "env.eval.num_envs=${EVAL_NUM_ENVS}"
   "env.eval.eval_per_task=${EVAL_NUM_ENVS}"
+  "env.eval.settle_steps=${EVAL_SETTLE_STEPS}"
   "algorithm.eval_rollout_epoch=${EVAL_ROLLOUT_EPOCH}"
   "env.eval.video_cfg.save_video=True"
   "env.eval.video_cfg.save_frequency=1"
@@ -105,6 +107,7 @@ echo "  teacher path: ${TEACHER_PATH}"
 echo "  teacher step: ${TEACHER_STEP}"
 echo "  eval envs: ${EVAL_NUM_ENVS}"
 echo "  eval rollout epoch: ${EVAL_ROLLOUT_EPOCH}"
+echo "  eval settle steps before policy: ${EVAL_SETTLE_STEPS}"
 echo "  greedy: ${USE_GREEDY}"
 echo "  videos will be under logs_spatial/evals/.../video/train/rank_0/"
 echo "=================================="

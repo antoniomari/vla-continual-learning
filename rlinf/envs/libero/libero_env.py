@@ -51,6 +51,7 @@ class LiberoEnv(gym.Env):
         self.use_fixed_reset_state_ids = cfg.use_fixed_reset_state_ids
         self.fixed_task_ids = cfg.get("fixed_task_ids", None)
         self.log_trajectories = cfg.get("log_trajectories", False)
+        self.settle_steps = int(cfg.get("settle_steps", 10))
 
         self.ignore_terminations = cfg.ignore_terminations
         self.auto_reset = cfg.auto_reset
@@ -514,7 +515,7 @@ class LiberoEnv(gym.Env):
 
         self._reconfigure(reset_state_ids, env_idx)
 
-        for _ in range(10):
+        for _ in range(self.settle_steps):
             zero_actions = np.zeros((self.num_envs, 7))
             raw_obs, _reward, terminations, info_lists = self.env.step(zero_actions)
 
