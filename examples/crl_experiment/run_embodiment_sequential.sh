@@ -45,6 +45,7 @@
 ### Optional: SKIP_POST_TRAIN_EVAL=1 skips automatic eval_embodiment.sh call after each successful task.
 ### Optional: OPD_SFT_PREFLIGHT_CHECK=0 disables the lightweight SFT HDF5 action-convention
 ###           check that runs before OPD BC teacher training.
+### Optional: TRAIN_EXTRA_HYDRA_OVERRIDES appends raw Hydra overrides to the train command.
 
 TASK_INPUT=${1:-0}
 MANUAL_CHECKPOINT_PATH=$2
@@ -395,6 +396,9 @@ for TASK_ID in $(seq $TASK_START $TASK_END); do
     fi
     if [ -n "${SWEEP_OPD_LOSS_TYPE:-}" ]; then
         OVERRIDES="$OVERRIDES algorithm.loss_type=${SWEEP_OPD_LOSS_TYPE}"
+    fi
+    if [ -n "${TRAIN_EXTRA_HYDRA_OVERRIDES:-}" ]; then
+        OVERRIDES="$OVERRIDES ${TRAIN_EXTRA_HYDRA_OVERRIDES}"
     fi
 
     if [[ "${OPD_SFT_PREFLIGHT_CHECK:-1}" == "1" && "${SWEEP_OPD_BC_STEPS:-0}" =~ ^[0-9]+$ && "${SWEEP_OPD_BC_STEPS:-0}" -gt 0 ]]; then

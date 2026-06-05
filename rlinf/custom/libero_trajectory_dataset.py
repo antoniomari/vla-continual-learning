@@ -8,6 +8,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 from rlinf.config import torch_dtype_from_precision
+from rlinf.envs.libero.utils import quat2axisangle
 from rlinf.models import get_model_config_and_processor
 from rlinf.models.embodiment.model_utils import prepare_observations
 
@@ -88,6 +89,10 @@ def make_collate_fn(cfg, input_processor, precision):
         images_and_states = {"full_image": images}
         if images_wrist is not None:
             images_and_states["wrist_image"] = images_wrist
+        if use_proprio:
+            images_and_states["state"] = [
+                torch.from_numpy(s["state"]).float() for s in samples
+            ]
         raw_obs_batch = {
             "task_descriptions": task_descs,
             "images_and_states": images_and_states,
@@ -349,6 +354,13 @@ class LiberoSFTDataset(Dataset):
             if self._match_rollout_image_rotation:
                 obs_wrist = np.ascontiguousarray(obs_wrist[::-1, ::-1])
             obs_wrist = self._maybe_resize_obs(obs_wrist)
+        state = np.concatenate(
+            [
+                np.array(obs_group["robot0_eef_pos"][obs_idx]),
+                quat2axisangle(np.array(obs_group["robot0_eef_quat"][obs_idx])),
+                np.array(obs_group["robot0_gripper_qpos"][obs_idx]),
+            ]
+        ).astype(np.float32)
         actions = np.array(
             demo["actions"][timestep : timestep + self.num_action_chunks]
         )
@@ -367,6 +379,7 @@ class LiberoSFTDataset(Dataset):
             "obs_rgb": obs,         # [H, W, C] uint8 numpy
             "task_desc": task_desc,  # str
             "actions": actions,      # [C, D] float numpy
+            "state": state,          # [8] float numpy, matches rollout proprio state
         }
         if obs_wrist is not None:
             output["obs_wrist_rgb"] = obs_wrist

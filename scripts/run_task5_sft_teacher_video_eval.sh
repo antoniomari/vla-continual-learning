@@ -27,6 +27,7 @@ EVAL_SEED="${EVAL_SEED:-184}"
 EVAL_NUM_ENVS="${EVAL_NUM_ENVS:-8}"
 EVAL_ROLLOUT_EPOCH="${EVAL_ROLLOUT_EPOCH:-4}"
 EVAL_SETTLE_STEPS="${EVAL_SETTLE_STEPS:-50}"
+EVAL_EXTRA_HYDRA_OVERRIDES="${EVAL_EXTRA_HYDRA_OVERRIDES:-}"
 USE_GREEDY="${USE_GREEDY:-0}"
 TIME="${TIME:-04:00:00}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-8}"
@@ -64,6 +65,11 @@ HYDRA_OVERRIDES=(
   "env.eval.video_cfg.info_on_video=True"
   "+actor.model.lora_path=${TEACHER_PATH}"
 )
+
+if [[ -n "${EVAL_EXTRA_HYDRA_OVERRIDES}" ]]; then
+  # shellcheck disable=SC2206
+  HYDRA_OVERRIDES+=( ${EVAL_EXTRA_HYDRA_OVERRIDES} )
+fi
 
 if [[ "${USE_GREEDY}" == "1" ]]; then
   HYDRA_OVERRIDES+=(
@@ -108,6 +114,7 @@ echo "  teacher step: ${TEACHER_STEP}"
 echo "  eval envs: ${EVAL_NUM_ENVS}"
 echo "  eval rollout epoch: ${EVAL_ROLLOUT_EPOCH}"
 echo "  eval settle steps before policy: ${EVAL_SETTLE_STEPS}"
+echo "  eval extra hydra overrides: ${EVAL_EXTRA_HYDRA_OVERRIDES:-none}"
 echo "  greedy: ${USE_GREEDY}"
 echo "  videos will be under logs_spatial/evals/.../video/train/rank_0/"
 echo "=================================="

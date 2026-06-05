@@ -26,6 +26,7 @@ from libero.libero.envs import OffScreenRenderEnv
 from omegaconf.omegaconf import OmegaConf
 
 from rlinf.envs.libero.utils import (
+    get_libero_dummy_action,
     get_libero_image,
     get_libero_wrist_image,
     list_of_dict_to_dict_of_list,
@@ -515,9 +516,10 @@ class LiberoEnv(gym.Env):
 
         self._reconfigure(reset_state_ids, env_idx)
 
+        dummy_action = np.asarray(get_libero_dummy_action("openvla"), dtype=np.float32)
+        dummy_actions = np.repeat(dummy_action[None, :], self.num_envs, axis=0)
         for _ in range(self.settle_steps):
-            zero_actions = np.zeros((self.num_envs, 7))
-            raw_obs, _reward, terminations, info_lists = self.env.step(zero_actions)
+            raw_obs, _reward, terminations, info_lists = self.env.step(dummy_actions)
 
         obs = self._wrap_obs(raw_obs)
         if env_idx is not None:

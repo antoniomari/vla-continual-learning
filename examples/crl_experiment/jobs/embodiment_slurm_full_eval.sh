@@ -40,6 +40,7 @@
 #   SFT_MODEL_EVAL_TASK      -> task id to evaluate mapped SFT teacher adapter (same as positional arg 5)
 #   SFT_TEACHER_PATH         -> explicit SFT teacher adapter path to evaluate instead of JSON lookup
 #   SFT_TEACHER_NAME         -> optional W&B target stem for SFT_TEACHER_PATH eval jobs
+#   EVAL_EXTRA_HYDRA_OVERRIDES -> raw Hydra overrides appended to eval command
 #
 set -euo pipefail
 
@@ -76,6 +77,7 @@ SFT_MODEL_EVAL_TASK="${5:-${SFT_MODEL_EVAL_TASK:-}}"
 OPD_TEACHER_MAPPING_JSON="${OPD_TEACHER_MAPPING_JSON:-${SCRIPT_DIR}/opd_teacher_mapping.json}"
 SFT_TEACHER_PATH="${SFT_TEACHER_PATH:-}"
 SFT_TEACHER_NAME="${SFT_TEACHER_NAME:-}"
+EVAL_EXTRA_HYDRA_OVERRIDES="${EVAL_EXTRA_HYDRA_OVERRIDES:-}"
 
 if ! [[ "${SEED}" =~ ^[0-9]+$ ]]; then
   echo "ERROR: SEED must be a non-negative integer, got: ${SEED}"
@@ -253,6 +255,7 @@ echo "EVAL_ROLLOUTS_PER_TASK(requested)=${EVAL_ROLLOUTS_PER_TASK}"
 echo "PER_EPOCH_PER_TASK=${PER_EPOCH_PER_TASK}"
 echo "algorithm.eval_rollout_epoch(derived)=${EVAL_ROLLOUT_EPOCH}"
 echo "ACTUAL_ROLLOUTS_PER_TASK=${ACTUAL_ROLLOUTS_PER_TASK}"
+echo "EVAL_EXTRA_HYDRA_OVERRIDES=${EVAL_EXTRA_HYDRA_OVERRIDES:-none}"
 echo "=================================="
 
 job_count=0
@@ -275,9 +278,9 @@ for STEP in "${STEP_LIST[@]}"; do
 
   # Keep eval env count aligned with OPD sweep/config; only override eval_rollout_epoch.
   if [[ "${SFT_TEACHER_MODE}" == "1" ]]; then
-    CMD=$(printf '%q ' bash examples/embodiment/eval_embodiment.sh "${CONFIG_NAME}" "runner.logger.experiment_name=${W_NAME}" "actor.seed=${SEED}" "algorithm.eval_rollout_epoch=${EVAL_ROLLOUT_EPOCH}" "+actor.model.lora_path=${SFT_TEACHER_PATH}")
+    CMD=$(printf '%q ' bash examples/embodiment/eval_embodiment.sh "${CONFIG_NAME}" "runner.logger.experiment_name=${W_NAME}" "actor.seed=${SEED}" "algorithm.eval_rollout_epoch=${EVAL_ROLLOUT_EPOCH}" "+actor.model.lora_path=${SFT_TEACHER_PATH}" ${EVAL_EXTRA_HYDRA_OVERRIDES})
   else
-    EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${W_NAME} actor.seed=${SEED} algorithm.eval_rollout_epoch=${EVAL_ROLLOUT_EPOCH}"
+    EVAL_HYDRA_OVERRIDES="runner.logger.experiment_name=${W_NAME} actor.seed=${SEED} algorithm.eval_rollout_epoch=${EVAL_ROLLOUT_EPOCH} ${EVAL_EXTRA_HYDRA_OVERRIDES}"
     CMD=$(printf '%q ' env EVAL_HYDRA_OVERRIDES="${EVAL_HYDRA_OVERRIDES}" bash examples/crl_experiment/eval_embodiment.sh "${TARGET}" "${STEP}" "${CONFIG_NAME}" "${SEED}")
   fi
 
