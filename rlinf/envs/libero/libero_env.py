@@ -444,9 +444,14 @@ class LiberoEnv(gym.Env):
 
     def _extract_image_and_state(self, obs):
         if self.cfg.num_images_in_input > 1:
+            init_params = self.cfg.get("init_params", {})
+            resize_size = (
+                int(init_params.get("camera_heights", 256)),
+                int(init_params.get("camera_widths", 256)),
+            )
             return {
                 "full_image": get_libero_image(obs),
-                "wrist_image": get_libero_wrist_image(obs),
+                "wrist_image": get_libero_wrist_image(obs, resize_size),
                 "state": np.concatenate(
                     [
                         obs["robot0_eef_pos"],

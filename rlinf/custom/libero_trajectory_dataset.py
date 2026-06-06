@@ -187,6 +187,7 @@ class LiberoSFTDataset(Dataset):
                 or int(cfg.env.train.get("num_images_in_input", 1)) > 1,
             )
         )
+        self._use_proprio = bool(cfg.actor.model.get("use_proprio", False))
         if use_cached_logits:
             task_suite_name = f"{suite}_simplevla"
             dataset_dir = "datasets_with_logits"
@@ -354,13 +355,31 @@ class LiberoSFTDataset(Dataset):
             if self._match_rollout_image_rotation:
                 obs_wrist = np.ascontiguousarray(obs_wrist[::-1, ::-1])
             obs_wrist = self._maybe_resize_obs(obs_wrist)
-        state = np.concatenate(
-            [
-                np.array(obs_group["robot0_eef_pos"][obs_idx]),
-                quat2axisangle(np.array(obs_group["robot0_eef_quat"][obs_idx])),
-                np.array(obs_group["robot0_gripper_qpos"][obs_idx]),
+        state = None
+        if self._use_proprio:
+            missing_state_keys = [
+                key
+                for key in (
+                    "robot0_eef_pos",
+                    "robot0_eef_quat",
+                    "robot0_gripper_qpos",
+                )
+                if key not in obs_group
             ]
-        ).astype(np.float32)
+            if missing_state_keys:
+                raise KeyError(
+                    "LiberoSFTDataset: actor.model.use_proprio=True requires "
+                    f"proprio keys in HDF5 obs, but missing {missing_state_keys} "
+                    f"in {path}/{demo_name}/obs. Use actor.model.use_proprio=False "
+                    "for image-only SFT data."
+                )
+            state = np.concatenate(
+                [
+                    np.array(obs_group["robot0_eef_pos"][obs_idx]),
+                    quat2axisangle(np.array(obs_group["robot0_eef_quat"][obs_idx])),
+                    np.array(obs_group["robot0_gripper_qpos"][obs_idx]),
+                ]
+            ).astype(np.float32)
         actions = np.array(
             demo["actions"][timestep : timestep + self.num_action_chunks]
         )
@@ -379,8 +398,9 @@ class LiberoSFTDataset(Dataset):
             "obs_rgb": obs,         # [H, W, C] uint8 numpy
             "task_desc": task_desc,  # str
             "actions": actions,      # [C, D] float numpy
-            "state": state,          # [8] float numpy, matches rollout proprio state
         }
+        if state is not None:
+            output["state"] = state  # [8] float numpy, matches rollout proprio state
         if obs_wrist is not None:
             output["obs_wrist_rgb"] = obs_wrist
 
