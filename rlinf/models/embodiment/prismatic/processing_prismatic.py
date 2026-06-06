@@ -205,6 +205,11 @@ class MultiInputPrismaticProcessor(PrismaticProcessorOriginal):
             )
 
         input_pixel_values = torch.cat(all_pixel_values, dim=1)
+        if input_pixel_values.ndim == 5 and input_pixel_values.shape[1] > 1:
+            batch_size = input_pixel_values.shape[0]
+            input_pixel_values = input_pixel_values.reshape(
+                batch_size, 1, -1, *input_pixel_values.shape[-2:]
+            )
 
         text_inputs = self.tokenizer(
             text,
