@@ -7,6 +7,7 @@
   },
   "teacher_rl_by_task": {
     "1": "logs_spatial/sequential/task_1_seed4096/checkpoints/global_step_60/actor",
-    "4": "logs_spatial/sequential/task_4_seed4096/checkpoints/global_step_60/actor"
+    "4": "logs_spatial/sequential/task_4_seed4096/checkpoints/global_step_60/actor",
+    "9": "logs_spatial/sequential/grpo_rps32_gb2048_gs8_steps200_si25_task_9_seed2_spatial/checkpoints/global_step_200/actor"
   }
 }
